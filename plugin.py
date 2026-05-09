@@ -37,7 +37,7 @@ class WSServerConfig(PluginConfigBase):
     __ui_icon__ = "wifi"
     __ui_order__ = 1
     host: str = Field(default="127.0.0.1", description="监听地址")
-    port: int = Field(default=9517, description="监听端口")
+    port: int = Field(default=8523, description="监听端口")
 
 
 class ChatConfig(PluginConfigBase):

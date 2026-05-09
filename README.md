@@ -33,6 +33,12 @@ maibot-deskpet-plugin/            # git clone 后直接丢进 MaiBot/plugins/
             └── public/           # Live2D Cubism 运行时 + 模型文件
 ```
 
+## 兼容性
+
+- 基于 MaiBot **dev 分支**（1.0.0pre）开发
+- 开发环境：MaiBot **1.0.0pre15**
+- **仅兼容 MaiBot 1.0.0 及以上版本**，不兼容 0.12.2 及以下版本
+
 ## 功能
 
 - Live2D 角色桌面显示（透明窗口，始终置顶）
