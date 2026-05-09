@@ -9,11 +9,12 @@
     "url": "https://github.com/Maboroshinatsu"
   },
   "license": "GPL-3.0",
-  "homepage_url": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
-  "repository_url": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
-  "categories": ["Entertainment", "Desktop Tools"],
+  "urls": {
+    "repository": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
+    "homepage": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin"
+  },
   "host_application": {
-    "min_version": "1.0.0-pre15",
+    "min_version": "1.0.0",
     "max_version": "1.99.99"
   },
   "sdk": {
