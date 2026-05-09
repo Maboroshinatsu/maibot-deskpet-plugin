@@ -38,6 +38,8 @@ maibot-deskpet-plugin/            # git clone 后直接丢进 MaiBot/plugins/
 - 基于 MaiBot **dev 分支**（1.0.0pre）开发
 - 开发环境：MaiBot **1.0.0pre15**
 - **仅兼容 MaiBot 1.0.0 及以上版本**，不兼容 0.12.2 及以下版本
+- **当前仅在 Windows 上测试通过**，macOS / Linux 理论兼容但未经测试
+- **仅支持本地使用**，跨设备远程连接尚未实现
 
 ## 功能
 
