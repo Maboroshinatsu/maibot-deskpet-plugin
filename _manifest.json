@@ -2,17 +2,16 @@
   "manifest_version": 2,
   "id": "maibot.deskpet-plugin",
   "version": "0.1.0",
-  "name": "桌面宠物插件 (Live2D Deskpet)",
-  "description": "为 MaiBot 提供 Live2D 桌面宠物交互能力，包括双向对话、表情控制、动作触发等。需要在桌面端运行 deskpet-app Electron 应用。",
+  "name": "MaiVTB",
+  "description": "为 MaiBot 接入 Live2D 桌面宠物，支持双向对话（消息管线集成）、表情/动作控制、视线追踪、滚轮缩放和拖拽平移。需配合 deskpet-app Electron 前端使用。",
   "author": {
-    "name": "MaiBot Deskpet",
+    "name": "MaboroshiNatsu / DeepSeek-V4PRO",
     "url": "https://github.com/Maboroshinatsu"
   },
   "license": "GPL-3.0",
-  "urls": {
-    "repository": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
-    "homepage": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin"
-  },
+  "homepage_url": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
+  "repository_url": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
+  "categories": ["Entertainment", "Desktop Tools"],
   "host_application": {
     "min_version": "1.0.0-pre15",
     "max_version": "1.99.99"
