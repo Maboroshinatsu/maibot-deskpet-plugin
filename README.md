@@ -9,6 +9,16 @@
 - **[MaiBot](https://github.com/MaiM-with-u/MaiBot)** — 插件运行的宿主平台，提供消息管线和 AI 推理能力
 - **[Airi](https://github.com/moeru-ai/airi)** — PixiJS Live2D 渲染方案的重要参考，包括 `stage.scale` 初始化方式、模型焦点缩放、视线追踪等实现
 
+## 模型资源
+
+项目默认使用 Live2D 官方免费示例模型 **Hiyori (日和)**。你也可以从以下渠道获取更多模型：
+
+- [Live2D 官方示例](https://www.live2d.com/zh-CHS/learn/sample/)
+- [imuncle/live2d](https://github.com/imuncle/live2d/tree/master)
+- [summerscar/live2dDemo](https://github.com/summerscar/live2dDemo)
+
+将模型文件夹放入 `deskpet-app/src/renderer/public/models/`，然后修改 `src/renderer/services/model-config.ts` 中的 `MODEL_PATH` 即可切换。
+
 ## 项目结构
 
 ```

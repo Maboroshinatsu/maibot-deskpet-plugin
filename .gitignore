@@ -12,3 +12,6 @@ airi-main/
 *.7z
 .mcp.json
 .claude/
+deskpet-app/src/renderer/public/models/ariu_vts/
+deskpet-app/src/renderer/public/models/haru_cubism4/
+hiyori_pro_zh.zip
