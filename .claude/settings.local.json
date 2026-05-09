@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sL \"https://docs.mai-mai.org/develop/architecture/message-pipeline.html\")",
+      "Bash(python3 -c ' *)",
+      "Bash(rm -rf /d/Maivtb/deskpet-app/out)",
+      "Bash(npx electron-vite *)",
+      "Bash(npx electron *)",
+      "Bash(/d/Maivtb/deskpet-app/node_modules/electron/dist/electron.exe out/main/index.js)",
+      "Bash(/d/Maivtb/deskpet-app/node_modules/electron/dist/electron.exe --version)",
+      "Bash(/d/Maivtb/deskpet-app/node_modules/electron/dist/electron.exe -e \"console.log\\(typeof require\\('electron'\\), Object.keys\\(require\\('electron'\\)\\).slice\\(0,10\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('main:', d.get\\('main',''\\)\\); print\\('exports:', d.get\\('exports',''\\)\\)\")",
+      "Bash(echo \"console.log\\(typeof require\\('electron'\\), require\\('electron'\\).app ? 'HAS app' : 'NO app'\\)\")",
+      "Bash(/d/Maivtb/deskpet-app/node_modules/electron/dist/electron.exe /tmp/test-electron.js)",
+      "Bash(echo \"console.log\\(typeof require\\('electron/main'\\), typeof require\\('electron/common'\\)\\)\")",
+      "Bash(/d/Maivtb/deskpet-app/node_modules/electron/dist/electron.exe /tmp/test-e2.js)",
+      "Bash(echo \"const e = require\\('electron'\\); console.log\\('type from require:', typeof e\\); console.log\\('keys:', typeof e === 'object' ? Object.keys\\(e\\).slice\\(0,5\\) : 'not object'\\); console.log\\('val:', typeof e === 'string' ? e.substring\\(0,80\\) : 'N/A'\\); if\\(e && e.app\\) { console.log\\('app found'\\); e.app.whenReady\\(\\).then\\(\\(\\) => { console.log\\('ready, process.type=', process.type\\); e.app.quit\\(\\); }\\); }\")",
+      "Bash(ELECTRON_RUN_AS_NODE=0 /d/Maivtb/deskpet-app/node_modules/electron/dist/electron.exe /tmp/test-e5.js)",
+      "Bash(/d/Maivtb/deskpet-app/node_modules/electron/dist/electron.exe /d/Maivtb/deskpet-app/out)",
+      "Bash(echo \"console.log\\('globalThis keys with electron:', Object.keys\\(globalThis\\).filter\\(k => k.toLowerCase\\(\\).includes\\('electron'\\)\\)\\); console.log\\('process.features:', process.features\\); console.log\\('process._linkedBinding:', typeof process._linkedBinding\\)\")",
+      "Bash(/d/Maivtb/deskpet-app/node_modules/electron/dist/electron.exe /tmp/test-e6.js)",
+      "Bash(npm cache *)"
+    ]
+  }
+}

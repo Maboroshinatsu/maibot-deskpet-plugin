@@ -1,0 +1,14 @@
+node_modules/
+out/
+dist/
+__pycache__/
+*.pyc
+.electron-cache/
+.vite/
+.venv/
+*.log
+MaiBot/
+airi-main/
+*.7z
+.mcp.json
+.claude/

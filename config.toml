@@ -1,0 +1,10 @@
+[plugin]
+enabled = true
+config_version = "1.0.0"
+
+[ws_server]
+host = "127.0.0.1"
+port = 8523
+
+[chat]
+stream_buffer_size = 50
