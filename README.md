@@ -2,6 +2,13 @@
 
 基于 Electron + Vue3 + PixiJS + Live2D Cubism 4 的 MaiBot 桌面宠物插件，为 MaiBot 提供可交互的 Live2D 角色桌面伴侣。
 
+## 致谢
+
+本项目受到以下开源项目的启发和帮助：
+
+- **[MaiBot](https://github.com/MaiM-with-u/MaiBot)** — 插件运行的宿主平台，提供消息管线和 AI 推理能力
+- **[Airi](https://github.com/moeru-ai/airi)** — PixiJS Live2D 渲染方案的重要参考，包括 `stage.scale` 初始化方式、模型焦点缩放、视线追踪等实现
+
 ## 项目结构
 
 ```
@@ -134,4 +141,6 @@ stream_buffer_size = 50
 
 ## 许可
 
-MIT
+[GPL-3.0](LICENSE)
+
+本项目作为 MaiBot 的插件，遵循与 MaiBot 相同的 GPL-3.0 许可证。

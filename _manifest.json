@@ -6,12 +6,12 @@
   "description": "为 MaiBot 提供 Live2D 桌面宠物交互能力，包括双向对话、表情控制、动作触发等。需要在桌面端运行 deskpet-app Electron 应用。",
   "author": {
     "name": "MaiBot Deskpet",
-    "url": "https://github.com"
+    "url": "https://github.com/Maboroshinatsu"
   },
-  "license": "MIT",
+  "license": "GPL-3.0",
   "urls": {
-    "repository": "https://github.com",
-    "homepage": "https://github.com"
+    "repository": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
+    "homepage": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin"
   },
   "host_application": {
     "min_version": "1.0.0",
