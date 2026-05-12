@@ -1,7 +1,7 @@
 <template>
-  <div class="deskpet-stage" :class="{ hovered: isHovered }" @dblclick="onDoubleClick" @mousedown.left="onMouseDown" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
+  <div class="deskpet-stage" :class="{ hovered: isHovered, 'hover-fade-enabled': store.hoverFadeEnabled }" @dblclick="onDoubleClick" @mousedown.left="onMouseDown" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
     <div ref="stageRef" class="live2d-stage" />
-    <div class="nav-bar" @mousedown.stop />
+    <div class="nav-bar" title="拖动窗口，双击重置模型位置和缩放" @mousedown.stop="onNavMouseDown" @dblclick.stop="resetModelView" />
 
     <div v-if="modelError" class="model-error">
       <div class="error-icon">!</div>
@@ -15,45 +15,33 @@
       <p class="error-hint" v-else>将模型放入 <code>src/renderer/public/models/</code> 后重启应用</p>
     </div>
 
-    <Transition name="bubble-fade">
-      <div v-if="showBubble" class="chat-bubble">
-        <div class="bubble-content">
-          <span class="bubble-text">{{ displayText }}</span>
-          <span v-if="store.chatBubble.streaming" class="bubble-cursor">|</span>
-        </div>
-      </div>
-    </Transition>
+    <ChatBubble :visible="showBubble" :text="displayText" :streaming="store.chatBubble.streaming" />
 
-    <Transition name="input-fade">
-      <div v-if="showInput" class="quick-input" @mousedown.stop>
-        <input
-          ref="inputRef"
-          v-model="inputText"
-          class="input-field"
-          placeholder="说点什么..."
-          @keydown.enter="sendText"
-          @blur="showInput = false"
-        />
-      </div>
-    </Transition>
+    <QuickInput
+      v-model="inputText"
+      :visible="showInput"
+      @submit="sendText"
+      @blur="showInput = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import ChatBubble from './ChatBubble.vue'
+import QuickInput from './QuickInput.vue'
 import { useDeskpetStore } from '@/stores/deskpet'
-import { useWebSocket } from '@/composables/useWebSocket'
+import { useChimeraTransport } from '@/services/transport/chimera'
 import { useLive2DAnimation } from '@/composables/useLive2DAnimation'
 import { createPixiApp, loadLive2DModel, resizeModel, resizeModelFit, playMotion, modelRefW, modelRefH } from '@/services/live2d/loader'
 import { discoverModel } from '@/services/live2d/model-discovery'
 import { EMOTION_TO_MOTION } from '@/services/protocol'
 
 const store = useDeskpetStore()
-const { send } = useWebSocket()
+const transport = useChimeraTransport()
 const { start: startAnim, stop: stopAnim } = useLive2DAnimation()
 
 const stageRef = ref<HTMLDivElement>()
-const inputRef = ref<HTMLInputElement>()
 const inputText = ref('')
 const showInput = ref(false)
 const isHovered = ref(false)
@@ -62,6 +50,9 @@ const displayText = computed(() => store.chatBubble.text)
 const modelError = ref('')
 
 let animFrameId = 0
+let unsubscribeGlobalCursor: (() => void) | null = null
+let unsubscribeResetModelView: (() => void) | null = null
+let unsubscribeSetHoverFade: (() => void) | null = null
 
 onMounted(async () => {
   const container = stageRef.value
@@ -92,6 +83,9 @@ onMounted(async () => {
     store.pixiApp = app
 
     const model = await loadLive2DModel(modelUrl, app)
+    resizeModel(model, window.innerWidth, window.innerHeight, store.modelZoom)
+    model.position.x += store.modelOffsetX
+    model.position.y += store.modelOffsetY
     store.live2dModel = model
     store.modelLoaded = true
 
@@ -103,6 +97,17 @@ onMounted(async () => {
     console.error('[Deskpet] Failed to load Live2D model:', err)
     modelError.value = `模型加载失败: ${err}`
   }
+
+  unsubscribeGlobalCursor = window.electronAPI?.onGlobalCursorPosition?.((position) => {
+    mouseX = position.x
+    mouseY = position.y
+  }) ?? null
+  unsubscribeResetModelView = window.electronAPI?.onResetModelView?.(() => {
+    resetModelView()
+  }) ?? null
+  unsubscribeSetHoverFade = window.electronAPI?.onSetHoverFade?.((enabled) => {
+    store.hoverFadeEnabled = enabled
+  }) ?? null
 
   startAnimationPoll()
 })
@@ -136,6 +141,8 @@ function startAnimationPoll() {
         lastW = cw
         lastH = ch
         resizeModelFit(store.live2dModel, cw, ch, store.modelZoom)
+        store.live2dModel.position.x += store.modelOffsetX
+        store.live2dModel.position.y += store.modelOffsetY
       }
       if (store.modelZoom !== lastZoom) {
         lastZoom = store.modelZoom
@@ -153,6 +160,7 @@ function startAnimationPoll() {
         const vh = modelRefH * m.scale.y
         m.position.x = Math.max(-vw * 0.8, Math.min(cw + vw * 0.8, m.position.x))
         m.position.y = Math.max(-vh * 0.8, Math.min(ch + vh * 0.8, m.position.y))
+        store.setModelOffset(m.position.x - cw / 2, m.position.y - ch / 2)
       }
       try { store.live2dModel.focus(mouseX, mouseY) } catch { /* focus not supported */ }
     }
@@ -170,6 +178,12 @@ window.addEventListener('mousemove', onMouseMove)
 onUnmounted(() => {
   stopAnim()
   if (animFrameId) cancelAnimationFrame(animFrameId)
+  unsubscribeGlobalCursor?.()
+  unsubscribeGlobalCursor = null
+  unsubscribeResetModelView?.()
+  unsubscribeResetModelView = null
+  unsubscribeSetHoverFade?.()
+  unsubscribeSetHoverFade = null
   window.removeEventListener('mousemove', onMouseMove)
   if (store.pixiApp) {
     const canvas = store.pixiApp.view as HTMLCanvasElement
@@ -183,13 +197,12 @@ onUnmounted(() => {
 
 function onDoubleClick() {
   showInput.value = true
-  setTimeout(() => inputRef.value?.focus(), 50)
 }
 
 function sendText() {
   const text = inputText.value.trim()
   if (!text) return
-  send('input:text', { text })
+  transport.sendUserText(text)
   inputText.value = ''
   showInput.value = false
 }
@@ -200,6 +213,30 @@ let dragActive = false
 let dragStartX = 0
 let dragStartY = 0
 let dragMoved = false
+
+function onNavMouseDown(e: MouseEvent) {
+  let lastX = e.screenX
+  let lastY = e.screenY
+  let moved = false
+
+  const onMove = (ev: MouseEvent) => {
+    const dx = ev.screenX - lastX
+    const dy = ev.screenY - lastY
+    if (!moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return
+    moved = true
+    window.electronAPI?.dragWindow(dx, dy)
+    lastX = ev.screenX
+    lastY = ev.screenY
+  }
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 
 function onMouseDown(e: MouseEvent) {
   dragStartX = e.clientX
@@ -229,6 +266,14 @@ function onMouseDown(e: MouseEvent) {
   document.addEventListener('mouseup', onUp)
 }
 
+function resetModelView() {
+  store.resetModelView()
+  if (store.live2dModel) {
+    resizeModelFit(store.live2dModel, window.innerWidth, window.innerHeight, store.modelZoom)
+    lastZoom = store.modelZoom
+  }
+}
+
 let lastWheelTime = 0
 
 function onWheel(e: WheelEvent) {
@@ -242,6 +287,7 @@ function onWheel(e: WheelEvent) {
   // zoom toward mouse cursor position
   resizeModel(store.live2dModel, window.innerWidth, window.innerHeight, newZoom, mouseX, mouseY)
   store.modelZoom = newZoom
+  store.setModelOffset(store.live2dModel.position.x - window.innerWidth / 2, store.live2dModel.position.y - window.innerHeight / 2)
   lastZoom = newZoom
 }
 
@@ -279,6 +325,11 @@ onUnmounted(() => { /* cleanup in stopAnim + pixiApp.destroy */ })
   width: 100%;
   height: 100%;
   display: block;
+  transition: opacity 0.18s ease;
+}
+
+.deskpet-stage.hover-fade-enabled.hovered .live2d-stage {
+  opacity: 0.15;
 }
 
 .nav-bar {
@@ -302,88 +353,6 @@ onUnmounted(() => { /* cleanup in stopAnim + pixiApp.destroy */ })
   height: 5px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.5);
-}
-
-.chat-bubble {
-  position: absolute;
-  top: 10%;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 80%;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  border-radius: 16px;
-  padding: 12px 18px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-  z-index: 10;
-  pointer-events: none;
-  -webkit-app-region: no-drag;
-}
-
-.bubble-content {
-  font-size: 14px;
-  line-height: 1.5;
-  color: #333;
-  word-break: break-word;
-}
-
-.bubble-cursor {
-  animation: blink 0.8s infinite;
-  color: #666;
-}
-
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
-.quick-input {
-  position: absolute;
-  bottom: 15%;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  min-width: 200px;
-  -webkit-app-region: no-drag;
-}
-
-.input-field {
-  width: 100%;
-  padding: 10px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  font-size: 14px;
-  outline: none;
-  color: #333;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  -webkit-app-region: no-drag;
-}
-
-.input-field::placeholder {
-  color: #aaa;
-}
-
-/* Transitions */
-.bubble-fade-enter-active,
-.bubble-fade-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.bubble-fade-enter-from,
-.bubble-fade-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(10px);
-}
-
-.input-fade-enter-active,
-.input-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.input-fade-enter-from,
-.input-fade-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(20px);
 }
 
 .model-error {

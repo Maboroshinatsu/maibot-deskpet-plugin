@@ -36,7 +36,7 @@ maibot-deskpet-plugin/            # git clone 后直接丢进 MaiBot/plugins/
         ├── preload/              # 预加载脚本
         │   └── index.ts
         └── renderer/             # Vue3 渲染进程
-            ├── components/       # DeskpetStage.vue
+            ├── components/       # DeskpetStage, ChatBubble, QuickInput
             ├── composables/      # useWebSocket, useLive2DAnimation
             ├── services/         # Live2D 模型加载, PixiJS 渲染
             ├── stores/           # Pinia 状态管理
@@ -57,9 +57,13 @@ maibot-deskpet-plugin/            # git clone 后直接丢进 MaiBot/plugins/
 - 双向对话：桌宠输入框 → MaiBot 消息管线 → LLM 响应 → 气泡回复
 - WebSocket 实时通信（端口 8523）
 - 模型交互：滚轮缩放（鼠标焦点）、拖拽平移（窗口内自由移动）
-- 视线追踪：角色眼睛跟随鼠标指针
+- 视线追踪：角色眼睛跟随鼠标指针，支持窗口外全局鼠标追踪
+- 桌面窗口交互：底部导航条拖动窗口、窗口位置/大小持久化、最小尺寸保护
+- 布局持久化：模型缩放、模型偏移、窗口位置和窗口大小自动保存与恢复
+- 托盘控制：显示/隐藏、置顶、锁定穿透、重置模型位置、重置窗口位置、重置全部布局
+- 悬停淡化模型：可通过托盘开启，方便临时查看/操作模型遮挡区域
 - 情绪/动画触发：MaiBot 可通过 Tool 控制角色表情和动作
-- 窗口控制：底部导航条拖动窗口、双击打开输入框
+- 自定义应用图标：托盘和窗口图标使用 `public/icon.png`
 
 ## 技术栈
 
@@ -119,6 +123,18 @@ stream_buffer_size = 50
 ```
 
 ## 更新日志
+
+### v0.1.1 — 桌宠交互增强
+
+- [x] 全局鼠标追踪：窗口外也能让 Live2D 视线跟随鼠标
+- [x] 模型布局持久化：缩放和窗口内偏移自动保存/恢复
+- [x] 窗口布局持久化：位置和大小自动保存/恢复
+- [x] 托盘菜单增强：显示/隐藏、置顶、锁定穿透、重置模型、重置窗口、重置全部布局
+- [x] 锁定穿透提示：托盘文案提示当前穿透状态
+- [x] 悬停淡化模型：便于临时查看模型遮挡区域
+- [x] 组件拆分：抽出 ChatBubble / QuickInput，降低 DeskpetStage 复杂度
+- [x] Transport Adapter 初步抽象：为后续接入 maim_message / MaiBot 原生平台预留接口
+- [x] 自定义图标：托盘和窗口图标使用 public/icon.png
 
 ### v0.1.0 — 初始版本
 

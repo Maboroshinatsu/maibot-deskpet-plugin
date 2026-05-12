@@ -28,7 +28,9 @@
       "version_spec": ">=12.0"
     }
   ],
-  "capabilities": [],
+  "capabilities": [
+    "llm.generate"
+  ],
   "i18n": {
     "default_locale": "zh-CN",
     "supported_locales": ["zh-CN"]
