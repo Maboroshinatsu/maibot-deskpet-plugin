@@ -36,8 +36,9 @@ class WSServerConfig(PluginConfigBase):
     __ui_label__ = "WebSocket"
     __ui_icon__ = "wifi"
     __ui_order__ = 1
-    host: str = Field(default="127.0.0.1", description="监听地址")
+    host: str = Field(default="127.0.0.1", description="监听地址，跨设备时设为 0.0.0.0")
     port: int = Field(default=8523, description="监听端口")
+    auth_token: str = Field(default="", description="鉴权令牌，留空则不验证")
 
 
 class ChatConfig(PluginConfigBase):
@@ -96,11 +97,12 @@ class DeskpetMessage:
 # ═══════════════════════════════════════════════
 
 class DeskpetWSServer:
-    def __init__(self, host: str, port: int, plugin: "DeskpetPlugin", logger: Logger):
+    def __init__(self, host: str, port: int, plugin: "DeskpetPlugin", logger: Logger, auth_token: str = ""):
         self.host = host
         self.port = port
         self.plugin = plugin
         self.logger = logger
+        self.auth_token = auth_token
         self._server = None
         self._clients: Set[websockets.WebSocketServerProtocol] = set()
 
@@ -131,6 +133,20 @@ class DeskpetWSServer:
         return len(self._clients) > 0
 
     async def _handle_client(self, ws: websockets.WebSocketServerProtocol):
+        if self.auth_token:
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=5)
+                msg = DeskpetMessage.from_json(raw)
+                if msg.type != "auth" or msg.data.get("token") != self.auth_token:
+                    self.logger.warning(f"[Deskpet] Auth failed from {ws.remote_address}")
+                    await ws.close(4001, "Unauthorized")
+                    return
+                self.logger.info(f"[Deskpet] Client authenticated: {ws.remote_address}")
+            except asyncio.TimeoutError:
+                self.logger.warning(f"[Deskpet] Auth timeout from {ws.remote_address}")
+                await ws.close(4001, "Unauthorized")
+                return
+
         self._clients.add(ws)
         addr = ws.remote_address
         self.logger.info(f"[Deskpet] Client connected: {addr}")
@@ -168,6 +184,7 @@ class DeskpetPlugin(MaiBotPlugin):
             port=self.config.ws_server.port,
             plugin=self,
             logger=self.ctx.logger,
+            auth_token=self.config.ws_server.auth_token,
         )
         await self._ws_server.start()
 

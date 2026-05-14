@@ -4,7 +4,19 @@ import { useChatStore } from '@/stores/chat'
 import { useSpeechSynthesis } from './useSpeechSynthesis'
 import { useLipSync } from './useLipSync'
 
-const DEFAULT_URL = 'ws://127.0.0.1:8523/ws'
+function getWsUrl(): string {
+  try {
+    const custom = localStorage.getItem('deskpet/ws-url')
+    if (custom) return custom
+  } catch { /* localStorage blocked */ }
+  return 'ws://127.0.0.1:8523/ws'
+}
+
+function getWsToken(): string {
+  try {
+    return localStorage.getItem('deskpet/ws-token') || ''
+  } catch { return '' }
+}
 
 interface WSMessage {
   type: string
@@ -13,7 +25,9 @@ interface WSMessage {
   request_id?: string
 }
 
-export function useWebSocket(url: string = DEFAULT_URL) {
+export function useWebSocket() {
+  const url = getWsUrl()
+  const token = getWsToken()
   const store = useDeskpetStore()
   const chatStore = useChatStore()
   const { speak: browserSpeak, cancel: cancelSpeech } = useSpeechSynthesis()
@@ -55,6 +69,7 @@ export function useWebSocket(url: string = DEFAULT_URL) {
     ws.value.onopen = () => {
       console.log('[Deskpet] WebSocket connected')
       store.wsConnected = true
+      if (token) send('auth', { token })
       reconnectAttempt.value = 0
       startHeartbeat()
     }

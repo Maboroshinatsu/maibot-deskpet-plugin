@@ -122,6 +122,34 @@ https://hf-mirror.com/rhasspy/piper-voices/resolve/v1.0.0/zh/zh_CN/huayan/medium
 npm run build
 ```
 
+## 跨设备连接
+
+桌宠前端可以运行在另一台电脑上，通过网络连接到运行 MaiBot 的服务器。
+
+### 服务器端（运行 MaiBot 的机器）
+
+编辑 `config.toml`：
+
+```toml
+[ws_server]
+host = "0.0.0.0"       # 允许外部连接
+port = 8523
+auth_token = "你的密码"  # 可选，建议设置
+```
+
+确保防火墙允许端口 8523。
+
+### 客户端（运行桌宠的机器）
+
+打开桌宠后按 F12 打开 DevTools，输入：
+
+```js
+localStorage.setItem('deskpet/ws-url', 'ws://192.168.x.x:8523/ws')
+localStorage.setItem('deskpet/ws-token', '你的密码')
+```
+
+替换 IP 为服务器的实际地址。刷新页面即可连接。
+
 ## 配置
 
 编辑 `config.toml`：
