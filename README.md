@@ -122,33 +122,107 @@ https://hf-mirror.com/rhasspy/piper-voices/resolve/v1.0.0/zh/zh_CN/huayan/medium
 npm run build
 ```
 
-## 跨设备连接
+## 跨设备连接（局域网 / VPN）
 
-桌宠前端可以运行在另一台电脑上，通过网络连接到运行 MaiBot 的服务器。
+桌宠前端（Electron）可以运行在一台电脑上，通过网络连接到**另一台电脑**上运行的 MaiBot。典型场景：
 
-### 服务器端（运行 MaiBot 的机器）
+- 服务器（台式机/笔记本）运行 MaiBot + 插件
+- 本地（笔记本/平板）运行桌宠前端，享受 Live2D 交互
+- 两者在同一局域网或通过 VPN 互联
 
-编辑 `config.toml`：
+### 1. 服务器端设置
+
+在运行 MaiBot 的机器上编辑 `plugins/maibot-deskpet-plugin/config.toml`：
 
 ```toml
 [ws_server]
-host = "0.0.0.0"       # 允许外部连接
-port = 8523
-auth_token = "你的密码"  # 可选，建议设置
+host = "0.0.0.0"            # 监听所有网络接口（默认 127.0.0.1 仅本机）
+port = 8523                  # WebSocket 端口
+auth_token = "你的密码"      # 强烈建议设置，防止未授权连接
 ```
 
-确保防火墙允许端口 8523。
+### 2. 开放防火墙端口
 
-### 客户端（运行桌宠的机器）
+需要在服务器端允许外部访问 8523 端口：
 
-打开桌宠后按 F12 打开 DevTools，输入：
+**Windows（PowerShell 管理员）：**
+
+```powershell
+New-NetFirewallRule -DisplayName "MaiBot Deskpet WS" -Direction Inbound -LocalPort 8523 -Protocol TCP -Action Allow
+```
+
+**Linux（ufw）：**
+
+```bash
+sudo ufw allow 8523/tcp
+```
+
+### 3. 获取服务器 IP 地址
+
+在服务器上查看局域网 IP：
+
+**Windows：**
+
+```powershell
+ipconfig | findstr IPv4
+```
+
+**Linux：**
+
+```bash
+ip addr show | grep "inet " | grep -v 127.0.0.1
+```
+
+通常会看到类似 `192.168.1.100` 或 `10.0.0.5` 的地址。
+
+### 4. 客户端设置
+
+在运行桌宠的机器上：
+
+1. 启动桌宠 `npm run dev`
+2. 按 `F12` 打开 DevTools 控制台
+3. 输入以下命令配置连接：
 
 ```js
-localStorage.setItem('deskpet/ws-url', 'ws://192.168.x.x:8523/ws')
+// 设置服务器地址（替换为实际 IP）
+localStorage.setItem('deskpet/ws-url', 'ws://192.168.1.100:8523/ws')
+
+// 如果服务器端设置了 auth_token
 localStorage.setItem('deskpet/ws-token', '你的密码')
 ```
 
-替换 IP 为服务器的实际地址。刷新页面即可连接。
+4. 按 `Ctrl+R` 刷新页面，桌宠将连接到远程 MaiBot
+
+### 5. 验证连接
+
+服务器端 MaiBot 日志应显示：
+
+```text
+[Deskpet] Client authenticated: ('192.168.x.x', xxxxx)
+[Deskpet] Client connected: ('192.168.x.x', xxxxx)
+```
+
+客户端发一条消息，服务器端应出现 `[Deskpet] User input: ...`。
+
+### 6. 恢复本地连接
+
+如果之后想切回本机连接：
+
+```js
+localStorage.removeItem('deskpet/ws-url')
+localStorage.removeItem('deskpet/ws-token')
+```
+
+刷新即可恢复默认的 `ws://127.0.0.1:8523/ws`。
+
+### 7. 常见问题
+
+| 问题 | 可能原因 |
+|------|----------|
+| 连接不上，控制台无日志 | 防火墙未开放 / IP 地址错误 / MaiBot 未启动 |
+| 连接后立刻断开 | auth_token 不匹配 |
+| 能连接但消息无回复 | MaiBot 插件未加载 / gateway 未就绪 |
+| VPN 下无法连接 | VPN 可能隔离了局域网，尝试用 VPN 分配的 IP |
 
 ## 配置
 
@@ -160,8 +234,9 @@ enabled = true
 config_version = "1.0.0"
 
 [ws_server]
-host = "127.0.0.1"
+host = "127.0.0.1"       # 仅本机连接；跨设备改为 "0.0.0.0"
 port = 8523
+auth_token = ""           # 跨设备时建议设置密码
 
 [chat]
 stream_buffer_size = 50
