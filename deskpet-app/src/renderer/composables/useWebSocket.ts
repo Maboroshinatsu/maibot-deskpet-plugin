@@ -1,5 +1,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useDeskpetStore } from '@/stores/deskpet'
+import { useChatStore } from '@/stores/chat'
+import { useSpeechSynthesis } from './useSpeechSynthesis'
+import { useLipSync } from './useLipSync'
 
 const DEFAULT_URL = 'ws://127.0.0.1:8523/ws'
 
@@ -12,6 +15,25 @@ interface WSMessage {
 
 export function useWebSocket(url: string = DEFAULT_URL) {
   const store = useDeskpetStore()
+  const chatStore = useChatStore()
+  const { speak: browserSpeak, cancel: cancelSpeech } = useSpeechSynthesis()
+  const { attach: attachLipSync, detach: detachLipSync } = useLipSync()
+
+  async function speak(text: string) {
+    try {
+      const data = await window.electronAPI?.ttsSpeak(text)
+      if (data && data.byteLength > 0) {
+        const blob = new Blob([data], { type: 'audio/wav' })
+        const audio = new Audio(URL.createObjectURL(blob))
+        attachLipSync(audio)
+        audio.onended = () => detachLipSync()
+        audio.onerror = () => detachLipSync()
+        audio.play()
+        return
+      }
+    } catch { /* fall through to browser TTS */ }
+    browserSpeak(text)
+  }
 
   const ws = ref<WebSocket | null>(null)
   const heartbeatTimer = ref<ReturnType<typeof setInterval> | null>(null)
@@ -63,19 +85,21 @@ export function useWebSocket(url: string = DEFAULT_URL) {
 
     switch (type) {
       case 'output:text:delta':
-        store.appendChatText(data.delta, request_id || data.request_id || '')
+        chatStore.appendChatText(data.delta, request_id || data.request_id || '')
         break
 
       case 'output:text:done':
-        store.finishChatStream(request_id || data.request_id || '')
+        chatStore.finishChatStream(request_id || data.request_id || '')
         if (!data.error) {
-          setTimeout(() => store.hideChatBubble(), 8000)
+          speak(chatStore.chatBubble.text)
+          setTimeout(() => chatStore.hideChatBubble(), 8000)
         }
         break
 
       case 'output:text':
-        store.showChatMessage(data.text)
-        setTimeout(() => store.hideChatBubble(), 8000)
+        chatStore.showChatMessage(data.text)
+        speak(data.text)
+        setTimeout(() => chatStore.hideChatBubble(), 8000)
         break
 
       case 'state:emotion':
@@ -132,6 +156,7 @@ export function useWebSocket(url: string = DEFAULT_URL) {
 
   function disconnect() {
     stopHeartbeat()
+    cancelSpeech()
     if (reconnectTimer.value) {
       clearTimeout(reconnectTimer.value)
       reconnectTimer.value = null

@@ -24,6 +24,7 @@ interface ElectronAPI {
   onGlobalCursorPosition: (callback: (position: GlobalCursorPosition) => void) => () => void
   onResetModelView: (callback: () => void) => () => void
   onSetHoverFade: (callback: (enabled: boolean) => void) => () => void
+  ttsSpeak: (text: string) => Promise<ArrayBuffer | null>
 }
 
 interface Window {

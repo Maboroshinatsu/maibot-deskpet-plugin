@@ -8,6 +8,6 @@ export function useChimeraTransport(): DeskpetTransport {
     connect,
     disconnect,
     sendHeartbeat: () => send('heartbeat'),
-    sendUserText: (text: string) => send('ask', { text }),
+    sendUserText: (text: string) => send('input:text', { text }),
   }
 }

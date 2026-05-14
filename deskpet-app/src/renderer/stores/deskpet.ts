@@ -3,13 +3,6 @@ import { ref, shallowRef, watch } from 'vue'
 import type { Live2DModel } from 'pixi-live2d-display/cubism4'
 import type { Application } from '@pixi/app'
 
-export interface ChatBubbleState {
-  text: string
-  visible: boolean
-  streaming: boolean
-  requestId: string | null
-}
-
 interface PersistedModelViewState {
   zoom: number
   offsetX: number
@@ -80,39 +73,10 @@ export const useDeskpetStore = defineStore('deskpet', () => {
     localStorage.setItem(MODEL_VIEW_STATE_KEY, JSON.stringify({ zoom, offsetX, offsetY }))
   })
 
-  const chatBubble = ref<ChatBubbleState>({
-    text: '',
-    visible: false,
-    streaming: false,
-    requestId: null
-  })
-
   const currentEmotion = ref('neutral')
   const isThinking = ref(false)
   const pendingAnimation = ref<string | null>(null)
   const pendingAnimationLoop = ref(false)
-
-  function appendChatText(delta: string, requestId: string) {
-    if (!chatBubble.value.visible || chatBubble.value.requestId !== requestId) {
-      chatBubble.value = { text: delta, visible: true, streaming: true, requestId }
-    } else {
-      chatBubble.value.text += delta
-    }
-  }
-
-  function finishChatStream(requestId: string) {
-    if (chatBubble.value.requestId === requestId) {
-      chatBubble.value.streaming = false
-    }
-  }
-
-  function showChatMessage(text: string) {
-    chatBubble.value = { text, visible: true, streaming: false, requestId: null }
-  }
-
-  function hideChatBubble() {
-    chatBubble.value.visible = false
-  }
 
   function consumePendingAnimation(): { name: string; loop: boolean } | null {
     if (!pendingAnimation.value) return null
@@ -142,15 +106,10 @@ export const useDeskpetStore = defineStore('deskpet', () => {
     modelOffsetX,
     modelOffsetY,
     hoverFadeEnabled,
-    chatBubble,
     currentEmotion,
     isThinking,
     pendingAnimation,
     pendingAnimationLoop,
-    appendChatText,
-    finishChatStream,
-    showChatMessage,
-    hideChatBubble,
     consumePendingAnimation,
     setModelOffset,
     resetModelView

@@ -15,3 +15,6 @@ airi-main/
 deskpet-app/src/renderer/public/models/ariu_vts/
 deskpet-app/src/renderer/public/models/haru_cubism4/
 hiyori_pro_zh.zip
+deskpet-app/piper/
+*.wav
+*.mp3

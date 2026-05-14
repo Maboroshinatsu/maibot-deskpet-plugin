@@ -1,6 +1,6 @@
-# MaiBot Deskpet v0.1 — 桌面宠物 Live2D 插件
+# MaiBot Deskpet v0.2 — 桌面宠物 Live2D 插件
 
-基于 Electron + Vue3 + PixiJS + Live2D Cubism 4 的 MaiBot 桌面宠物插件，为 MaiBot 提供可交互的 Live2D 角色桌面伴侣。
+基于 Electron + Vue3 + PixiJS + Live2D Cubism 4 的 MaiBot 桌面宠物插件，为 MaiBot 提供可交互的 Live2D 角色桌面伴侣。支持本地 TTS 语音合成与实时唇形同步。
 
 ## 致谢
 
@@ -63,6 +63,8 @@ maibot-deskpet-plugin/            # git clone 后直接丢进 MaiBot/plugins/
 - 托盘控制：显示/隐藏、置顶、锁定穿透、重置模型位置、重置窗口位置、重置全部布局
 - 悬停淡化模型：可通过托盘开启，方便临时查看/操作模型遮挡区域
 - 情绪/动画触发：MaiBot 可通过 Tool 控制角色表情和动作
+- 本地 TTS 语音合成：基于 Piper TTS，离线可用（zh_CN-huayan-medium 中文模型）
+- 实时唇形同步：Web Audio API 分析音量驱动 ParamMouthOpenY
 - 自定义应用图标：托盘和窗口图标使用 `public/icon.png`
 
 ## 技术栈
@@ -99,7 +101,22 @@ npm install
 npm run dev
 ```
 
-### 4. 构建生产版本
+### 4. 安装 Piper TTS（可选，用于语音合成）
+
+下载 [Piper Windows 发行版](https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip)，解压到 `deskpet-app/piper/piper/`。
+
+下载中文语音模型：
+
+```
+https://hf-mirror.com/rhasspy/piper-voices/resolve/v1.0.0/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx
+https://hf-mirror.com/rhasspy/piper-voices/resolve/v1.0.0/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx.json
+```
+
+放入 `deskpet-app/piper/piper/`，与 `piper.exe` 同级。
+
+> 不安装 Piper 时，Maibot 回复不会朗读，其他功能不受影响。
+
+### 5. 构建生产版本
 
 ```bash
 npm run build
@@ -123,6 +140,17 @@ stream_buffer_size = 50
 ```
 
 ## 更新日志
+
+### v0.2.0 — TTS + 唇形同步 + 表情系统
+
+- [x] 本地 TTS 语音合成（Piper TTS，zh_CN-huayan-medium，离线推理）
+- [x] 实时唇形同步（Web Audio API → ParamMouthOpenY，快攻慢退算法）
+- [x] 表情状态机（自动恢复 neutral，可配置持续时间）
+- [x] 动作优先级系统（Idle / Reply / Interaction 三层，低优先级不打断高优先级）
+- [x] 空闲动画调度器（25s 无交互后随机播放 idle 动作）
+- [x] Store 拆分（deskpet / chat 分离）
+- [x] Composable 重构（useWindowDrag / useModelZoom / useModelDrag / useExpressionState / useMotionPriority / useIdleScheduler / useLipSync）
+- [x] Transport Adapter 抽象（input:text 协议，为 maim_message 预留）
 
 ### v0.1.1 — 桌宠交互增强
 
@@ -148,18 +176,11 @@ stream_buffer_size = 50
 
 ## 未来计划
 
-### v0.2 — 交互增强
-- [ ] 鼠标指针追踪优化（头部/身体跟随，类似 Airi）
-- [ ] 聊天气泡智能定位（避免遮挡角色）
-- [ ] 更多角色动画（空闲随机动作、点击反应）
-- [ ] 设置 UI 菜单（模型切换、缩放、置顶开关）
-- [ ] 模型文件快速替换入口
-
 ### v0.3 — 感官扩展
-- [ ] TTS 语音合成播报
 - [ ] STT 语音识别输入
-- [ ] 唇形同步（ParamMouthOpenY + 音频分析）
+- [ ] 浏览器内置 TTS 中文语音回退
 - [ ] 表情包系统集成
+- [ ] 鼠标指针追踪优化（头部/身体跟随，类似 Airi）
 
 ### v0.4 — 多模型 & 兼容性
 - [ ] Cubism 2/3/4 模型兼容性验证

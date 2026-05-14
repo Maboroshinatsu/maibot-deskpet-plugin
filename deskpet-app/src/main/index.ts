@@ -1,6 +1,8 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalShortcut } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
+import { spawn } from 'child_process'
 
 app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.commandLine.appendSwitch('in-process-gpu')
@@ -267,6 +269,32 @@ function formatShortcut(accelerator: string): string {
   return accelerator.replace('CommandOrControl', 'Ctrl')
 }
 
+function getPiperDir(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'piper')
+    : path.join(__dirname, '../../piper/piper')
+}
+
+async function ttsSpeakCore(text: string): Promise<Buffer | null> {
+  const cleanText = text.trim()
+  if (!cleanText) return null
+
+  const piperExe = path.join(getPiperDir(), 'piper.exe')
+  const modelPath = path.join(getPiperDir(), 'zh_CN-huayan-medium.onnx')
+  const outFile = path.join(os.tmpdir(), `maibot-deskpet-tts-${Date.now()}.wav`)
+
+  return new Promise<Buffer | null>((resolve) => {
+    const child = spawn(piperExe, ['--model', modelPath, '--output_file', outFile])
+    child.stdin.write(cleanText)
+    child.stdin.end()
+    child.on('close', (code) => {
+      if (code !== 0) { resolve(null); return }
+      try { resolve(fs.readFileSync(outFile)) } catch { resolve(null) }
+    })
+    child.on('error', () => resolve(null))
+  })
+}
+
 function toggleWindowVisible(): void {
   if (!mainWindow) return
   mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
@@ -335,6 +363,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle('minimize-window', () => {
     mainWindow?.minimize()
+  })
+
+  ipcMain.handle('tts-speak', async (_event, text: string) => {
+    return ttsSpeakCore(text)
   })
 
   ipcMain.handle('close-window', () => {

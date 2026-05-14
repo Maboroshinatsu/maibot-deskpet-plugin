@@ -1,5 +1,5 @@
 <template>
-  <div class="deskpet-stage" :class="{ hovered: isHovered, 'hover-fade-enabled': store.hoverFadeEnabled }" @dblclick="onDoubleClick" @mousedown.left="onMouseDown" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
+  <div class="deskpet-stage" :class="{ hovered: isHovered, 'hover-fade-enabled': store.hoverFadeEnabled }" @dblclick="onDoubleClick" @mousedown.left="onModelMouseDown" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
     <div ref="stageRef" class="live2d-stage" />
     <div class="nav-bar" title="拖动窗口，双击重置模型位置和缩放" @mousedown.stop="onNavMouseDown" @dblclick.stop="resetModelView" />
 
@@ -15,7 +15,7 @@
       <p class="error-hint" v-else>将模型放入 <code>src/renderer/public/models/</code> 后重启应用</p>
     </div>
 
-    <ChatBubble :visible="showBubble" :text="displayText" :streaming="store.chatBubble.streaming" />
+    <ChatBubble :visible="showBubble" :text="displayText" :streaming="chatStore.chatBubble.streaming" />
 
     <QuickInput
       v-model="inputText"
@@ -31,22 +31,32 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import ChatBubble from './ChatBubble.vue'
 import QuickInput from './QuickInput.vue'
 import { useDeskpetStore } from '@/stores/deskpet'
+import { useChatStore } from '@/stores/chat'
 import { useChimeraTransport } from '@/services/transport/chimera'
 import { useLive2DAnimation } from '@/composables/useLive2DAnimation'
-import { createPixiApp, loadLive2DModel, resizeModel, resizeModelFit, playMotion, modelRefW, modelRefH } from '@/services/live2d/loader'
+import { useWindowDrag } from '@/composables/useWindowDrag'
+import { useModelZoom } from '@/composables/useModelZoom'
+import { useModelDrag } from '@/composables/useModelDrag'
+import { useExpressionState } from '@/composables/useExpressionState'
+import { useMotionPriority, MotionLayer } from '@/composables/useMotionPriority'
+import { useIdleScheduler } from '@/composables/useIdleScheduler'
+import { useLipSync } from '@/composables/useLipSync'
+import { createPixiApp, loadLive2DModel, resizeModel, resizeModelFit, modelRefW, modelRefH } from '@/services/live2d/loader'
 import { discoverModel } from '@/services/live2d/model-discovery'
 import { EMOTION_TO_MOTION } from '@/services/protocol'
 
 const store = useDeskpetStore()
+const chatStore = useChatStore()
 const transport = useChimeraTransport()
 const { start: startAnim, stop: stopAnim } = useLive2DAnimation()
+const { onNavMouseDown } = useWindowDrag()
 
 const stageRef = ref<HTMLDivElement>()
 const inputText = ref('')
 const showInput = ref(false)
 const isHovered = ref(false)
-const showBubble = computed(() => store.chatBubble.visible)
-const displayText = computed(() => store.chatBubble.text)
+const showBubble = computed(() => chatStore.chatBubble.visible)
+const displayText = computed(() => chatStore.chatBubble.text)
 const modelError = ref('')
 
 let animFrameId = 0
@@ -88,6 +98,7 @@ onMounted(async () => {
     model.position.y += store.modelOffsetY
     store.live2dModel = model
     store.modelLoaded = true
+    idleScheduler.start()
 
     startAnim(model)
     const canvas = app.view as HTMLCanvasElement
@@ -116,7 +127,8 @@ watch(() => store.currentEmotion, (emotion) => {
   if (!store.live2dModel || emotion === 'neutral' || emotion === 'idle') return
   const motionGroup = EMOTION_TO_MOTION[emotion]
   if (motionGroup) {
-    playMotion(store.live2dModel, motionGroup)
+    playMotionWithPriority(motionGroup, MotionLayer.Reply)
+    idleScheduler.notifyInteraction()
   }
 })
 
@@ -126,11 +138,24 @@ let lastZoom = store.modelZoom
 let mouseX = window.innerWidth / 2
 let mouseY = window.innerHeight / 2
 
+const { onWheel } = useModelZoom(
+  store,
+  () => ({ x: mouseX, y: mouseY }),
+  () => ({ width: window.innerWidth, height: window.innerHeight }),
+  (zoom) => { lastZoom = zoom },
+)
+const { onModelMouseDown, consumeDragOffsets } = useModelDrag()
+const { cleanup: cleanupExpression } = useExpressionState(store)
+const { playMotionWithPriority } = useMotionPriority(store)
+const idleScheduler = useIdleScheduler(playMotionWithPriority)
+const { getMouthOpen } = useLipSync()
+
 function startAnimationPoll() {
   const tick = () => {
     const pending = store.consumePendingAnimation()
     if (pending && store.live2dModel) {
-      playMotion(store.live2dModel, pending.name)
+      playMotionWithPriority(pending.name, MotionLayer.Reply)
+      idleScheduler.notifyInteraction()
     }
     if (store.live2dModel) {
       const cw = window.innerWidth
@@ -149,11 +174,10 @@ function startAnimationPoll() {
         // zoom focal point is handled in onWheel, not here
         resizeModel(store.live2dModel, cw, ch, store.modelZoom)
       }
-      if (dragOffsetX !== 0 || dragOffsetY !== 0) {
-        store.live2dModel.position.x += dragOffsetX
-        store.live2dModel.position.y += dragOffsetY
-        dragOffsetX = 0
-        dragOffsetY = 0
+      const dragOffsets = consumeDragOffsets()
+      if (dragOffsets) {
+        store.live2dModel.position.x += dragOffsets.x
+        store.live2dModel.position.y += dragOffsets.y
         // clamp: keep at least 20% of model visible
         const m = store.live2dModel
         const vw = modelRefW * m.scale.x
@@ -163,6 +187,9 @@ function startAnimationPoll() {
         store.setModelOffset(m.position.x - cw / 2, m.position.y - ch / 2)
       }
       try { store.live2dModel.focus(mouseX, mouseY) } catch { /* focus not supported */ }
+      try {
+        (store.live2dModel as any).internalModel.coreModel.setParameterValueById('ParamMouthOpenY', getMouthOpen())
+      } catch { /* lip sync param not available */ }
     }
     animFrameId = requestAnimationFrame(tick)
   }
@@ -184,6 +211,8 @@ onUnmounted(() => {
   unsubscribeResetModelView = null
   unsubscribeSetHoverFade?.()
   unsubscribeSetHoverFade = null
+  cleanupExpression()
+  idleScheduler.stop()
   window.removeEventListener('mousemove', onMouseMove)
   if (store.pixiApp) {
     const canvas = store.pixiApp.view as HTMLCanvasElement
@@ -207,88 +236,12 @@ function sendText() {
   showInput.value = false
 }
 
-let dragOffsetX = 0
-let dragOffsetY = 0
-let dragActive = false
-let dragStartX = 0
-let dragStartY = 0
-let dragMoved = false
-
-function onNavMouseDown(e: MouseEvent) {
-  let lastX = e.screenX
-  let lastY = e.screenY
-  let moved = false
-
-  const onMove = (ev: MouseEvent) => {
-    const dx = ev.screenX - lastX
-    const dy = ev.screenY - lastY
-    if (!moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return
-    moved = true
-    window.electronAPI?.dragWindow(dx, dy)
-    lastX = ev.screenX
-    lastY = ev.screenY
-  }
-
-  const onUp = () => {
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
-
-function onMouseDown(e: MouseEvent) {
-  dragStartX = e.clientX
-  dragStartY = e.clientY
-  dragMoved = false
-  dragActive = true
-
-  const onMove = (ev: MouseEvent) => {
-    if (!dragActive) return
-    const dx = ev.clientX - dragStartX
-    const dy = ev.clientY - dragStartY
-    if (!dragMoved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return
-    dragMoved = true
-    dragOffsetX += dx
-    dragOffsetY += dy
-    dragStartX = ev.clientX
-    dragStartY = ev.clientY
-  }
-
-  const onUp = () => {
-    dragActive = false
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
-
 function resetModelView() {
   store.resetModelView()
   if (store.live2dModel) {
     resizeModelFit(store.live2dModel, window.innerWidth, window.innerHeight, store.modelZoom)
     lastZoom = store.modelZoom
   }
-}
-
-let lastWheelTime = 0
-
-function onWheel(e: WheelEvent) {
-  e.preventDefault()
-  if (!store.live2dModel) return
-  const now = performance.now()
-  if (now - lastWheelTime < 50) return
-  lastWheelTime = now
-  const factor = e.deltaY > 0 ? 0.92 : 1.08
-  const newZoom = Math.max(0.15, Math.min(20.0, store.modelZoom * factor))
-  // zoom toward mouse cursor position
-  resizeModel(store.live2dModel, window.innerWidth, window.innerHeight, newZoom, mouseX, mouseY)
-  store.modelZoom = newZoom
-  store.setModelOffset(store.live2dModel.position.x - window.innerWidth / 2, store.live2dModel.position.y - window.innerHeight / 2)
-  lastZoom = newZoom
 }
 
 onUnmounted(() => { /* cleanup in stopAnim + pixiApp.destroy */ })
