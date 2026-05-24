@@ -2,6 +2,7 @@
   <div class="deskpet-stage" :class="{ hovered: isHovered, 'hover-fade-enabled': store.hoverFadeEnabled }" @dblclick="onDoubleClick" @mousedown.left="onModelMouseDown" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
     <div ref="stageRef" class="live2d-stage" />
     <div class="nav-bar" title="拖动窗口，双击重置模型位置和缩放" @mousedown.stop="onNavMouseDown" @dblclick.stop="resetModelView" />
+    <div class="mic-btn" :class="{ recording: recordingActive }" @mousedown.stop @click.stop="toggleRecording" :title="recordingActive ? '正在录音，点击停止' : '语音输入'" />
 
     <div v-if="modelError" class="model-error">
       <div class="error-icon">!</div>
@@ -41,6 +42,7 @@ import { useExpressionState } from '@/composables/useExpressionState'
 import { useMotionPriority, MotionLayer } from '@/composables/useMotionPriority'
 import { useIdleScheduler } from '@/composables/useIdleScheduler'
 import { useLipSync } from '@/composables/useLipSync'
+import { useVoiceInput } from '@/composables/useVoiceInput'
 import { createPixiApp, loadLive2DModel, resizeModel, resizeModelFit, modelRefW, modelRefH } from '@/services/live2d/loader'
 import { discoverModel } from '@/services/live2d/model-discovery'
 import { EMOTION_TO_MOTION } from '@/services/protocol'
@@ -149,6 +151,20 @@ const { cleanup: cleanupExpression } = useExpressionState(store)
 const { playMotionWithPriority } = useMotionPriority(store)
 const idleScheduler = useIdleScheduler(playMotionWithPriority)
 const { getMouthOpen } = useLipSync()
+const { start: startRecord, stop: stopRecord, isRecording } = useVoiceInput()
+
+let recordingActive = false
+
+async function toggleRecording() {
+  if (recordingActive) {
+    recordingActive = false
+    const text = await stopRecord()
+    if (text) transport.sendUserText(text)
+  } else {
+    recordingActive = true
+    await startRecord()
+  }
+}
 
 function startAnimationPoll() {
   const tick = () => {
@@ -306,6 +322,39 @@ onUnmounted(() => { /* cleanup in stopAnim + pixiApp.destroy */ })
   height: 5px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.5);
+}
+
+.mic-btn {
+  position: absolute;
+  bottom: 44px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.mic-btn::after {
+  content: '🎤';
+  font-size: 14px;
+  line-height: 1;
+}
+.mic-btn:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+.mic-btn.recording {
+  background: rgba(255, 60, 60, 0.6);
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 60, 60, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 60, 60, 0); }
 }
 
 .model-error {

@@ -31,4 +31,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('set-hover-fade', listener)
   },
   ttsSpeak: (text: string): Promise<string | null> => ipcRenderer.invoke('tts-speak', text),
+  sttTranscribe: (audio: ArrayBuffer): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio),
 })

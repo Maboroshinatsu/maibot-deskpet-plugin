@@ -1,7 +1,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 import { useChatStore } from '@/stores/chat'
-import { useSpeechSynthesis } from './useSpeechSynthesis'
+import { createTtsBackend } from '@/services/tts/backend-composite'
 import { useLipSync } from './useLipSync'
 
 function getWsUrl(): string {
@@ -30,23 +30,16 @@ export function useWebSocket() {
   const token = getWsToken()
   const store = useDeskpetStore()
   const chatStore = useChatStore()
-  const { speak: browserSpeak, cancel: cancelSpeech } = useSpeechSynthesis()
+  const tts = createTtsBackend()
   const { attach: attachLipSync, detach: detachLipSync } = useLipSync()
 
   async function speak(text: string) {
-    try {
-      const data = await window.electronAPI?.ttsSpeak(text)
-      if (data && data.byteLength > 0) {
-        const blob = new Blob([data], { type: 'audio/wav' })
-        const audio = new Audio(URL.createObjectURL(blob))
-        attachLipSync(audio)
-        audio.onended = () => detachLipSync()
-        audio.onerror = () => detachLipSync()
-        audio.play()
-        return
-      }
-    } catch { /* fall through to browser TTS */ }
-    browserSpeak(text)
+    await tts.speak(text)
+    const audio = tts.getAudioElement()
+    if (audio) {
+      attachLipSync(audio)
+      audio.addEventListener('ended', () => detachLipSync(), { once: true })
+    }
   }
 
   const ws = ref<WebSocket | null>(null)
@@ -171,7 +164,7 @@ export function useWebSocket() {
 
   function disconnect() {
     stopHeartbeat()
-    cancelSpeech()
+    tts.cancel()
     if (reconnectTimer.value) {
       clearTimeout(reconnectTimer.value)
       reconnectTimer.value = null

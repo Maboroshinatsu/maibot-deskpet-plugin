@@ -25,6 +25,7 @@ interface ElectronAPI {
   onResetModelView: (callback: () => void) => () => void
   onSetHoverFade: (callback: (enabled: boolean) => void) => () => void
   ttsSpeak: (text: string) => Promise<ArrayBuffer | null>
+  sttTranscribe: (audio: ArrayBuffer) => Promise<string | null>
 }
 
 interface Window {

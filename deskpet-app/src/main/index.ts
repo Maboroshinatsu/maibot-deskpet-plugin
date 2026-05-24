@@ -2,6 +2,7 @@ import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalSho
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
+import http from 'http'
 import { spawn } from 'child_process'
 
 app.commandLine.appendSwitch('disable-gpu-sandbox')
@@ -367,6 +368,26 @@ app.whenReady().then(() => {
 
   ipcMain.handle('tts-speak', async (_event, text: string) => {
     return ttsSpeakCore(text)
+  })
+
+  ipcMain.handle('stt-transcribe', async (_event, audioBuffer: ArrayBuffer) => {
+    const body = Buffer.from(audioBuffer)
+    return new Promise<string | null>((resolve) => {
+      const req = http.request({
+        hostname: '127.0.0.1', port: 18531, path: '/stt', method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': body.length },
+      }, (res) => {
+        let data = ''
+        res.on('data', (chunk: string) => data += chunk)
+        res.on('end', () => {
+          try { resolve(JSON.parse(data).text || null) } catch { resolve(null) }
+        })
+        res.on('error', () => resolve(null))
+      })
+      req.on('error', () => resolve(null))
+      req.write(body)
+      req.end()
+    })
   })
 
   ipcMain.handle('close-window', () => {
