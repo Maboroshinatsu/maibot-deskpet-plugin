@@ -7,8 +7,13 @@ from aiohttp import web
 
 PORT = 9881
 SOVITS_URL = "http://127.0.0.1:9880/tts"
-REF_AUDIO_PATH = r"D:\GPT-SoVITS-v2pro-20250604\终末地全角色GSV模型\参考音（视）频\昼雪\昼雪\昼雪-cut-.wav_0000000000_0000153600.wav"
-PROMPT_TEXT = "这套装备充满了工匠的巧思呢，是新的外情任务吗？"
+
+# ── 配置你的角色 ──
+# 示例配置（已注释，请改成你自己的路径和文本）：
+# REF_AUDIO_PATH = r"D:\GPT-SoVITS-v2pro\角色\参考音频.wav"
+# PROMPT_TEXT = "参考音频里说的文本内容，用于音色克隆"
+REF_AUDIO_PATH = r""
+PROMPT_TEXT = ""
 PROMPT_LANG = "zh"
 TEXT_LANG = "zh"
 SPEED = 0.9        # 稍慢更自然
