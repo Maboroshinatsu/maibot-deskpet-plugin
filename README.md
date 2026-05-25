@@ -104,6 +104,50 @@ maibot-deskpet-plugin/
 
 ## 安装与运行
 
+### 第零步：MaiBot 配置（必要）
+
+在安装插件前，需要先编辑 MaiBot 的 `config/bot_config.toml`，让 MaiBot 认识桌宠平台和用户。
+
+**1. 注册桌宠平台**
+
+在 `[bot]` 节的 `platforms` 数组中添加 `"deskpet:deskpet-user"`：
+
+```toml
+[bot]
+platforms = ["deskpet:deskpet-user"]
+```
+
+如果已经有其他平台（如 QQ），用逗号分隔：
+
+```toml
+[bot]
+platforms = ["qq:123456789", "deskpet:deskpet-user"]
+```
+
+**2. 为桌宠配置专属 Prompt（推荐）**
+
+在 `[[chat.chat_prompts]]` 中新增一条，让 AI 知道桌宠场景下该怎样说话：
+
+```toml
+[[chat.chat_prompts]]
+platform = "deskpet"
+item_id = "deskpet-user"
+rule_type = "private"
+prompt = "你是 Live2D 桌面宠物，正在和用户一对一私聊。回复简短自然，像朋友聊天。可以使用 set_deskpet_emotion 和 trigger_deskpet_animation 工具。"
+```
+
+**3. 桌宠用户与 QQ 用户如何关联？**
+
+目前 `deskpet-user` 是独立的平台身份，和 QQ 用户在 MaiBot 层面没有直接绑定。但有几种方式让它们共享上下文：
+
+| 方式 | 说明 |
+|------|------|
+| **共享人格** | `[personality]` 节是所有平台共用的，桌宠和 QQ 聊天的 AI 人格一致 |
+| **长期记忆关联** | 开启 `a_memorix` 后，MaiBot 会按 `user_id` 做人物画像。如果想让桌宠"知道"某个 QQ 用户的事，可以在聊天中自然地告诉 AI（例如"刚才 QQ 上的张三找你"），AI 会通过记忆系统建立关联 |
+| **手动关联**（进阶） | 在 MaiBot 支持 `user_persona` 绑定的版本中，可以配置 `user_bind = [{from = "deskpet:deskpet-user", to = "qq:123456789"}]`，将桌宠身份映射到特定 QQ 用户 |
+
+最简单的做法：桌宠和 QQ 共享同一套人格和记忆后端，AI 会在对话中自然建立跨平台关联。
+
 ### 第一步：安装插件到 MaiBot
 
 打开 MaiBot 目录，找到 `plugins` 文件夹，把本仓库整个放进去：
