@@ -178,9 +178,11 @@ curl -L -o deskpet-app\sensevoice\tokens.txt "https://hf-mirror.com/csukuangfj/s
 
 ```powershell
 New-Item -ItemType Directory -Force -Path deskpet-app\sensevoice
-Invoke-WebRequest -Uri "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx" -OutFile "deskpet-app\sensevoice\model.onnx"
-Invoke-WebRequest -Uri "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt" -OutFile "deskpet-app\sensevoice\tokens.txt"
+curl.exe -L -o deskpet-app\sensevoice\model.onnx "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx"
+curl.exe -L -o deskpet-app\sensevoice\tokens.txt "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt"
 ```
+
+> PowerShell 的 `curl` 实际上是 `Invoke-WebRequest` 的别名，不支持 `-L` 参数。请使用 `curl.exe`（Windows 自带）。
 
 > 这三个文件正确路径：
 > ```text
