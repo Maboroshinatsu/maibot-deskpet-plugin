@@ -30,6 +30,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('set-hover-fade', listener)
     return () => ipcRenderer.removeListener('set-hover-fade', listener)
   },
-  ttsSpeak: (text: string): Promise<string | null> => ipcRenderer.invoke('tts-speak', text),
-  sttTranscribe: (audio: ArrayBuffer): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio),
+  onScreenshotCaptured: (callback: (base64: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, base64: string) => callback(base64)
+    ipcRenderer.on('screenshot-captured', listener)
+    return () => ipcRenderer.removeListener('screenshot-captured', listener)
+  },
+  setAutoScreenshotInterval: (sec: number) => ipcRenderer.invoke('set-auto-screenshot-interval', sec),
+  sttTranscribe: (audio: ArrayBuffer, url?: string): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio, url),
 })

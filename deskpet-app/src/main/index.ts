@@ -1,9 +1,8 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalShortcut } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalShortcut, desktopCapturer } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import os from 'os'
 import http from 'http'
-import { spawn } from 'child_process'
+import http from 'http'
 
 app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.commandLine.appendSwitch('in-process-gpu')
@@ -270,29 +269,24 @@ function formatShortcut(accelerator: string): string {
   return accelerator.replace('CommandOrControl', 'Ctrl')
 }
 
-function getPiperDir(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'piper')
-    : path.join(__dirname, '../../piper/piper')
+let autoScreenshotTimer: ReturnType<typeof setInterval> | null = null
+let autoScreenshotInterval = 60
+
+function setAutoScreenshot(flag: boolean, intervalSec?: number): void {
+  if (intervalSec && intervalSec > 0) autoScreenshotInterval = intervalSec
+  if (autoScreenshotTimer) { clearInterval(autoScreenshotTimer); autoScreenshotTimer = null }
+  if (flag) {
+    autoScreenshotTimer = setInterval(captureScreen, autoScreenshotInterval * 1000)
+  }
 }
 
-async function ttsSpeakCore(text: string): Promise<Buffer | null> {
-  const cleanText = text.trim()
-  if (!cleanText) return null
-
-  const piperExe = path.join(getPiperDir(), 'piper.exe')
-  const modelPath = path.join(getPiperDir(), 'zh_CN-huayan-medium.onnx')
-  const outFile = path.join(os.tmpdir(), `maibot-deskpet-tts-${Date.now()}.wav`)
-
-  return new Promise<Buffer | null>((resolve) => {
-    const child = spawn(piperExe, ['--model', modelPath, '--output_file', outFile])
-    child.stdin.write(cleanText)
-    child.stdin.end()
-    child.on('close', (code) => {
-      if (code !== 0) { resolve(null); return }
-      try { resolve(fs.readFileSync(outFile)) } catch { resolve(null) }
-    })
-    child.on('error', () => resolve(null))
+function captureScreen(): void {
+  // maxSize limits thumbnail to avoid WebSocket frame overflow
+  desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1280, height: 720 } }).then((sources) => {
+    if (sources.length === 0) return
+    const png = sources[0].thumbnail.toPNG()
+    const b64 = png.toString('base64')
+    mainWindow?.webContents.send('screenshot-captured', b64)
   })
 }
 
@@ -332,6 +326,8 @@ function createTray(): void {
     { label: '置顶', type: 'checkbox', checked: alwaysOnTop, click: (mi) => { setAlwaysOnTopState(mi.checked) } },
     { label: lockLabel, type: 'checkbox', checked: clickThroughLocked, click: (mi) => { setClickThroughLocked(mi.checked) } },
     { label: `悬停淡化模型 (${formatShortcut(SHORTCUTS.toggleHoverFade)})`, type: 'checkbox', checked: hoverFadeEnabled, click: (mi) => { setHoverFadeEnabled(mi.checked) } },
+    { label: '截图识图', click: () => { captureScreen() } },
+    { label: '自动截图', type: 'checkbox', checked: false, click: (mi) => { setAutoScreenshot(mi.checked) } },
     { label: '重置模型位置', click: () => { mainWindow?.webContents.send('reset-model-view') } },
     { label: '重置窗口位置', click: () => { resetWindowPosition() } },
     { label: '重置全部布局', click: () => { resetAllLayout() } },
@@ -366,15 +362,12 @@ app.whenReady().then(() => {
     mainWindow?.minimize()
   })
 
-  ipcMain.handle('tts-speak', async (_event, text: string) => {
-    return ttsSpeakCore(text)
-  })
-
-  ipcMain.handle('stt-transcribe', async (_event, audioBuffer: ArrayBuffer) => {
+  ipcMain.handle('stt-transcribe', async (_event, audioBuffer: ArrayBuffer, url?: string) => {
+    const sttUrl = new URL(url || 'http://127.0.0.1:18530/stt')
     const body = Buffer.from(audioBuffer)
     return new Promise<string | null>((resolve) => {
       const req = http.request({
-        hostname: '127.0.0.1', port: 18531, path: '/stt', method: 'POST',
+        hostname: sttUrl.hostname, port: sttUrl.port, path: sttUrl.pathname, method: 'POST',
         headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': body.length },
       }, (res) => {
         let data = ''
@@ -388,6 +381,11 @@ app.whenReady().then(() => {
       req.write(body)
       req.end()
     })
+  })
+
+  ipcMain.handle('set-auto-screenshot-interval', (_event, sec: number) => {
+    autoScreenshotInterval = sec
+    if (autoScreenshotTimer) setAutoScreenshot(true, sec)
   })
 
   ipcMain.handle('close-window', () => {

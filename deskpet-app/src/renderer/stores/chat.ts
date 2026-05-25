@@ -1,45 +1,98 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
-export interface ChatBubbleState {
-  text: string
-  visible: boolean
-  streaming: boolean
-  requestId: string | null
-}
+export type ChatMessage =
+  | {
+      id: string
+      role: 'user' | 'assistant'
+      text: string
+      streaming: boolean
+      timestamp: number
+      type: 'text'
+    }
+  | {
+      id: string
+      role: 'assistant'
+      base64: string
+      description: string
+      timestamp: number
+      type: 'emoji'
+    }
 
 export const useChatStore = defineStore('chat', () => {
-  const chatBubble = ref<ChatBubbleState>({
-    text: '',
-    visible: false,
-    streaming: false,
-    requestId: null,
+  const messages = ref<ChatMessage[]>([])
+
+  // backward-compat: last assistant bubble
+  const chatBubble = computed(() => {
+    const last = [...messages.value].reverse().find((m) => m.role === 'assistant')
+    return {
+      text: last?.text || '',
+      visible: !!last,
+      streaming: last?.streaming || false,
+      requestId: last?.id || null,
+    }
   })
 
+  function addUserMessage(text: string) {
+    messages.value.push({
+      id: `user-${Date.now()}`,
+      role: 'user',
+      text,
+      streaming: false,
+      timestamp: Date.now(),
+    })
+  }
+
   function appendChatText(delta: string, requestId: string) {
-    if (!chatBubble.value.visible || chatBubble.value.requestId !== requestId) {
-      chatBubble.value = { text: delta, visible: true, streaming: true, requestId }
+    const existing = messages.value.find((m) => m.id === requestId)
+    if (existing) {
+      existing.text += delta
     } else {
-      chatBubble.value.text += delta
+      messages.value.push({
+        id: requestId,
+        role: 'assistant',
+        text: delta,
+        streaming: true,
+        timestamp: Date.now(),
+      })
     }
   }
 
   function finishChatStream(requestId: string) {
-    if (chatBubble.value.requestId === requestId) {
-      chatBubble.value.streaming = false
-    }
+    const msg = messages.value.find((m) => m.id === requestId)
+    if (msg) msg.streaming = false
   }
 
   function showChatMessage(text: string) {
-    chatBubble.value = { text, visible: true, streaming: false, requestId: null }
+    messages.value.push({
+      id: `assistant-${Date.now()}`,
+      role: 'assistant',
+      text,
+      streaming: false,
+      timestamp: Date.now(),
+    })
+  }
+
+  function addEmojiMessage(base64: string, description: string) {
+    messages.value.push({
+      id: `emoji-${Date.now()}`,
+      role: 'assistant',
+      base64,
+      description,
+      timestamp: Date.now(),
+      type: 'emoji',
+    })
   }
 
   function hideChatBubble() {
-    chatBubble.value.visible = false
+    // no-op — messages stay in history
   }
 
   return {
+    messages,
     chatBubble,
+    addUserMessage,
+    addEmojiMessage,
     appendChatText,
     finishChatStream,
     showChatMessage,

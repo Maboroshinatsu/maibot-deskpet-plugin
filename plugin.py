@@ -6,10 +6,17 @@ WebSocket 服务器监听 ws://127.0.0.1:8523，供 Electron 前端连接。
 """
 
 import asyncio
+import hashlib
 import json
 import time
 import uuid
+import base64
+
 import random
+
+import hashlib
+
+import aiohttp
 from dataclasses import dataclass, field
 from logging import Logger
 from typing import Any, Dict, Optional, Set
@@ -109,6 +116,7 @@ class DeskpetWSServer:
     async def start(self):
         self._server = await websockets.serve(
             self._handle_client, self.host, self.port, ping_interval=30, ping_timeout=10,
+            max_size=20_000_000,
         )
         self.logger.info(f"[Deskpet] WebSocket server started on ws://{self.host}:{self.port}")
 
@@ -208,6 +216,22 @@ class DeskpetPlugin(MaiBotPlugin):
     async def on_config_update(self, scope: str, config_data: dict, version: str) -> None:
         self.ctx.logger.info(f"[Deskpet] Config updated: scope={scope}, version={version}")
 
+    TTS_URL = "http://127.0.0.1:9881/tts"
+
+    async def _fetch_tts_audio(self, text: str) -> Optional[str]:
+        """调用 TTS 桥获取音频 base64。"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.TTS_URL, json={"text": text}, timeout=aiohttp.ClientTimeout(total=60),
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.read()
+                        return base64.b64encode(data).decode("ascii")
+        except Exception as e:
+            self.ctx.logger.warning(f"[Deskpet] TTS fetch failed: {e}")
+        return None
+
     # ── MessageGateway: 出站 (MaiBot → 桌宠) ──
 
     @MessageGateway(
@@ -229,6 +253,7 @@ class DeskpetPlugin(MaiBotPlugin):
 
         response_text = self._extract_text_from_message(message)
         if not response_text:
+            self.ctx.logger.warning(f"[Deskpet] Empty extracted text, message keys: {list(message.keys())}")
             return {"success": True}
 
         req_id = uuid.uuid4().hex[:12]
@@ -239,22 +264,51 @@ class DeskpetPlugin(MaiBotPlugin):
             await asyncio.sleep(0.03)
 
         await self._ws_server.broadcast("output:text:done", {"request_id": req_id})
+
+        # 异步取 TTS 音频
+        asyncio.create_task(self._send_tts_audio(response_text, req_id))
+
         return {"success": True}
+
+    async def _send_tts_audio(self, text: str, req_id: str) -> None:
+        """后台获取 TTS 音频并推送到前端。"""
+        b64 = await self._fetch_tts_audio(text)
+        if b64:
+            await self._ws_server.broadcast("output:audio", {
+                "base64": b64,
+                "request_id": req_id,
+            })
 
     def _extract_text_from_message(self, message: Dict[str, Any]) -> str:
         """从 MaiBot 出站消息字典中提取纯文本。"""
-        plain = message.get("processed_plain_text", "")
+        plain = message.get("processed_plain_text") or ""
         if plain:
-            return str(plain)
+            # Strip MaiBot platform reply prefix (e.g. [回复消息], [回复])
+            import re
+            cleaned = re.sub(r'^\[回复[^\]]*\]\s*', '', str(plain))
+            return cleaned
 
-        raw = message.get("raw_message", [])
+        raw = message.get("raw_message") or []
         if isinstance(raw, list):
             texts = [
                 str(comp.get("data", ""))
                 for comp in raw
                 if isinstance(comp, dict) and comp.get("type") == "text"
             ]
-            return "".join(texts)
+            result = "".join(texts)
+            if result:
+                return result
+
+        # Newer MaiBot replyer output may use different fields
+        for key in ("content", "text", "response", "message"):
+            val = message.get(key)
+            if isinstance(val, str) and val.strip():
+                return val
+            if isinstance(val, list):
+                parts = [str(item.get("text") or item.get("data") or "") for item in val if isinstance(item, dict)]
+                result = "".join(parts)
+                if result:
+                    return result
 
         return ""
 
@@ -265,6 +319,8 @@ class DeskpetPlugin(MaiBotPlugin):
             await self._handle_input_text(msg)
         elif msg.type == "input:click":
             await self._handle_input_click(msg)
+        elif msg.type == "input:screenshot":
+            await self._handle_screenshot(msg)
         elif msg.type == "heartbeat":
             pass  # silently ack
 
@@ -273,7 +329,7 @@ class DeskpetPlugin(MaiBotPlugin):
         if not text:
             return
 
-        self.ctx.logger.info(f"[Deskpet] User input: {text}")
+        self.ctx.logger.debug(f"[Deskpet] User input: {text}")
 
         if not self._ws_server:
             return
@@ -313,6 +369,41 @@ class DeskpetPlugin(MaiBotPlugin):
         reaction = random.choice(reactions)
         if self._ws_server:
             await self._ws_server.broadcast("output:text", {"text": reaction})
+
+    async def _handle_screenshot(self, msg: DeskpetMessage) -> None:
+        image_b64 = msg.data.get("image", "")
+        if not image_b64:
+            return
+
+        image_bytes = base64.b64decode(image_b64)
+        image_hash = hashlib.sha256(image_bytes).hexdigest()
+        self.ctx.logger.info(f"[Deskpet] Screenshot received ({len(image_bytes)} bytes, hash={image_hash[:12]})")
+
+        message_id = f"deskpet-ss-{uuid.uuid4().hex[:16]}"
+        await self.ctx.gateway.route_message(
+            gateway_name=self.GATEWAY_NAME,
+            message={
+                "message_id": message_id,
+                "platform": "deskpet",
+                "timestamp": str(time.time()),
+                "message_info": {
+                    "user_info": {
+                        "user_id": self.DESKPET_USER_ID,
+                        "user_nickname": "桌宠用户",
+                    },
+                    "additional_config": {},
+                },
+                "raw_message": [
+                    {
+                        "type": "image",
+                        "data": "",
+                        "hash": image_hash,
+                        "binary_data_base64": image_b64,
+                    },
+                    {"type": "text", "data": "看看屏幕上有什么，简短评论一下"},
+                ],
+            },
+        )
 
     # ── Tool: 表情 ──
 
@@ -358,23 +449,47 @@ class DeskpetPlugin(MaiBotPlugin):
             await self._ws_server.broadcast("state:animation", {"name": animation, "loop": loop})
         return {"success": True, "animation": animation}
 
-    # ── Tool: 气泡 ──
+    # ── Tool: 表情包 ──
 
     @Tool(
-        "send_deskpet_bubble",
-        brief_description="在桌面宠物上显示文本气泡",
-        detailed_description="在 Live2D 桌面宠物上方显示指定文本的对话气泡。",
+        "send_deskpet_emoji",
+        brief_description="发送表情包到桌面宠物",
+        detailed_description="从麦麦的表情包库中搜索匹配的表情包图片，发送到桌面宠物显示。",
         parameters=[
             ToolParameterInfo(
-                name="text", param_type=ToolParamType.STRING,
-                description="要显示在气泡中的文本", required=True,
+                name="description", param_type=ToolParamType.STRING,
+                description="表情包描述，例如'开心'、'无语'、'贴贴'、'猫猫'", required=True,
             ),
         ],
     )
-    async def handle_send_bubble(self, text: str, **kwargs) -> dict:
+    async def handle_send_emoji(self, description: str, **kwargs) -> dict:
+        try:
+            result = await self.ctx.emoji.get_by_description(description)
+            self.ctx.logger.info(f"[Deskpet] get_by_description('{description}') => {result}")
+        except Exception as e:
+            self.ctx.logger.warning(f"[Deskpet] Emoji lookup failed: {e}")
+            return {"success": False, "error": str(e)}
+
+        emoji = result.get("emoji") if isinstance(result, dict) else None
+        if not emoji:
+            # fallback: random emoji
+            try:
+                rand_result = await self.ctx.emoji.get_random(count=1)
+                self.ctx.logger.info(f"[Deskpet] get_random result: {rand_result}")
+                emojis = rand_result.get("emojis", []) if isinstance(rand_result, dict) else []
+                emoji = emojis[0] if emojis else None
+            except Exception as e:
+                self.ctx.logger.warning(f"[Deskpet] get_random failed: {e}")
+        if not emoji:
+            return {"success": True, "emoji": None, "message": "表情库为空，请先收集表情包"}
+
         if self._ws_server:
-            await self._ws_server.broadcast("output:text", {"text": text})
-        return {"success": True, "text": text}
+            await self._ws_server.broadcast("output:emoji", {
+                "base64": emoji.get("base64", ""),
+                "description": emoji.get("description", ""),
+                "emotion": emoji.get("emotion", ""),
+            })
+        return {"success": True, "emoji_sent": True, "description": emoji.get("description", "")}
 
 
 def create_plugin() -> DeskpetPlugin:

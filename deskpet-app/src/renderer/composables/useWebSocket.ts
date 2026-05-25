@@ -1,7 +1,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 import { useChatStore } from '@/stores/chat'
-import { createTtsBackend } from '@/services/tts/backend-composite'
 import { useLipSync } from './useLipSync'
 
 function getWsUrl(): string {
@@ -30,16 +29,35 @@ export function useWebSocket() {
   const token = getWsToken()
   const store = useDeskpetStore()
   const chatStore = useChatStore()
-  const tts = createTtsBackend()
-  const { attach: attachLipSync, detach: detachLipSync } = useLipSync()
+  const { start: startLipSync, stop: stopLipSync } = useLipSync()
 
-  async function speak(text: string) {
-    await tts.speak(text)
-    const audio = tts.getAudioElement()
-    if (audio) {
-      attachLipSync(audio)
-      audio.addEventListener('ended', () => detachLipSync(), { once: true })
+  let currentAudio: HTMLAudioElement | null = null
+  let audioQueue: string[] = []
+
+  function playNextInQueue() {
+    currentAudio = null
+    if (audioQueue.length === 0) return
+    const b64 = audioQueue.shift()!
+    playAudioNow(b64)
+  }
+
+  function playAudioNow(base64: string) {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+    const blob = new Blob([bytes], { type: 'audio/wav' })
+    const audio = new Audio(URL.createObjectURL(blob))
+    currentAudio = audio
+    startLipSync()
+    audio.onended = () => { stopLipSync(); playNextInQueue() }
+    audio.onerror = () => { stopLipSync(); playNextInQueue() }
+    audio.play()
+  }
+
+  function playAudio(base64: string) {
+    if (currentAudio) {
+      audioQueue.push(base64)
+      return
     }
+    playAudioNow(base64)
   }
 
   const ws = ref<WebSocket | null>(null)
@@ -99,14 +117,12 @@ export function useWebSocket() {
       case 'output:text:done':
         chatStore.finishChatStream(request_id || data.request_id || '')
         if (!data.error) {
-          speak(chatStore.chatBubble.text)
           setTimeout(() => chatStore.hideChatBubble(), 8000)
         }
         break
 
       case 'output:text':
         chatStore.showChatMessage(data.text)
-        speak(data.text)
         setTimeout(() => chatStore.hideChatBubble(), 8000)
         break
 
@@ -119,8 +135,16 @@ export function useWebSocket() {
         store.pendingAnimationLoop = !!data.loop
         break
 
+      case 'output:audio':
+        if (data.base64) playAudio(data.base64)
+        break
+
       case 'state:thinking':
         store.isThinking = true
+        break
+
+      case 'output:emoji':
+        if (data.base64) chatStore.addEmojiMessage(data.base64, data.description || '')
         break
 
       case 'heartbeat':
@@ -135,6 +159,10 @@ export function useWebSocket() {
     if (ws.value?.readyState !== WebSocket.OPEN) return false
     ws.value.send(JSON.stringify({ type, data, timestamp: Date.now() }))
     return true
+  }
+
+  function sendScreenshot(base64: string) {
+    send('input:screenshot', { image: base64 })
   }
 
   function startHeartbeat() {
@@ -164,7 +192,6 @@ export function useWebSocket() {
 
   function disconnect() {
     stopHeartbeat()
-    tts.cancel()
     if (reconnectTimer.value) {
       clearTimeout(reconnectTimer.value)
       reconnectTimer.value = null
@@ -181,5 +208,5 @@ export function useWebSocket() {
     disconnect()
   })
 
-  return { ws, connect, disconnect, send }
+  return { ws, connect, disconnect, send, sendScreenshot }
 }

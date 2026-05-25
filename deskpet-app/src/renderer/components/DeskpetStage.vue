@@ -2,7 +2,15 @@
   <div class="deskpet-stage" :class="{ hovered: isHovered, 'hover-fade-enabled': store.hoverFadeEnabled }" @dblclick="onDoubleClick" @mousedown.left="onModelMouseDown" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
     <div ref="stageRef" class="live2d-stage" />
     <div class="nav-bar" title="拖动窗口，双击重置模型位置和缩放" @mousedown.stop="onNavMouseDown" @dblclick.stop="resetModelView" />
-    <div class="mic-btn" :class="{ recording: recordingActive }" @mousedown.stop @click.stop="toggleRecording" :title="recordingActive ? '正在录音，点击停止' : '语音输入'" />
+
+    <!-- bottom-right button bar -->
+    <div class="btn-bar" :class="{ shifted: chatPanelOpen }">
+      <div class="btn-bar-item" @mousedown.stop @click.stop="showSettings = true" title="设置">⚙</div>
+      <div class="btn-bar-item" @mousedown.stop @click.stop="chatPanelOpen = !chatPanelOpen" :title="chatPanelOpen ? '收起聊天' : '聊天记录'">💬</div>
+      <div class="btn-bar-item" :class="{ recording: recordingActive, vad: vadActive }" @mousedown.stop @click.stop="toggleRecording" :title="vadActive ? 'VAD 监听中，点击关闭' : (recordingActive ? '停止录音' : '语音输入')">🎤</div>
+    </div>
+
+    <SettingsPanel :open="showSettings" @close="showSettings = false" />
 
     <div v-if="modelError" class="model-error">
       <div class="error-icon">!</div>
@@ -16,7 +24,12 @@
       <p class="error-hint" v-else>将模型放入 <code>src/renderer/public/models/</code> 后重启应用</p>
     </div>
 
-    <ChatBubble :visible="showBubble" :text="displayText" :streaming="chatStore.chatBubble.streaming" />
+    <ChatBubble
+      :messages="chatStore.messages"
+      :last-bubble="chatStore.chatBubble"
+      :panel-open="chatPanelOpen"
+      @bubbles-cleared="showInput = false; inputText = ''"
+    />
 
     <QuickInput
       v-model="inputText"
@@ -31,6 +44,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import ChatBubble from './ChatBubble.vue'
 import QuickInput from './QuickInput.vue'
+import SettingsPanel from './SettingsPanel.vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 import { useChatStore } from '@/stores/chat'
 import { useChimeraTransport } from '@/services/transport/chimera'
@@ -57,14 +71,15 @@ const stageRef = ref<HTMLDivElement>()
 const inputText = ref('')
 const showInput = ref(false)
 const isHovered = ref(false)
-const showBubble = computed(() => chatStore.chatBubble.visible)
-const displayText = computed(() => chatStore.chatBubble.text)
+const chatPanelOpen = ref(false)
+const showSettings = ref(false)
 const modelError = ref('')
 
 let animFrameId = 0
 let unsubscribeGlobalCursor: (() => void) | null = null
 let unsubscribeResetModelView: (() => void) | null = null
 let unsubscribeSetHoverFade: (() => void) | null = null
+let unsubscribeScreenshot: (() => void) | null = null
 
 onMounted(async () => {
   const container = stageRef.value
@@ -121,6 +136,9 @@ onMounted(async () => {
   unsubscribeSetHoverFade = window.electronAPI?.onSetHoverFade?.((enabled) => {
     store.hoverFadeEnabled = enabled
   }) ?? null
+  unsubscribeScreenshot = window.electronAPI?.onScreenshotCaptured?.((base64) => {
+    transport.sendScreenshot(base64)
+  }) ?? null
 
   startAnimationPoll()
 })
@@ -151,19 +169,13 @@ const { cleanup: cleanupExpression } = useExpressionState(store)
 const { playMotionWithPriority } = useMotionPriority(store)
 const idleScheduler = useIdleScheduler(playMotionWithPriority)
 const { getMouthOpen } = useLipSync()
-const { start: startRecord, stop: stopRecord, isRecording } = useVoiceInput()
+const { start: startRecord, stop: stopRecord, isRecording, enableVad, disableVad } = useVoiceInput()
+let vadActive = false
 
-let recordingActive = false
-
-async function toggleRecording() {
-  if (recordingActive) {
-    recordingActive = false
-    const text = await stopRecord()
-    if (text) transport.sendUserText(text)
-  } else {
-    recordingActive = true
-    await startRecord()
-  }
+function toggleRecording() {
+  if (vadActive) { vadActive = false; disableVad(); return }
+  vadActive = true
+  enableVad((text) => { chatStore.addUserMessage(text); transport.sendUserText(text) })
 }
 
 function startAnimationPoll() {
@@ -227,6 +239,8 @@ onUnmounted(() => {
   unsubscribeResetModelView = null
   unsubscribeSetHoverFade?.()
   unsubscribeSetHoverFade = null
+  unsubscribeScreenshot?.()
+  unsubscribeScreenshot = null
   cleanupExpression()
   idleScheduler.stop()
   window.removeEventListener('mousemove', onMouseMove)
@@ -247,6 +261,7 @@ function onDoubleClick() {
 function sendText() {
   const text = inputText.value.trim()
   if (!text) return
+  chatStore.addUserMessage(text)
   transport.sendUserText(text)
   inputText.value = ''
   showInput.value = false
@@ -324,10 +339,43 @@ onUnmounted(() => { /* cleanup in stopAnim + pixiApp.destroy */ })
   background: rgba(255, 255, 255, 0.5);
 }
 
-.mic-btn {
+.btn-bar {
   position: absolute;
   bottom: 44px;
-  right: 16px;
+  right: 12px;
+  z-index: 65;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.btn-bar-item {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.2s;
+  user-select: none;
+}
+.btn-bar-item:hover { background: rgba(255, 255, 255, 0.6); }
+.btn-bar-item.recording { background: rgba(255, 60, 60, 0.6); animation: mic-pulse 1s ease-in-out infinite; }
+.btn-bar-item.vad { background: rgba(60, 200, 120, 0.6); }
+.btn-bar.shifted { right: 216px; }
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 60, 60, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 60, 60, 0); }
+}
+
+.chat-toggle {
+  position: absolute;
+  bottom: 44px;
+  right: 56px;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -338,23 +386,11 @@ onUnmounted(() => { /* cleanup in stopAnim + pixiApp.destroy */ })
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
-}
-.mic-btn::after {
-  content: '🎤';
   font-size: 14px;
   line-height: 1;
 }
-.mic-btn:hover {
+.chat-toggle:hover {
   background: rgba(255, 255, 255, 0.6);
-}
-.mic-btn.recording {
-  background: rgba(255, 60, 60, 0.6);
-  animation: mic-pulse 1s ease-in-out infinite;
-}
-@keyframes mic-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 60, 60, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 60, 60, 0); }
 }
 
 .model-error {

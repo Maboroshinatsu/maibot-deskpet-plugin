@@ -24,8 +24,9 @@ interface ElectronAPI {
   onGlobalCursorPosition: (callback: (position: GlobalCursorPosition) => void) => () => void
   onResetModelView: (callback: () => void) => () => void
   onSetHoverFade: (callback: (enabled: boolean) => void) => () => void
-  ttsSpeak: (text: string) => Promise<ArrayBuffer | null>
-  sttTranscribe: (audio: ArrayBuffer) => Promise<string | null>
+  onScreenshotCaptured: (callback: (base64: string) => void) => () => void
+  setAutoScreenshotInterval: (sec: number) => void
+  sttTranscribe: (audio: ArrayBuffer, url?: string) => Promise<string | null>
 }
 
 interface Window {

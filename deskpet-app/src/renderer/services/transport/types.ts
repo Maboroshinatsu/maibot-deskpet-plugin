@@ -1,5 +1,6 @@
 export interface DeskpetTransport {
   sendUserText: (text: string) => boolean
+  sendScreenshot: (base64: string) => boolean
   sendHeartbeat: () => boolean
   connect: () => void
   disconnect: () => void
