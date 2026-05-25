@@ -379,17 +379,6 @@ class DeskpetPlugin(MaiBotPlugin):
         image_hash = hashlib.sha256(image_bytes).hexdigest()
         self.ctx.logger.info(f"[Deskpet] Screenshot received ({len(image_bytes)} bytes, hash={image_hash[:12]})")
 
-        # 保存到本地并维护滚动缓冲区（最多 30 张）
-        ss_dir = Path("data/deskpet/screenshots")
-        ss_dir.mkdir(parents=True, exist_ok=True)
-        img_path = ss_dir / f"{image_hash[:12]}.png"
-        img_path.write_bytes(image_bytes)
-
-        # 删除超出上限的旧截图
-        files = sorted(ss_dir.glob("*.png"), key=lambda p: p.stat().st_mtime)
-        for old in files[:-30]:
-            old.unlink(missing_ok=True)
-
         message_id = f"deskpet-ss-{uuid.uuid4().hex[:16]}"
         await self.ctx.gateway.route_message(
             gateway_name=self.GATEWAY_NAME,
