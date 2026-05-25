@@ -66,6 +66,16 @@ async def handle_options(_request: web.Request) -> web.Response:
 
 
 def main() -> None:
+    import sys
+    if not _os.path.isfile(MODEL_PATH):
+        print(f"[stt-bridge] ERROR: Model file not found: {MODEL_PATH}")
+        print("[stt-bridge] Download it from: https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")
+        sys.exit(1)
+    if not _os.path.isfile(TOKENS_PATH):
+        print(f"[stt-bridge] ERROR: Tokens file not found: {TOKENS_PATH}")
+        print("[stt-bridge] Download it from: https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")
+        sys.exit(1)
+
     app = web.Application()
     app.router.add_post("/stt", handle_stt)
     app.router.add_route("OPTIONS", "/stt", handle_options)

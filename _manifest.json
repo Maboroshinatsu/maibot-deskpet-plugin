@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "id": "maibot.deskpet-plugin",
-  "version": "0.1.0",
-  "name": "MaiVTB",
+  "version": "0.3.0",
+  "name": "MaiBot Deskpet",
   "description": "为 MaiBot 接入 Live2D 桌面宠物，支持双向对话（消息管线集成）、表情/动作控制、视线追踪、滚轮缩放和拖拽平移。需配合 deskpet-app Electron 前端使用。",
   "author": {
     "name": "MaboroshiNatsu / DeepSeek-V4PRO",
@@ -26,6 +26,21 @@
       "type": "python_package",
       "name": "websockets",
       "version_spec": ">=12.0"
+    },
+    {
+      "type": "python_package",
+      "name": "aiohttp",
+      "version_spec": ">=3.8"
+    },
+    {
+      "type": "python_package",
+      "name": "numpy",
+      "version_spec": ">=1.24"
+    },
+    {
+      "type": "python_package",
+      "name": "sherpa-onnx",
+      "version_spec": ">=1.10"
     }
   ],
   "capabilities": [

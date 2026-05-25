@@ -1,17 +1,18 @@
 {
   "name": "maibot-deskpet",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "MaiBot 桌面宠物 - Live2D Deskpet",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
+    "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "preview": "env -u ELECTRON_RUN_AS_NODE electron-vite preview"
+    "preview": "electron-vite preview"
   },
   "dependencies": {
     "@pixi/app": "^6.5.10",
     "@pixi/core": "^6.5.10",
     "@pixi/display": "^6.5.10",
+    "@pixi/extensions": "^6.5.10",
     "@pixi/ticker": "^6.5.10",
     "animejs": "^4.3.6",
     "pinia": "^2.3.0",

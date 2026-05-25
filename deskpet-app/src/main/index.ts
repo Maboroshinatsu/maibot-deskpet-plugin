@@ -2,7 +2,6 @@ import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalSho
 import path from 'path'
 import fs from 'fs'
 import http from 'http'
-import http from 'http'
 
 app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.commandLine.appendSwitch('in-process-gpu')
