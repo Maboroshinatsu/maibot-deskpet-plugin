@@ -104,73 +104,133 @@ maibot-deskpet-plugin/
 
 ## 安装与运行
 
-### 1. 安装插件
+### 第一步：安装插件到 MaiBot
 
-将仓库根目录放入 MaiBot 的 `plugins/maibot-deskpet-plugin/`。
+打开 MaiBot 目录，找到 `plugins` 文件夹，把本仓库整个放进去：
 
-### 2. 安装前端依赖
+```text
+你的MaiBot目录/
+└── plugins/
+    └── maibot-deskpet-plugin/    ← 整个仓库放这里
+        ├── _manifest.json
+        ├── plugin.py
+        ├── config.toml
+        ├── start.bat
+        ├── gpt-sovits-bridge.py
+        ├── stt-bridge.py
+        └── deskpet-app/          ← 前端代码
+```
+
+### 第二步：安装前端依赖
+
+打开命令行（在桌宠目录里右键 → "在终端中打开"，或 `cd` 进去）：
 
 ```bash
-cd deskpet-app
+cd 你的MaiBot目录/plugins/maibot-deskpet-plugin/deskpet-app
 npm install
 ```
 
-### 3. 安装 AI 模型
+> 如果 `npm install` 卡住不动，先设置国内镜像再重试：
+> ```bash
+> npm config set registry https://registry.npmmirror.com
+> npm install
+> ```
 
-**SenseVoice 语音识别模型**（约 900MB）：
+安装成功后，`deskpet-app` 下会多出一个 `node_modules` 文件夹。
 
-```bash
-# 在 deskpet-app/ 下创建 sensevoice 目录
-mkdir deskpet-app/sensevoice
+### 第三步：安装 Python 依赖
 
-# 下载模型文件
-# model.onnx: https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx
-# tokens.txt: https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt
+桌宠需要用 Python 跑 STT 和 TTS 桥，先装依赖包：
 
-# 放入 deskpet-app/sensevoice/
-```
-
-**GPT-SoVITS**（需单独安装整合包）：
-
-参考 [GPT-SoVITS 官方文档](https://github.com/RVC-Boss/GPT-SoVITS) 安装整合包。下载角色模型权重和参考音频后，编辑 `gpt-sovits-bridge.py` 中的 `REF_AUDIO_PATH` 和 `PROMPT_TEXT`。
-
-### 4. 启动
-
-**方式一：一键启动**
+> 如果还没有装 Python，先去 [python.org](https://www.python.org/downloads/) 下载安装（勾选"Add Python to PATH"）
 
 ```bash
-start.bat
+pip install aiohttp websockets edge-tts sherpa-onnx numpy
 ```
 
-**方式二：分别启动**
+验证安装成功：
 
 ```bash
-# 终端 1: GPT-SoVITS API (整合包自带)
-cd GPT-SoVITS-v2pro && runtime\python.exe api_v2.py -p 9880
-
-# 终端 2: TTS 桥
-python -u gpt-sovits-bridge.py
-
-# 终端 3: STT 桥
-python -u stt-bridge.py
-
-# 终端 4: 桌宠前端
-cd deskpet-app && npm run dev
-
-# 终端 5: MaiBot（手动启动）
+python -c "import aiohttp; import sherpa_onnx; print('OK')"
 ```
 
-### 5. 启动开发模式
+看到 `OK` 就说明装好了。
+
+### 第四步（可选）：安装 AI 模型
+
+> 没有模型也能用桌宠聊天，只是没有语音功能。不需要语音功能可以跳到第五步。
+
+---
+
+**A. SenseVoice 语音识别模型**（约 900MB，离线识别用）
+
+复制下面三行命令，**一起粘贴到命令行里运行**：
 
 ```bash
-npm run dev
+mkdir -p deskpet-app/sensevoice
+curl -L -o deskpet-app/sensevoice/model.onnx "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx"
+curl -L -o deskpet-app/sensevoice/tokens.txt "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt"
 ```
 
-### 6. 构建生产版本
+> 这三个文件正确路径：
+> ```text
+> deskpet-app/sensevoice/model.onnx      ← 约 900MB
+> deskpet-app/sensevoice/tokens.txt      ← 约 300KB
+> ```
 
-```bash
-npm run build
+---
+
+**B. GPT-SoVITS 语音合成**（需要 NVIDIA 显卡，CPU 也可但较慢）
+
+1. 下载 [GPT-SoVITS 整合包](https://github.com/RVC-Boss/GPT-SoVITS)，解压到任意位置
+2. 下载角色模型（权重文件 `.ckpt` + `.pth` + 参考音频 `.wav`）
+3. 打开 `gpt-sovits-bridge.py`，修改这三行：
+
+```python
+REF_AUDIO_PATH = r"你的参考音频路径.wav"
+PROMPT_TEXT = "参考音频里说的文本内容"
 ```
+
+4. 打开 `start.bat`，找到 `GSV_DIR` 这一行，改成你的整合包路径：
+
+```bat
+set "GSV_DIR=D:\你的GPT-SoVITS目录"
+```
+
+### 第五步：启动
+
+**双击 `start.bat`**，会弹出 4 个命令行窗口：
+
+| 窗口标题 | 作用 | 必须？ |
+|---------|------|--------|
+| STT Bridge | 语音识别 | 可选 |
+| GPT-SoVITS API | 语音合成 | 可选 |
+| TTS Bridge | 文字→语音 | 可选 |
+| Deskpet | 桌宠前端 | ✅ 必须 |
+
+然后**手动启动 MaiBot**。
+
+> 如果 GPT-SoVITS 没配，TTS 窗口会提示"TTS 未启动"，不影响聊天。
+
+### 第六步：测试是否正常
+
+1. 确认桌宠窗口显示角色模型
+2. 双击模型弹出输入框，发一条消息
+3. 如果 MaiBot 回复了文字，说明**插件通信正常**
+4. 如果有 GPT-SoVITS，回复后应有语音朗读
+5. 点右下角 🎤 按钮测试语音输入
+
+### 常见问题
+
+| 问题 | 解决 |
+|------|------|
+| `npm install` 失败 | 设置国内镜像或挂代理 |
+| `python` 命令找不到 | 重新安装 Python，勾选"Add to PATH" |
+| `curl` 无法下载模型 | 用浏览器打开链接手动下载，放到对应目录 |
+| 桌宠窗口黑屏 | 检查 `deskpet-app/src/renderer/public/` 里的 Live2D 模型文件 |
+| 桌宠没连上 MaiBot | 确认 MaiBot 启动且有加载插件，检查 `config.toml` 端口 |
+| TTS 没声音 | `gpt-sovits-bridge.py` 的 `REF_AUDIO_PATH` 是否正确 |
+| STT 不识别 | `sensevoice/` 目录下两个文件是否齐全 |
 
 ## 跨设备连接（局域网 / VPN）
 
