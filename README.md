@@ -88,7 +88,7 @@ maibot-deskpet-plugin/
 ### 设置
 - **设置面板**：右侧滑入面板，连接地址/模型路径/VAD 参数/截图间隔/自动截图间隔
 - **托盘菜单**：显示/隐藏、置顶、锁定穿透、悬停淡化、截图、自动截图、重置布局
-- **快捷键**：Ctrl+Shift+H 显示隐藏、Ctrl+Shift+F 悬停淡化、Ctrl+Shift+L 锁定穿透
+- **快捷键**：Ctrl+Alt+H 显示隐藏、Ctrl+Alt+F 悬停淡化、Ctrl+Alt+L 锁定穿透
 
 ## 技术栈
 
