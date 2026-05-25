@@ -164,12 +164,22 @@ python -c "import aiohttp; import sherpa_onnx; print('OK')"
 
 **A. SenseVoice 语音识别模型**（约 900MB，离线识别用）
 
-复制下面三行命令，**一起粘贴到命令行里运行**：
+> ⚠️ 如果使用 PowerShell，请用下方「PowerShell」版命令。CMD / Git Bash 用户用「CMD」版。
+
+**CMD 版：**
 
 ```bash
-mkdir -p deskpet-app/sensevoice
-curl -L -o deskpet-app/sensevoice/model.onnx "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx"
-curl -L -o deskpet-app/sensevoice/tokens.txt "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt"
+mkdir deskpet-app\sensevoice 2>nul
+curl -L -o deskpet-app\sensevoice\model.onnx "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx"
+curl -L -o deskpet-app\sensevoice\tokens.txt "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt"
+```
+
+**PowerShell 版：**
+
+```powershell
+New-Item -ItemType Directory -Force -Path deskpet-app\sensevoice
+Invoke-WebRequest -Uri "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx" -OutFile "deskpet-app\sensevoice\model.onnx"
+Invoke-WebRequest -Uri "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt" -OutFile "deskpet-app\sensevoice\tokens.txt"
 ```
 
 > 这三个文件正确路径：
