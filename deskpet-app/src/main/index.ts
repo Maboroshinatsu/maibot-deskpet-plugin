@@ -271,12 +271,22 @@ function formatShortcut(accelerator: string): string {
 
 let autoScreenshotTimer: ReturnType<typeof setInterval> | null = null
 let autoScreenshotInterval = 60
+let autoScreenshotCount = 0
+const AUTO_SCREENSHOT_MAX = 30
 
 function setAutoScreenshot(flag: boolean, intervalSec?: number): void {
   if (intervalSec && intervalSec > 0) autoScreenshotInterval = intervalSec
   if (autoScreenshotTimer) { clearInterval(autoScreenshotTimer); autoScreenshotTimer = null }
   if (flag) {
-    autoScreenshotTimer = setInterval(captureScreen, autoScreenshotInterval * 1000)
+    autoScreenshotCount = 0
+    autoScreenshotTimer = setInterval(() => {
+      if (autoScreenshotCount >= AUTO_SCREENSHOT_MAX) {
+        setAutoScreenshot(false)
+        return
+      }
+      autoScreenshotCount++
+      captureScreen()
+    }, autoScreenshotInterval * 1000)
   }
 }
 
