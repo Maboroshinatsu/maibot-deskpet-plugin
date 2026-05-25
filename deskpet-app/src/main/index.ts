@@ -196,8 +196,8 @@ function startGlobalCursorPolling(): void {
 
 function getAppIconPath(): string {
   return app.isPackaged
-    ? path.join(process.resourcesPath, 'icon.svg')
-    : path.join(__dirname, '../renderer/icon.svg')
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(__dirname, '../renderer/icon.png')
 }
 
 function createWindow(): void {
