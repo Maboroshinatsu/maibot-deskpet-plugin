@@ -124,29 +124,19 @@ platforms = ["deskpet:deskpet-user"]
 platforms = ["qq:123456789", "deskpet:deskpet-user"]
 ```
 
-**2. 为桌宠配置专属 Prompt（推荐）**
+**2. 为桌宠配置专属 Prompt（必读）**
 
-在 `[[chat.chat_prompts]]` 中新增一条，让 AI 知道桌宠场景下该怎样说话：
+在 `[[chat.chat_prompts]]` 中新增一条，让 AI 知道桌宠场景下该怎样说话，以及桌宠用户对应哪个 QQ 用户。替换 `qq:12345678` 和昵称为你自己的：
 
 ```toml
 [[chat.chat_prompts]]
 platform = "deskpet"
 item_id = "deskpet-user"
 rule_type = "private"
-prompt = "你是 Live2D 桌面宠物，正在和用户一对一私聊。回复简短自然，像朋友聊天。可以使用 set_deskpet_emotion 和 trigger_deskpet_animation 工具。"
+prompt = "你是 Live2D 桌面宠物，正在和用户一对一私聊。回复简短自然，像朋友聊天。桌宠用户和 qq:12345678 (昵称:千石可乐) 是同一个人，共享记忆和对话上下文。可以使用 set_deskpet_emotion 和 trigger_deskpet_animation 工具。"
 ```
 
-**3. 桌宠用户与 QQ 用户如何关联？**
-
-目前 `deskpet-user` 是独立的平台身份，和 QQ 用户在 MaiBot 层面没有直接绑定。但有几种方式让它们共享上下文：
-
-| 方式 | 说明 |
-|------|------|
-| **共享人格** | `[personality]` 节是所有平台共用的，桌宠和 QQ 聊天的 AI 人格一致 |
-| **长期记忆关联** | 开启 `a_memorix` 后，MaiBot 会按 `user_id` 做人物画像。如果想让桌宠"知道"某个 QQ 用户的事，可以在聊天中自然地告诉 AI（例如"刚才 QQ 上的张三找你"），AI 会通过记忆系统建立关联 |
-| **Prompt 关联** | 在 `[[chat.chat_prompts]]` 的 `prompt` 中明确写出身份映射，例如：`"桌宠用户和 qq:12345678 (昵称:千石可乐) 是同一个人，共享记忆和对话上下文。"`。AI 会在对话中自然把两边的用户当作同一人 |
-
-最简单的做法：桌宠和 QQ 共享同一套人格和记忆后端，AI 会在对话中自然建立跨平台关联。
+如果不需关联 QQ，去掉身份映射那句即可。
 
 ### 第一步：安装插件到 MaiBot
 
