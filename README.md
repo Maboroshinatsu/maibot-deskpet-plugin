@@ -1,4 +1,4 @@
-# MaiBot Deskpet v0.3 — 桌面宠物 Live2D 插件
+# MaiBot Deskpet — 桌面宠物 Live2D 插件
 
 基于 Electron + Vue3 + PixiJS + Live2D Cubism 4 的 MaiBot 桌面宠物插件，为 MaiBot 提供可交互的 Live2D 角色桌面伴侣。支持 GPT-SoVITS 语音合成、SenseVoice 语音识别、实时唇形同步与桌面截图识图。
 
