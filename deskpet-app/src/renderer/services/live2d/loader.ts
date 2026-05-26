@@ -66,6 +66,22 @@ export function setExpression(model: Live2DModel<Cubism4ModelSettings>, id: stri
   }
 }
 
+export function applyParameters(
+  model: Live2DModel<Cubism4ModelSettings>,
+  parameters: Record<string, number>,
+) {
+  const coreModel = (model as any).internalModel?.coreModel
+  if (!coreModel) return
+
+  for (const [id, value] of Object.entries(parameters)) {
+    try {
+      coreModel.setParameterValueById(id, value)
+    } catch (err) {
+      console.debug(`[Deskpet] Parameter not available: ${id}`, err)
+    }
+  }
+}
+
 export function resizeModel(
   model: Live2DModel<Cubism4ModelSettings>,
   cw: number, ch: number,

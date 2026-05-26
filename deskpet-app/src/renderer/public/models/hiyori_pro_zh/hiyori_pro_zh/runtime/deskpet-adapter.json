@@ -4,31 +4,87 @@
   "name": "Hiyori Pro",
   "emotions": {
     "happy": {
-      "motion": { "group": "Tap", "index": 1 }
+      "motion": { "group": "Tap", "index": 1 },
+      "parameters": {
+        "ParamEyeLSmile": 1,
+        "ParamEyeRSmile": 1,
+        "ParamMouthForm": 1
+      }
     },
     "sad": {
-      "motion": { "group": "FlickDown", "index": 0 }
+      "motion": { "group": "FlickDown", "index": 0 },
+      "parameters": {
+        "ParamMouthForm": -1,
+        "ParamBrowLY": -0.5,
+        "ParamBrowRY": -0.5
+      }
     },
     "angry": {
-      "motion": { "group": "Flick@Body", "index": 0 }
+      "motion": { "group": "Flick@Body", "index": 0 },
+      "parameters": {
+        "ParamMouthForm": -0.7,
+        "ParamBrowLAngle": -0.8,
+        "ParamBrowRAngle": 0.8
+      }
     },
     "surprise": {
-      "motion": { "group": "Flick", "index": 0 }
+      "motion": { "group": "Flick", "index": 0 },
+      "parameters": {
+        "ParamMouthOpenY": 0.8,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1
+      }
     },
     "thinking": {
-      "motion": { "group": "FlickUp", "index": 0 }
+      "motion": { "group": "FlickUp", "index": 0 },
+      "parameters": {
+        "ParamMouthForm": 0,
+        "ParamBrowLY": 0.3,
+        "ParamBrowRY": 0.3
+      }
     },
     "shy": {
-      "motion": { "group": "Tap@Body", "index": 0 }
+      "motion": { "group": "Tap@Body", "index": 0 },
+      "parameters": {
+        "ParamCheek": 1,
+        "ParamEyeLSmile": 0.7,
+        "ParamEyeRSmile": 0.7,
+        "ParamMouthForm": 0.5
+      }
     },
     "curious": {
-      "motion": { "group": "FlickUp", "index": 0 }
+      "motion": { "group": "FlickUp", "index": 0 },
+      "parameters": {
+        "ParamMouthForm": 0.3,
+        "ParamBrowLY": 0.4,
+        "ParamBrowRY": 0.4
+      }
     },
     "neutral": {
-      "motion": { "group": "Idle", "index": 0 }
+      "parameters": {
+        "ParamCheek": 0,
+        "ParamEyeLSmile": 0,
+        "ParamEyeRSmile": 0,
+        "ParamMouthForm": 0,
+        "ParamMouthOpenY": 0,
+        "ParamBrowLY": 0,
+        "ParamBrowRY": 0,
+        "ParamBrowLAngle": 0,
+        "ParamBrowRAngle": 0
+      }
     },
     "idle": {
-      "motion": { "group": "Idle", "index": 0 }
+      "parameters": {
+        "ParamCheek": 0,
+        "ParamEyeLSmile": 0,
+        "ParamEyeRSmile": 0,
+        "ParamMouthForm": 0,
+        "ParamMouthOpenY": 0,
+        "ParamBrowLY": 0,
+        "ParamBrowRY": 0,
+        "ParamBrowLAngle": 0,
+        "ParamBrowRAngle": 0
+      }
     }
   },
   "animations": {

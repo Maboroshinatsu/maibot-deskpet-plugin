@@ -20,6 +20,7 @@ export interface EmotionMotionTarget {
 export interface EmotionTarget {
   expression?: string
   motion?: EmotionMotionTarget
+  parameters?: Record<string, number>
 }
 
 export interface ModelEmotionAdapter {
@@ -63,7 +64,19 @@ function normalizeTarget(target: unknown): EmotionTarget | null {
     }
   }
 
-  return normalized.expression || normalized.motion ? normalized : null
+  if (entry.parameters && typeof entry.parameters === 'object') {
+    const parameters: Record<string, number> = {}
+    for (const [id, value] of Object.entries(entry.parameters)) {
+      if (typeof id === 'string' && typeof value === 'number') {
+        parameters[id] = value
+      }
+    }
+    if (Object.keys(parameters).length > 0) {
+      normalized.parameters = parameters
+    }
+  }
+
+  return normalized.expression || normalized.motion || normalized.parameters ? normalized : null
 }
 
 function normalizeAdapter(raw: any): ModelEmotionAdapter {
