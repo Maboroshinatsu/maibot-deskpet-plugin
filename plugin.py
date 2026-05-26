@@ -70,6 +70,18 @@ EMOTION_LIST = [
     "thinking", "shy", "curious", "neutral", "idle"
 ]
 
+TOOL_EMOTION_SUPPRESS_SECONDS = 3.0
+
+EMOTION_KEYWORDS = {
+    "surprise": ("诶", "欸", "哇", "竟然", "真的假的", "不会吧", "惊讶", "震惊"),
+    "angry": ("生气", "讨厌", "烦", "过分", "不理你", "哼", "可恶"),
+    "sad": ("难过", "伤心", "呜", "哭", "失落", "对不起", "抱歉"),
+    "shy": ("害羞", "脸红", "不好意思", "嘿嘿", "欸嘿"),
+    "happy": ("开心", "高兴", "喜欢", "太好了", "好耶", "哈哈", "嘿嘿", "嘻嘻"),
+    "thinking": ("我想想", "让我想想", "可能", "也许", "应该是", "大概"),
+    "curious": ("为什么", "怎么会", "是什么", "好奇", "想知道"),
+}
+
 ACTION_LIST = [
     "wave", "jump", "spin", "sit", "sleep", "wake", "dance", "cheer"
 ]
@@ -183,6 +195,7 @@ class DeskpetPlugin(MaiBotPlugin):
     DESKPET_USER_ID = "deskpet-user"
 
     async def on_load(self) -> None:
+        self._last_tool_emotion_at = 0.0
         self._ws_server: Optional[DeskpetWSServer] = None
         if not self.config.plugin.enabled:
             return
@@ -257,6 +270,16 @@ class DeskpetPlugin(MaiBotPlugin):
             return {"success": True}
 
         req_id = uuid.uuid4().hex[:12]
+
+        recent_tool_emotion = time.time() - self._last_tool_emotion_at < TOOL_EMOTION_SUPPRESS_SECONDS
+        if recent_tool_emotion:
+            self.ctx.logger.debug("[Deskpet] Skip auto emotion because tool emotion was recently set")
+        else:
+            emotion = self._infer_emotion_from_text(response_text)
+            if emotion not in ("neutral", "idle"):
+                self.ctx.logger.debug(f"[Deskpet] Auto inferred emotion: {emotion}")
+                await self._ws_server.broadcast("state:emotion", {"emotion": emotion}, req_id)
+
         buf = self.config.chat.stream_buffer_size
         for i in range(0, len(response_text), buf):
             chunk = response_text[i:i + buf]
@@ -311,6 +334,17 @@ class DeskpetPlugin(MaiBotPlugin):
                     return result
 
         return ""
+
+    def _infer_emotion_from_text(self, text: str) -> str:
+        normalized = text.strip().lower()
+        if not normalized:
+            return "neutral"
+
+        for emotion, keywords in EMOTION_KEYWORDS.items():
+            if any(keyword in normalized for keyword in keywords):
+                return emotion
+
+        return "neutral"
 
     # ── Client Messages (桌宠前端 → 插件) ──
 
@@ -423,6 +457,7 @@ class DeskpetPlugin(MaiBotPlugin):
             return {"success": False, "error": f"未知情绪: {emotion}"}
         if self._ws_server:
             await self._ws_server.broadcast("state:emotion", {"emotion": emotion})
+            self._last_tool_emotion_at = time.time()
         return {"success": True, "emotion": emotion}
 
     # ── Tool: 动作 ──

@@ -23,6 +23,47 @@
 
 将模型文件夹放入 `deskpet-app/src/renderer/public/models/`，在设置面板中修改模型路径。
 
+### 自定义模型适配
+
+每个 Live2D 模型可以在 `.model3.json` 同目录放置 `deskpet-adapter.json`，用于声明桌宠情绪/语义动作到模型动作/表情的映射。
+
+示例：
+
+```json
+{
+  "version": 1,
+  "modelId": "your-model",
+  "emotions": {
+    "happy": {
+      "expression": "smile",
+      "motion": { "group": "Tap", "index": 0 }
+    },
+    "sad": {
+      "expression": "sad"
+    },
+    "neutral": {
+      "expression": "default"
+    }
+  },
+  "animations": {
+    "wave": {
+      "motion": { "group": "Tap", "index": 1 }
+    },
+    "sleep": {
+      "motion": { "group": "FlickDown", "index": 0 }
+    }
+  }
+}
+```
+
+支持的情绪：`happy`、`sad`、`angry`、`surprise`、`thinking`、`shy`、`curious`、`neutral`、`idle`。
+
+支持的语义动作：`wave`、`jump`、`spin`、`sit`、`sleep`、`wake`、`dance`、`cheer`。
+
+如果模型配置了 `expression`，建议同时配置 `neutral` 的默认表情，方便非中性表情结束后恢复。
+
+没有 `deskpet-adapter.json` 的模型仍可正常加载，只是不会响应情绪动作/表情。
+
 ## 项目结构
 
 ```

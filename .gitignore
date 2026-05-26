@@ -15,6 +15,7 @@ airi-main/
 deskpet-app/src/renderer/public/models/
 !deskpet-app/src/renderer/public/models/README.md
 !deskpet-app/src/renderer/public/models/hiyori_pro_zh/
+!deskpet-app/src/renderer/public/models/hiyori_pro_zh/**
 hiyori_pro_zh.zip
 deskpet-app/piper/
 *.wav

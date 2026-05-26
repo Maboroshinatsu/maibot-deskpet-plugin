@@ -1,6 +1,7 @@
 import { watch } from 'vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 import { setExpression } from '@/services/live2d/loader'
+import { getEmotionTarget } from '@/services/live2d/emotion-adapter'
 
 const EXPRESSION_DURATION_MS = 6000
 
@@ -10,7 +11,11 @@ export function useExpressionState(store: ReturnType<typeof useDeskpetStore>) {
   function applyExpression(emotion: string) {
     const model = store.live2dModel
     if (!model) return
-    setExpression(model, emotion)
+
+    const target = getEmotionTarget(store.emotionAdapter, emotion)
+    if (!target?.expression) return
+
+    setExpression(model, target.expression)
   }
 
   function clearRevertTimer() {

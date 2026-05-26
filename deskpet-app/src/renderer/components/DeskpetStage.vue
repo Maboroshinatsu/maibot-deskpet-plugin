@@ -59,7 +59,7 @@ import { useLipSync } from '@/composables/useLipSync'
 import { useVoiceInput } from '@/composables/useVoiceInput'
 import { createPixiApp, loadLive2DModel, resizeModel, resizeModelFit, modelRefW, modelRefH } from '@/services/live2d/loader'
 import { discoverModel } from '@/services/live2d/model-discovery'
-import { EMOTION_TO_MOTION } from '@/services/protocol'
+import { getAnimationTarget, getEmotionTarget, loadEmotionAdapter } from '@/services/live2d/emotion-adapter'
 
 const store = useDeskpetStore()
 const chatStore = useChatStore()
@@ -110,6 +110,7 @@ onMounted(async () => {
     store.pixiApp = app
 
     const model = await loadLive2DModel(modelUrl, app)
+    store.emotionAdapter = await loadEmotionAdapter(modelUrl)
     resizeModel(model, window.innerWidth, window.innerHeight, store.modelZoom)
     model.position.x += store.modelOffsetX
     model.position.y += store.modelOffsetY
@@ -145,9 +146,9 @@ onMounted(async () => {
 
 watch(() => store.currentEmotion, (emotion) => {
   if (!store.live2dModel || emotion === 'neutral' || emotion === 'idle') return
-  const motionGroup = EMOTION_TO_MOTION[emotion]
-  if (motionGroup) {
-    playMotionWithPriority(motionGroup, MotionLayer.Reply)
+  const target = getEmotionTarget(store.emotionAdapter, emotion)
+  if (target?.motion) {
+    playMotionWithPriority(target.motion.group, MotionLayer.Reply, target.motion.index ?? 0)
     idleScheduler.notifyInteraction()
   }
 })
@@ -182,8 +183,13 @@ function startAnimationPoll() {
   const tick = () => {
     const pending = store.consumePendingAnimation()
     if (pending && store.live2dModel) {
-      playMotionWithPriority(pending.name, MotionLayer.Reply)
-      idleScheduler.notifyInteraction()
+      const target = getAnimationTarget(store.emotionAdapter, pending.name)
+      if (target?.motion) {
+        playMotionWithPriority(target.motion.group, MotionLayer.Reply, target.motion.index ?? 0)
+        idleScheduler.notifyInteraction()
+      } else {
+        console.debug(`[Deskpet] No animation adapter target: ${pending.name}`)
+      }
     }
     if (store.live2dModel) {
       const cw = window.innerWidth
@@ -251,6 +257,7 @@ onUnmounted(() => {
     store.pixiApp = null
   }
   store.live2dModel = null
+  store.emotionAdapter = null
   store.modelLoaded = false
 })
 

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, shallowRef, watch } from 'vue'
 import type { Live2DModel } from 'pixi-live2d-display/cubism4'
 import type { Application } from '@pixi/app'
+import type { ModelEmotionAdapter } from '@/services/live2d/emotion-adapter'
 
 interface PersistedModelViewState {
   zoom: number
@@ -59,6 +60,7 @@ export const useDeskpetStore = defineStore('deskpet', () => {
   const wsConnected = ref(false)
   const pixiApp = shallowRef<Application | null>(null)
   const live2dModel = shallowRef<Live2DModel | null>(null)
+  const emotionAdapter = shallowRef<ModelEmotionAdapter | null>(null)
   const modelLoaded = ref(false)
   const modelZoom = ref(persistedModelView.zoom)
   const modelOffsetX = ref(persistedModelView.offsetX)
@@ -101,6 +103,7 @@ export const useDeskpetStore = defineStore('deskpet', () => {
     wsConnected,
     pixiApp,
     live2dModel,
+    emotionAdapter,
     modelLoaded,
     modelZoom,
     modelOffsetX,

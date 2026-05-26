@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "modelId": "hiyori_pro_t11",
+  "name": "Hiyori Pro",
+  "emotions": {
+    "happy": {
+      "motion": { "group": "Tap", "index": 1 }
+    },
+    "sad": {
+      "motion": { "group": "FlickDown", "index": 0 }
+    },
+    "angry": {
+      "motion": { "group": "Flick@Body", "index": 0 }
+    },
+    "surprise": {
+      "motion": { "group": "Flick", "index": 0 }
+    },
+    "thinking": {
+      "motion": { "group": "FlickUp", "index": 0 }
+    },
+    "shy": {
+      "motion": { "group": "Tap@Body", "index": 0 }
+    },
+    "curious": {
+      "motion": { "group": "FlickUp", "index": 0 }
+    },
+    "neutral": {
+      "motion": { "group": "Idle", "index": 0 }
+    },
+    "idle": {
+      "motion": { "group": "Idle", "index": 0 }
+    }
+  },
+  "animations": {
+    "wave": {
+      "motion": { "group": "Tap", "index": 1 }
+    },
+    "jump": {
+      "motion": { "group": "Tap", "index": 0 }
+    },
+    "spin": {
+      "motion": { "group": "Flick", "index": 0 }
+    },
+    "sit": {
+      "motion": { "group": "FlickDown", "index": 0 }
+    },
+    "sleep": {
+      "motion": { "group": "FlickDown", "index": 0 }
+    },
+    "wake": {
+      "motion": { "group": "FlickUp", "index": 0 }
+    },
+    "dance": {
+      "motion": { "group": "Tap@Body", "index": 0 }
+    },
+    "cheer": {
+      "motion": { "group": "Tap", "index": 1 }
+    }
+  }
+}

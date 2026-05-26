@@ -51,11 +51,19 @@ export async function loadLive2DModel(modelPath: string, app: Application): Prom
 }
 
 export function playMotion(model: Live2DModel<Cubism4ModelSettings>, name: string, idx = 0) {
-  try { model.motion(name, idx, MotionPriority.FORCE) } catch { /* motion not found */ }
+  try {
+    model.motion(name, idx, MotionPriority.FORCE)
+  } catch (err) {
+    console.debug(`[Deskpet] Motion not available: ${name}[${idx}]`, err)
+  }
 }
 
 export function setExpression(model: Live2DModel<Cubism4ModelSettings>, id: string) {
-  try { model.expression(id) } catch { /* expression not found */ }
+  try {
+    model.expression(id)
+  } catch (err) {
+    console.debug(`[Deskpet] Expression not available: ${id}`, err)
+  }
 }
 
 export function resizeModel(
