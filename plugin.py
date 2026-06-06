@@ -14,8 +14,6 @@ import base64
 
 import random
 
-import hashlib
-
 import aiohttp
 from dataclasses import dataclass, field
 from logging import Logger
@@ -73,10 +71,10 @@ EMOTION_LIST = [
 TOOL_EMOTION_SUPPRESS_SECONDS = 3.0
 
 EMOTION_KEYWORDS = {
-    "surprise": ("诶", "欸", "哇", "竟然", "真的假的", "不会吧", "惊讶", "震惊"),
+    "surprise": ("哇", "竟然", "真的假的", "不会吧", "惊讶", "震惊"),
     "angry": ("生气", "讨厌", "烦", "过分", "不理你", "哼", "可恶"),
     "sad": ("难过", "伤心", "呜", "哭", "失落", "对不起", "抱歉"),
-    "shy": ("害羞", "脸红", "不好意思", "嘿嘿", "欸嘿"),
+    "shy": ("害羞", "脸红", "不好意思", "欸嘿"),
     "happy": ("开心", "高兴", "喜欢", "太好了", "好耶", "哈哈", "嘿嘿", "嘻嘻"),
     "thinking": ("我想想", "让我想想", "可能", "也许", "应该是", "大概"),
     "curious": ("为什么", "怎么会", "是什么", "好奇", "想知道"),

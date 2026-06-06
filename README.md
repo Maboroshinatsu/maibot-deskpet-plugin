@@ -25,7 +25,7 @@
 
 ### 自定义模型适配
 
-每个 Live2D 模型可以在 `.model3.json` 同目录放置 `deskpet-adapter.json`，用于声明桌宠情绪/语义动作到模型动作/表情的映射。
+每个 Live2D 模型可以在 `.model3.json` 同目录放置 `deskpet-adapter.json`，用于声明桌宠情绪到模型动作/表情/参数，以及语义动作到模型动作的映射。
 
 示例：
 
@@ -58,7 +58,7 @@
 
 支持的情绪：`happy`、`sad`、`angry`、`surprise`、`thinking`、`shy`、`curious`、`neutral`、`idle`。
 
-支持的语义动作：`wave`、`jump`、`spin`、`sit`、`sleep`、`wake`、`dance`、`cheer`。
+支持的语义动作：`wave`、`jump`、`spin`、`sit`、`sleep`、`wake`、`dance`、`cheer`。当前 `animations` 只支持 `motion`，不支持 `expression` / `parameters`；`expression` / `parameters` 仅用于情绪。
 
 如果模型配置了 `expression`，建议同时配置 `neutral` 的默认表情，方便非中性表情结束后恢复。
 
@@ -259,7 +259,7 @@ curl.exe -L -o deskpet-app\sensevoice\tokens.txt "https://hf-mirror.com/csukuang
 
 > PowerShell 的 `curl` 实际上是 `Invoke-WebRequest` 的别名，不支持 `-L` 参数。请使用 `curl.exe`（Windows 自带）。
 
-> 这三个文件正确路径：
+> 这两个文件正确路径：
 > ```text
 > deskpet-app/sensevoice/model.onnx      ← 约 900MB
 > deskpet-app/sensevoice/tokens.txt      ← 约 300KB

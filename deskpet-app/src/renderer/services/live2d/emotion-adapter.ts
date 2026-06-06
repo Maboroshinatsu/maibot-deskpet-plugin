@@ -23,12 +23,16 @@ export interface EmotionTarget {
   parameters?: Record<string, number>
 }
 
+export interface AnimationTarget {
+  motion: EmotionMotionTarget
+}
+
 export interface ModelEmotionAdapter {
   version: 1
   modelId?: string
   name?: string
   emotions: Partial<Record<DeskpetEmotion, EmotionTarget>>
-  animations: Record<string, EmotionTarget>
+  animations: Record<string, AnimationTarget>
 }
 
 const EMPTY_ADAPTER: ModelEmotionAdapter = {
@@ -45,6 +49,10 @@ function getAdapterUrl(modelUrl: string): string {
 
 function isDeskpetEmotion(value: string): value is DeskpetEmotion {
   return (DESKPET_EMOTIONS as readonly string[]).includes(value)
+}
+
+export function isDeskpetEmotionValue(value: unknown): value is DeskpetEmotion {
+  return typeof value === 'string' && isDeskpetEmotion(value)
 }
 
 function normalizeTarget(target: unknown): EmotionTarget | null {
@@ -79,9 +87,23 @@ function normalizeTarget(target: unknown): EmotionTarget | null {
   return normalized.expression || normalized.motion || normalized.parameters ? normalized : null
 }
 
+function normalizeAnimationTarget(target: unknown): AnimationTarget | null {
+  if (!target || typeof target !== 'object') return null
+
+  const entry = target as any
+  if (!entry.motion || typeof entry.motion !== 'object' || typeof entry.motion.group !== 'string') return null
+
+  return {
+    motion: {
+      group: entry.motion.group,
+      index: typeof entry.motion.index === 'number' ? entry.motion.index : 0
+    }
+  }
+}
+
 function normalizeAdapter(raw: any): ModelEmotionAdapter {
   const emotions: Partial<Record<DeskpetEmotion, EmotionTarget>> = {}
-  const animations: Record<string, EmotionTarget> = {}
+  const animations: Record<string, AnimationTarget> = {}
 
   if (raw?.emotions && typeof raw.emotions === 'object') {
     for (const [emotion, target] of Object.entries(raw.emotions)) {
@@ -96,7 +118,7 @@ function normalizeAdapter(raw: any): ModelEmotionAdapter {
     for (const [animation, target] of Object.entries(raw.animations)) {
       if (!animation) continue
 
-      const normalized = normalizeTarget(target)
+      const normalized = normalizeAnimationTarget(target)
       if (normalized) animations[animation] = normalized
     }
   }
@@ -122,7 +144,11 @@ export async function loadEmotionAdapter(modelUrl: string): Promise<ModelEmotion
 
     const raw = await resp.json()
     const adapter = normalizeAdapter(raw)
-    console.info(`[Deskpet] Emotion adapter loaded: ${adapter.modelId || adapterUrl}`)
+    const emotionKeys = Object.keys(adapter.emotions)
+    const animationKeys = Object.keys(adapter.animations)
+    console.info(`[Deskpet] Emotion adapter loaded: ${adapter.name || adapter.modelId || adapterUrl}`)
+    console.info(`[Deskpet] Adapter emotions: ${emotionKeys.length ? emotionKeys.join(', ') : '(none)'}`)
+    console.info(`[Deskpet] Adapter animations: ${animationKeys.length ? animationKeys.join(', ') : '(none)'}`)
     return adapter
   } catch (err) {
     console.warn('[Deskpet] Failed to load emotion adapter:', err)
@@ -141,7 +167,7 @@ export function getEmotionTarget(
 export function getAnimationTarget(
   adapter: ModelEmotionAdapter | null,
   animation: string
-): EmotionTarget | null {
+): AnimationTarget | null {
   if (!adapter || !animation) return null
   return adapter.animations[animation] || null
 }

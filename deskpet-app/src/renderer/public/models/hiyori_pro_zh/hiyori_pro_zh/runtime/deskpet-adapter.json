@@ -30,7 +30,6 @@
     "surprise": {
       "motion": { "group": "Flick", "index": 0 },
       "parameters": {
-        "ParamMouthOpenY": 0.8,
         "ParamEyeLOpen": 1,
         "ParamEyeROpen": 1
       }
@@ -65,8 +64,9 @@
         "ParamCheek": 0,
         "ParamEyeLSmile": 0,
         "ParamEyeRSmile": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
         "ParamMouthForm": 0,
-        "ParamMouthOpenY": 0,
         "ParamBrowLY": 0,
         "ParamBrowRY": 0,
         "ParamBrowLAngle": 0,
@@ -78,8 +78,9 @@
         "ParamCheek": 0,
         "ParamEyeLSmile": 0,
         "ParamEyeRSmile": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
         "ParamMouthForm": 0,
-        "ParamMouthOpenY": 0,
         "ParamBrowLY": 0,
         "ParamBrowRY": 0,
         "ParamBrowLAngle": 0,

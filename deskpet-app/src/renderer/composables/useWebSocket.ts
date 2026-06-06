@@ -2,6 +2,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 import { useChatStore } from '@/stores/chat'
 import { useLipSync } from './useLipSync'
+import { isDeskpetEmotionValue } from '@/services/live2d/emotion-adapter'
 
 function getWsUrl(): string {
   try {
@@ -127,7 +128,11 @@ export function useWebSocket() {
         break
 
       case 'state:emotion':
-        store.currentEmotion = data.emotion
+        if (isDeskpetEmotionValue(data.emotion)) {
+          store.currentEmotion = data.emotion
+        } else {
+          console.debug('[Deskpet] Ignore unknown emotion:', data.emotion)
+        }
         break
 
       case 'state:animation':

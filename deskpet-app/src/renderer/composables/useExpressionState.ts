@@ -39,7 +39,7 @@ export function useExpressionState(store: ReturnType<typeof useDeskpetStore>) {
       if (emotion !== 'neutral' && emotion !== 'idle') {
         revertTimer = setTimeout(() => {
           revertTimer = null
-          applyEmotionState('neutral')
+          store.currentEmotion = 'neutral'
         }, EXPRESSION_DURATION_MS)
       }
     },

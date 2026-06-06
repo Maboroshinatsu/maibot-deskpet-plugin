@@ -171,11 +171,12 @@ const { playMotionWithPriority } = useMotionPriority(store)
 const idleScheduler = useIdleScheduler(playMotionWithPriority)
 const { getMouthOpen } = useLipSync()
 const { start: startRecord, stop: stopRecord, isRecording, enableVad, disableVad } = useVoiceInput()
-let vadActive = false
+const recordingActive = computed(() => isRecording())
+const vadActive = ref(false)
 
 function toggleRecording() {
-  if (vadActive) { vadActive = false; disableVad(); return }
-  vadActive = true
+  if (vadActive.value) { vadActive.value = false; disableVad(); return }
+  vadActive.value = true
   enableVad((text) => { chatStore.addUserMessage(text); transport.sendUserText(text) })
 }
 
