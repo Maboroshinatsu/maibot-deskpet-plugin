@@ -7,6 +7,8 @@
           <button class="settings-close" @click="$emit('close')">&times;</button>
         </div>
         <div class="settings-body">
+          <!-- 后台服务（一键启动的可视化） -->
+          <ServicesSection />
           <!-- 连接 -->
           <div class="section">
             <div class="section-title">连接</div>
@@ -60,6 +62,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
+import ServicesSection from './ServicesSection.vue'
 import { listAvailableModels, getStoredModelPath } from '@/services/live2d/model-discovery'
 import { useDeskpetStore } from '@/stores/deskpet'
 
@@ -135,42 +138,77 @@ function setVadSilence(e: Event) {
   z-index: 70;
   display: flex;
   justify-content: flex-end;
+  background: linear-gradient(to left, rgba(9, 9, 11, 0.35), transparent 45%);
 }
 .settings-panel {
-  width: 280px;
+  width: 320px;
   height: 100%;
-  background: rgba(18, 18, 24, 0.96);
-  backdrop-filter: blur(16px);
+  background: rgba(24, 24, 27, 0.94);
+  backdrop-filter: blur(20px) saturate(1.2);
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
 }
 .settings-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 16px; color: #ddd; font-size: 15px; font-weight: 600;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 15px 18px 13px; color: #e4e4e7; font-size: 14px; font-weight: 600; letter-spacing: 0.3px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
 }
-.settings-close { background: none; border: none; color: #999; font-size: 20px; cursor: pointer; }
-.settings-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 18px; }
-.section { display: flex; flex-direction: column; gap: 6px; }
-.section-title { color: #999; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-.row { display: flex; align-items: center; gap: 8px; }
-label { color: #bbb; font-size: 12px; }
-input, select {
-  width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06); color: #eee; font-size: 12px; outline: none;
+.settings-close {
+  width: 26px; height: 26px; display: grid; place-items: center;
+  background: none; border: none; border-radius: 8px; color: #71717a; font-size: 18px; cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
 }
-select option { background: #1a1a20; color: #eee; }
-input:focus, select:focus { border-color: rgba(120, 160, 220, 0.6); }
-.btn {
-  padding: 7px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.08); color: #ddd; font-size: 12px; cursor: pointer;
+.settings-close:hover { color: #e4e4e7; background: rgba(255, 255, 255, 0.08); }
+.settings-close:active { transform: translateY(1px); }
+.settings-body { flex: 1; overflow-y: auto; padding: 16px 18px 24px; display: flex; flex-direction: column; gap: 22px; }
+.settings-body::-webkit-scrollbar { width: 8px; }
+.settings-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12); border-radius: 4px;
+  border: 2px solid transparent; background-clip: padding-box;
 }
-.btn:hover:not(:disabled) { background: rgba(255,255,255,0.16); }
-.btn:disabled { opacity: 0.5; cursor: default; }
-.hint { color: #666; font-size: 11px; margin: 0; }
+.settings-body::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); background-clip: padding-box; border: 2px solid transparent; }
 
-.settings-slide-enter-active, .settings-slide-leave-active { transition: all 0.25s ease; }
+/* 分区依次入场，节奏感来自 60ms 阶梯 */
+.section { display: flex; flex-direction: column; gap: 7px; animation: section-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.settings-body > :nth-child(1) { animation-delay: 0.03s; }
+.settings-body > :nth-child(2) { animation-delay: 0.09s; }
+.settings-body > :nth-child(3) { animation-delay: 0.15s; }
+.settings-body > :nth-child(4) { animation-delay: 0.21s; }
+.settings-body > :nth-child(5) { animation-delay: 0.27s; }
+@keyframes section-in { from { opacity: 0; transform: translateY(10px); } }
+
+.section-title { color: #71717a; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; }
+.row { display: flex; align-items: center; gap: 8px; }
+label { color: #a1a1aa; font-size: 12px; }
+input, select {
+  width: 100%; padding: 8px 11px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05); color: #e4e4e7; font-size: 12.5px; outline: none;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+input:hover, select:hover { border-color: rgba(255, 255, 255, 0.18); }
+select option { background: #202024; color: #e4e4e7; }
+input:focus, select:focus {
+  border-color: rgba(109, 155, 209, 0.55);
+  box-shadow: 0 0 0 3px rgba(109, 155, 209, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+}
+input[type="number"] { font-family: ui-monospace, Consolas, monospace; }
+.btn {
+  padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.07); color: #d4d4d8; font-size: 12px; cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.1s ease;
+}
+.btn:hover:not(:disabled) { background: rgba(255,255,255,0.13); border-color: rgba(255,255,255,0.2); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.hint { color: #63636b; font-size: 11px; margin: 0; line-height: 1.5; }
+
+.settings-slide-enter-active, .settings-slide-leave-active { transition: opacity 0.28s ease; }
 .settings-slide-enter-from, .settings-slide-leave-to { opacity: 0; }
-.settings-slide-enter-from .settings-panel, .settings-slide-leave-to .settings-panel { transform: translateX(40px); }
-.settings-slide-enter-active .settings-panel, .settings-slide-leave-active .settings-panel { transition: transform 0.25s ease; }
+.settings-slide-enter-active .settings-panel, .settings-slide-leave-active .settings-panel {
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.settings-slide-enter-from .settings-panel, .settings-slide-leave-to .settings-panel { transform: translateX(48px); }
 </style>

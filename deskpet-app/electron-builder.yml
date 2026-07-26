@@ -1,0 +1,39 @@
+# 打包配置 —— npm run dist 产出 NSIS 安装版 exe
+#
+# 布局约定（与 main/services.ts、main/index.ts 的路径解析一一对应）：
+#   resources/bridges/            STT/TTS 桥脚本（ServiceManager 在这里找）
+#   resources/bridges/sensevoice/ SenseVoice 模型（~900MB，随包分发，装完即用）
+#   resources/models/             Live2D 模型（getModelsRoot → deskpet:// 协议提供）
+#   resources/icon.png            托盘/窗口图标（getAppIconPath）
+appId: com.maboroshinatsu.maibot-deskpet
+productName: MaiBot Deskpet
+electronDist: node_modules/electron/dist
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  # 模型走 extraResources（deskpet:// 协议），不塞进 asar
+  - "!out/renderer/models/**"
+asar: true
+extraResources:
+  - from: ../stt-bridge.py
+    to: bridges/stt-bridge.py
+  - from: ../gpt-sovits-bridge.py
+    to: bridges/gpt-sovits-bridge.py
+  - from: sensevoice
+    to: bridges/sensevoice
+  - from: src/renderer/public/models
+    to: models
+  - from: build/icon.png
+    to: icon.png
+win:
+  target:
+    - nsis
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: MaiBot 桌宠
+  artifactName: MaiBot-Deskpet-Setup-${version}.exe

@@ -22,6 +22,28 @@ interface ModelEntry {
   url: string
 }
 
+type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits'
+type ServiceStatus = 'stopped' | 'starting' | 'running' | 'error'
+
+interface ServiceState {
+  id: ServiceId
+  name: string
+  port: number
+  status: ServiceStatus
+  pid: number | null
+  detail: string
+  available: boolean
+  showTerminal: boolean
+  autoStart: boolean
+}
+
+interface ServicesConfig {
+  pythonPath: string
+  gsvDir: string
+  autoStart: Record<ServiceId, boolean>
+  showTerminal: Record<ServiceId, boolean>
+}
+
 interface ElectronAPI {
   dragWindow: (dx: number, dy: number) => Promise<void>
   setAlwaysOnTop: (flag: boolean) => Promise<void>
@@ -36,6 +58,15 @@ interface ElectronAPI {
   sttTranscribe: (audio: ArrayBuffer, url?: string) => Promise<string | null>
   listModels: () => Promise<ModelEntry[]>
   reloadWindow: () => Promise<void>
+  listServices: () => Promise<ServiceState[]>
+  startService: (id: ServiceId) => Promise<void>
+  stopService: (id: ServiceId) => Promise<void>
+  restartService: (id: ServiceId) => Promise<void>
+  getServiceLogs: (id: ServiceId) => Promise<string[]>
+  getServicesConfig: () => Promise<ServicesConfig>
+  setServicesConfig: (patch: Partial<ServicesConfig>) => Promise<ServicesConfig>
+  onServicesUpdate: (callback: (states: ServiceState[]) => void) => () => void
+  onServiceLog: (callback: (payload: { id: ServiceId; lines: string[] }) => void) => () => void
 }
 
 interface Window {

@@ -2,6 +2,15 @@
 
 基于 Electron + Vue3 + PixiJS + Live2D Cubism 4 的 MaiBot 桌面宠物插件，为 MaiBot 提供可交互的 Live2D 角色桌面伴侣。支持 GPT-SoVITS 语音合成、SenseVoice 语音识别、实时唇形同步与桌面截图识图。
 
+## 快速开始（安装版，推荐）
+
+1. 从 [Releases](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases) 下载 `MaiBot-Deskpet-Setup-x.x.x.exe` 并安装——内置全部 Live2D 模型和 SenseVoice 语音识别模型
+2. 安装 [Python](https://www.python.org/downloads/)（勾选 Add to PATH），然后 `pip install aiohttp numpy sherpa-onnx`（语音桥的运行时）
+3. 把本仓库放进 MaiBot 的 `plugins/` 目录，并完成下方「安装与运行 → 第零步」的 MaiBot 配置
+4. 启动 MaiBot，双击桌面「MaiBot 桌宠」——STT/TTS 桥随桌宠自动启动，状态灯和日志在设置面板 ⚙ →「后台服务」
+
+语音合成需要额外安装 GPT-SoVITS 整合包（可选），跑源码 / 二次开发请看下方「安装与运行」的完整流程。
+
 ## 致谢
 
 本项目受到以下开源项目的启发和帮助：
@@ -59,21 +68,26 @@ maibot-deskpet-plugin/
 ├── _manifest.json                # 插件清单
 ├── config.toml                   # 运行时配置
 ├── plugin.py                     # 插件入口（MaiBot MessageGateway）
-├── start.bat                     # 一键启动桌宠 + AI 桥
+├── start.bat                     # 一键启动（源码/开发方式）
 ├── gpt-sovits-bridge.py          # GPT-SoVITS TTS 桥 (端口 9881)
 ├── stt-bridge.py                 # SenseVoice STT 桥 (端口 18530)
+├── docs/
+│   ├── MODEL-ADAPTER-SPEC.md     # Live2D 模型适配规范（给 AI 看的）
+│   └── deskpet-adapter.schema.json
 └── deskpet-app/                  # Electron 前端
     ├── package.json
     ├── electron.vite.config.js
+    ├── electron-builder.yml      # 安装包打包配置（npm run dist）
     └── src/
         ├── main/                 # Electron 主进程
-        │   └── index.ts
+        │   ├── index.ts
+        │   └── services.ts       # 后台服务管理器（桥进程 spawn/日志/健康探测）
         ├── preload/              # 预加载脚本
         │   └── index.ts
         └── renderer/             # Vue3 渲染进程
-            ├── components/       # DeskpetStage, ChatBubble, QuickInput, SettingsPanel
+            ├── components/       # DeskpetStage, ChatBubble, QuickInput, SettingsPanel, ServicesSection
             ├── composables/      # useWebSocket, useVad, useVoiceInput, useLipSync 等
-            ├── services/         # Live2D 加载、Transport、TTS
+            ├── services/         # Live2D 加载/适配校验、Transport
             ├── stores/           # Pinia 状态管理
             └── public/           # Live2D Cubism 运行时 + 模型文件 + 图标
 ```
@@ -113,9 +127,10 @@ maibot-deskpet-plugin/
 - **自动截图**：定时截屏（间隔可配），MaiBot 主动根据屏幕内容搭话
 - **NapCat 兼容**：图片以 base64 + hash 格式通过管道，与 QQ 图片处理同路径
 
-### 设置
-- **设置面板**：右侧滑入面板，连接地址/模型下拉切换/VAD 参数/自动截图间隔
-- **模型热切换**：设置面板选中即换，无需重启；列表由主进程扫描 `public/models/` 得到
+### 设置与服务管理
+- **后台服务管理**：STT 桥 / TTS 桥 / GPT-SoVITS 随桌宠自动启动，面板内状态灯、启动/停止/重启、实时日志；每个服务可选「终端窗口」模式（在独立控制台里跑）；退出桌宠自动清理全部子进程
+- **设置面板**：右侧滑入面板，连接地址/模型下拉切换/VAD 参数/自动截图间隔/服务路径配置
+- **模型热切换**：设置面板选中即换，无需重启；列表由主进程扫描模型目录得到
 - **托盘菜单**：显示/隐藏、置顶、锁定穿透、悬停淡化、截图、自动截图、重置布局
 - **快捷键**：Ctrl+Alt+H 显示隐藏、Ctrl+Alt+F 悬停淡化、Ctrl+Alt+L 锁定穿透、Ctrl+R/F5 重载、Ctrl+Shift+I 开发者工具
 
@@ -184,7 +199,9 @@ prompt = "你是 Live2D 桌面宠物，正在和用户一对一私聊。回复�
         └── deskpet-app/          ← 前端代码
 ```
 
-### 第二步：安装前端依赖
+### 第二步：安装前端依赖（仅源码方式需要）
+
+> 用安装版 exe 的话跳过这一步——前端已经打进安装包里了。
 
 打开命令行（在桌宠目录里右键 → "在终端中打开"，或 `cd` 进去）：
 
@@ -208,7 +225,7 @@ npm install
 > 如果还没有装 Python，先去 [python.org](https://www.python.org/downloads/) 下载安装（勾选"Add Python to PATH"）
 
 ```bash
-pip install aiohttp websockets edge-tts sherpa-onnx numpy
+pip install aiohttp websockets sherpa-onnx numpy
 ```
 
 验证安装成功：
@@ -226,6 +243,8 @@ python -c "import aiohttp; import sherpa_onnx; print('OK')"
 ---
 
 **A. SenseVoice 语音识别模型**（约 900MB，离线识别用）
+
+> 安装版 exe 已内置该模型（在 `resources\bridges\sensevoice\`），跳过 A 节即可。以下仅源码方式需要。
 
 > ⚠️ 如果使用 PowerShell，请用下方「PowerShell」版命令。CMD / Git Bash 用户用「CMD」版。
 
@@ -266,15 +285,24 @@ REF_AUDIO_PATH = r"你的参考音频路径.wav"
 PROMPT_TEXT = "参考音频里说的文本内容"
 ```
 
-4. 打开 `start.bat`，找到 `GSV_DIR` 这一行，改成你的整合包路径：
-
-```bat
-set "GSV_DIR=D:\你的GPT-SoVITS目录"
-```
+4. 告诉桌宠整合包在哪（二选一）：
+   - **安装版 exe**：设置面板 → 后台服务 → 服务路径配置 → 填「GPT-SoVITS 整合包目录」（常见路径会自动探测，探测到就不用填）
+   - **start.bat 启动**：改脚本里的 `GSV_DIR` 一行：`set "GSV_DIR=D:\你的GPT-SoVITS目录"`
 
 ### 第五步：启动
 
-**双击 `start.bat`**，会弹出 4 个命令行窗口：
+**方式 A（推荐）：安装版 exe**
+
+运行 `deskpet-app` 下的 `npm run dist` 得到 `release/MaiBot-Deskpet-Setup-x.x.x.exe`（或直接用发布的安装包），安装后桌面双击图标即可——**STT 桥 / TTS 桥 / GPT-SoVITS 会随桌宠自动启动**，不再弹一排命令行窗口。
+
+- 服务的状态灯、启动/停止/重启、日志都在 **设置面板 ⚙ → 后台服务** 里
+- 想看某个服务的原生控制台？勾选该服务的「终端窗口」再重启它
+- SenseVoice 语音识别模型已随包分发，装完即用
+- 桥脚本用系统 Python 运行（需要 `pip install aiohttp numpy sherpa-onnx`），Python 不在 PATH 时可在「服务路径配置」里指定
+
+**方式 B：start.bat（开发 / 跑源码）**
+
+双击 `start.bat`，会弹出 4 个命令行窗口：
 
 | 窗口标题 | 作用 | 必须？ |
 |---------|------|--------|
@@ -283,9 +311,9 @@ set "GSV_DIR=D:\你的GPT-SoVITS目录"
 | TTS Bridge | 文字→语音 | 可选 |
 | Deskpet | 桌宠前端 | ✅ 必须 |
 
-然后**手动启动 MaiBot**。
+两种方式都需要**手动启动 MaiBot**（设置面板里的「MaiBot 插件」状态灯会告诉你连上没有）。
 
-> 如果 GPT-SoVITS 没配，TTS 窗口会提示"TTS 未启动"，不影响聊天。
+> 如果 GPT-SoVITS 没配，TTS 服务会显示"未找到整合包"，不影响文字聊天。
 
 ### 第六步：测试是否正常
 
@@ -377,21 +405,26 @@ stream_buffer_size = 50
 - **NachoBot**：TTS 适配器中继网关模式、情感分类器、音频后处理
 - **Shinsekai**：TTSAdapter 抽象 + 工厂模式、角色卡片系统、DAG 工作流管道
 
-### v0.4 — 感官增强
+### 后续计划
 
 - [ ] 麦克风全局快捷键（按住说话，需解决原生键盘钩子兼容性）
 - [ ] 多角色声线切换（设置面板可选 GPT-SoVITS 预设）
 - [ ] 情绪驱动声线切换（根据文本情绪选不同参考音频）
-- [ ] 浏览器内置 TTS 回退
-
-### v0.5 — 产品化
-
 - [ ] 设置面板完善（更多配置项、一键恢复默认）
 - [ ] 窗口尺寸自动适配模型
-- [ ] 打包为独立安装包（Windows NSIS / macOS DMG）
 - [ ] 静态立绘模式（无需 Live2D 模型，PNG + 情绪标签切换）
+- [ ] 动作循环播放（`loop` 标志目前只播一次）
+- [ ] macOS 打包（DMG）
 
 ## 更新日志
+
+### v0.5.0 — 产品化：安装版 + 后台服务管理（当前）
+
+- [x] Windows NSIS 独立安装包（`npm run dist`，内置全部模型与 SenseVoice）
+- [x] 后台服务管理：STT/TTS 桥、GPT-SoVITS 随桌宠自启，状态灯/日志面板/可选终端窗口，退出自动清理进程树
+- [x] Live2D 模型适配规范 v1（docs/MODEL-ADAPTER-SPEC.md + JSON Schema + 加载时校验 + 控制台调试三件套）
+- [x] 全量代码审查修复 30 项（并发竞态、STT 中文乱码、TTS 自听回环、气泡流式冻结、半开连接检测等）
+- [x] UI 打磨：设置/聊天/输入框统一设计语言，聊天记录改为抽屉面板
 
 ### v0.3.0 — AI 感官 + 设置面板
 

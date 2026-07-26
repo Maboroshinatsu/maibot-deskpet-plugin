@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import http from 'http'
 import { pathToFileURL } from 'url'
+import { ServiceManager, type ServiceId, type ServicesConfig } from './services'
 
 app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.commandLine.appendSwitch('in-process-gpu')
@@ -247,6 +248,9 @@ function saveWindowState(): void {
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+const serviceManager = new ServiceManager((channel, payload) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
+})
 let cursorPollTimer: ReturnType<typeof setInterval> | null = null
 let lastCursorX: number | null = null
 let lastCursorY: number | null = null
@@ -579,6 +583,17 @@ app.whenReady().then(() => {
 
   ipcMain.handle('list-models', () => listModels())
 
+  ipcMain.handle('services-list', () => serviceManager.list())
+  ipcMain.handle('service-start', (_event, id: ServiceId) => serviceManager.start(id))
+  ipcMain.handle('service-stop', (_event, id: ServiceId) => serviceManager.stop(id))
+  ipcMain.handle('service-restart', (_event, id: ServiceId) => serviceManager.restart(id))
+  ipcMain.handle('service-logs', (_event, id: ServiceId) => serviceManager.logsOf(id))
+  ipcMain.handle('services-get-config', () => serviceManager.getConfig())
+  ipcMain.handle('services-set-config', (_event, patch: Partial<ServicesConfig>) => serviceManager.setConfig(patch))
+
+  // 一键启动的核心：应用起来就把配置为自启的后台服务拉起来
+  serviceManager.autoStartAll()
+
   ipcMain.handle('reload-window', () => {
     mainWindow?.webContents.reload()
   })
@@ -599,4 +614,5 @@ app.on('before-quit', () => {
   stopGlobalCursorPolling()
   globalShortcut.unregisterAll()
   if (tray) { tray.destroy(); tray = null }
+  serviceManager.stopAllSync()
 })

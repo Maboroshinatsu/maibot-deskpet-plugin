@@ -4,9 +4,9 @@
     <div class="nav-bar" title="拖动窗口，双击重置模型位置和缩放" @mousedown.stop="onNavMouseDown" @dblclick.stop="resetModelView" />
 
     <!-- bottom-right button bar -->
-    <div class="btn-bar" :class="{ shifted: chatPanelOpen }">
-      <div class="btn-bar-item" @mousedown.stop @click.stop="showSettings = true" title="设置">⚙</div>
-      <div class="btn-bar-item" @mousedown.stop @click.stop="chatPanelOpen = !chatPanelOpen" :title="chatPanelOpen ? '收起聊天' : '聊天记录'">💬</div>
+    <div class="btn-bar">
+      <div class="btn-bar-item" @mousedown.stop @click.stop="openSettings" title="设置">⚙</div>
+      <div class="btn-bar-item" @mousedown.stop @click.stop="openChatPanel" title="聊天记录">💬</div>
       <div
         class="btn-bar-item"
         :class="{ recording: recordingActive, vad: vadActive }"
@@ -37,6 +37,7 @@
       :panel-open="chatPanelOpen"
       :thinking="store.isThinking"
       @bubbles-cleared="showInput = false; inputText = ''"
+      @close="chatPanelOpen = false"
     />
 
     <QuickInput
@@ -89,6 +90,16 @@ const isHovered = ref(false)
 const chatPanelOpen = ref(false)
 const showSettings = ref(false)
 const modelError = ref('')
+
+// 两个右侧抽屉互斥：打开一个就收起另一个
+function openSettings() {
+  chatPanelOpen.value = false
+  showSettings.value = true
+}
+function openChatPanel() {
+  showSettings.value = false
+  chatPanelOpen.value = true
+}
 
 let animFrameId = 0
 let unsubscribeGlobalCursor: (() => void) | null = null
@@ -329,7 +340,7 @@ const micTitle = computed(() => {
 function sendVoiceText(text: string) {
   chatStore.addUserMessage(text)
   if (!transport.sendUserText(text)) {
-    chatStore.showChatMessage('⚠ 未连接到 MaiBot，这条消息没有发出去')
+    chatStore.showChatMessage('（未连接到 MaiBot，这条消息没有发出去）')
   }
 }
 
@@ -465,7 +476,7 @@ function sendText() {
   if (!text) return
   chatStore.addUserMessage(text)
   if (!transport.sendUserText(text)) {
-    chatStore.showChatMessage('⚠ 未连接到 MaiBot，这条消息没有发出去')
+    chatStore.showChatMessage('（未连接到 MaiBot，这条消息没有发出去）')
   }
   inputText.value = ''
   showInput.value = false
@@ -568,7 +579,6 @@ function resetModelView() {
 .btn-bar-item:hover { background: rgba(255, 255, 255, 0.6); }
 .btn-bar-item.recording { background: rgba(255, 60, 60, 0.6); animation: mic-pulse 1s ease-in-out infinite; }
 .btn-bar-item.vad { background: rgba(60, 200, 120, 0.6); }
-.btn-bar.shifted { right: 216px; }
 @keyframes mic-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 60, 60, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(255, 60, 60, 0); }

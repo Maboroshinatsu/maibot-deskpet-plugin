@@ -65,35 +65,47 @@ function autoResize(event: Event) {
 
 .input-field {
   display: block;
-  min-width: 200px;
+  min-width: 220px;
   max-width: 100%;
   padding: 10px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
+  border: 1px solid rgba(24, 24, 27, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px) saturate(1.2);
   font-size: 14px;
   font-family: inherit;
-  line-height: 1.4;
+  line-height: 1.5;
   outline: none;
-  color: #333;
+  color: #27272a;
   resize: none;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 8px 28px -8px rgba(0, 0, 0, 0.18);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
   -webkit-app-region: no-drag;
 }
 
-.input-field::placeholder {
-  color: #aaa;
+.input-field:focus {
+  border-color: rgba(109, 155, 209, 0.5);
+  box-shadow:
+    0 0 0 3px rgba(109, 155, 209, 0.16),
+    0 8px 28px -8px rgba(0, 0, 0, 0.18);
 }
 
-.input-fade-enter-active,
+.input-field::placeholder {
+  color: #a1a1aa;
+}
+
+.input-fade-enter-active {
+  transition: opacity 0.22s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
 .input-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 .input-fade-enter-from,
 .input-fade-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(20px);
+  transform: translateX(-50%) translateY(16px) scale(0.97);
 }
 </style>

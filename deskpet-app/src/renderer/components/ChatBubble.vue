@@ -12,9 +12,17 @@
     </TransitionGroup>
   </div>
 
-  <!-- chat history panel -->
+  <!-- chat history panel（与设置面板同一套交互：遮罩 + 右侧抽屉 + 头部关闭） -->
   <Transition name="panel-slide">
-    <div v-if="panelOpen" class="chat-panel" @mousedown.stop>
+    <div v-if="panelOpen" class="chat-overlay" @mousedown.stop>
+      <div class="chat-panel">
+      <div class="panel-header">
+        <span>对话记录</span>
+        <span class="panel-header-right">
+          <span class="panel-count">{{ messages.length }}</span>
+          <button class="panel-close" @click="emit('close')">&times;</button>
+        </span>
+      </div>
       <div class="panel-messages" ref="messagesRef">
         <div v-for="msg in messages" :key="msg.id" :class="['msg-row', msg.role]">
           <div class="msg-label">{{ msg.role === 'user' ? '你' : '麦麦' }}</div>
@@ -23,7 +31,11 @@
             <template v-else>{{ msg.text }}<span v-if="msg.streaming" class="msg-cursor">|</span></template>
           </div>
         </div>
-        <div v-if="messages.length === 0" class="msg-empty">暂无消息</div>
+        <div v-if="messages.length === 0" class="msg-empty">
+          <div class="msg-empty-title">还没有消息</div>
+          <div class="msg-empty-hint">双击桌宠打开输入框<br />或点左下麦克风开始语音</div>
+        </div>
+      </div>
       </div>
     </div>
   </Transition>
@@ -52,7 +64,7 @@ const props = defineProps<{
   thinking: boolean
 }>()
 
-const emit = defineEmits<{ 'bubbles-cleared': [] }>()
+const emit = defineEmits<{ 'bubbles-cleared': []; close: [] }>()
 
 const floatingBubbles = ref<FloatingBubble[]>([])
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -175,47 +187,85 @@ onUnmounted(() => {
 .comic-pop-enter-from { opacity: 0; transform: translateY(16px) scale(0.9); }
 .comic-pop-leave-to { opacity: 0; transform: translateY(-8px); }
 
-/* ── history panel ── */
-.chat-panel {
+/* ── history panel：与 SettingsPanel 同一套抽屉模式 ── */
+.chat-overlay {
   position: absolute;
-  right: 6px;
-  top: 6px;
-  bottom: 90px;
-  width: 200px;
-  background: rgba(16, 16, 20, 0.94);
-  backdrop-filter: blur(14px);
-  border-radius: 12px;
+  inset: 0;
   z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  background: linear-gradient(to left, rgba(9, 9, 11, 0.35), transparent 45%);
+}
+.chat-panel {
+  width: 280px;
+  height: 100%;
+  background: rgba(24, 24, 27, 0.94);
+  backdrop-filter: blur(20px) saturate(1.2);
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.55);
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
+.panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 15px 18px 13px;
+  color: #e4e4e7; font-size: 14px; font-weight: 600; letter-spacing: 0.3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.panel-header-right { display: flex; align-items: center; gap: 8px; }
+.panel-count { color: #63636b; font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 400; }
+.panel-close {
+  width: 26px; height: 26px; display: grid; place-items: center;
+  background: none; border: none; border-radius: 8px; color: #71717a; font-size: 18px; cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+.panel-close:hover { color: #e4e4e7; background: rgba(255, 255, 255, 0.08); }
+.panel-close:active { transform: translateY(1px); }
 .panel-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 10px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+.panel-messages::-webkit-scrollbar { width: 7px; }
+.panel-messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12); border-radius: 4px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
 .msg-row { display: flex; flex-direction: column; }
-.msg-label { font-size: 10px; color: #777; margin-bottom: 2px; padding: 0 4px; }
+.msg-label { font-size: 10px; color: #71717a; margin-bottom: 2px; padding: 0 4px; }
 .msg-row.user { align-items: flex-end; }
-.msg-row.user .msg-label { color: #7cb8e4; }
+.msg-row.user .msg-label { color: #8fb4d9; }
 .msg-row.assistant { align-items: flex-start; }
-.msg-row.assistant .msg-label { color: #a0d1eb; }
 .msg-bubble {
   max-width: 90%;
   padding: 6px 10px;
   border-radius: 12px;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
   word-break: break-word;
-  color: #eee;
+  color: #e4e4e7;
 }
-.msg-row.user .msg-bubble { background: rgba(70, 130, 200, 0.5); border-bottom-right-radius: 3px; }
-.msg-row.assistant .msg-bubble { background: rgba(255,255,255,0.12); border-bottom-left-radius: 3px; }
-.msg-empty { color: #666; font-size: 12px; text-align: center; margin-top: 20px; }
-.panel-slide-enter-active, .panel-slide-leave-active { transition: all 0.25s ease; }
-.panel-slide-enter-from, .panel-slide-leave-to { opacity: 0; transform: translateX(16px); }
+.msg-row.user .msg-bubble {
+  background: rgba(109, 155, 209, 0.28);
+  border: 1px solid rgba(109, 155, 209, 0.22);
+  border-bottom-right-radius: 3px;
+}
+.msg-row.assistant .msg-bubble {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom-left-radius: 3px;
+}
+.msg-empty { text-align: center; margin-top: 36px; display: flex; flex-direction: column; gap: 6px; }
+.msg-empty-title { color: #a1a1aa; font-size: 12px; }
+.msg-empty-hint { color: #63636b; font-size: 11px; line-height: 1.7; }
+.panel-slide-enter-active, .panel-slide-leave-active { transition: opacity 0.28s ease; }
+.panel-slide-enter-from, .panel-slide-leave-to { opacity: 0; }
+.panel-slide-enter-active .chat-panel, .panel-slide-leave-active .chat-panel {
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.panel-slide-enter-from .chat-panel, .panel-slide-leave-to .chat-panel { transform: translateX(48px); }
 </style>

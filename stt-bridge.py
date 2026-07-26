@@ -11,7 +11,8 @@ from aiohttp import web
 
 PORT = 18530
 
-MODEL_DIR = _os.path.join(
+# 打包版桌宠会通过环境变量指定模型目录（模型跟随 resources/bridges 分发）
+MODEL_DIR = _os.environ.get("DESKPET_SENSEVOICE_DIR") or _os.path.join(
     _os.path.dirname(_os.path.abspath(__file__)), "deskpet-app", "sensevoice"
 )
 MODEL_PATH = _os.path.join(MODEL_DIR, "model.onnx")

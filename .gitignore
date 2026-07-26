@@ -23,3 +23,5 @@ deskpet-app/piper/
 plan.md
 .vscode/
 *.tsbuildinfo
+deskpet-app/release/
+deskpet-app/sensevoice/

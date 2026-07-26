@@ -1,7 +1,8 @@
 {
   "name": "maibot-deskpet",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "description": "MaiBot 桌面宠物 - Live2D Deskpet",
+  "author": "Maboroshinatsu",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -9,7 +10,8 @@
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web"
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "dist": "electron-vite build && electron-builder --win nsis"
   },
   "dependencies": {
     "@pixi/app": "^6.5.10",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.0",
     "electron": "^34.5.8",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^2.3.0",
     "typescript": "^5.7.0",
     "vue-tsc": "^2.2.0"

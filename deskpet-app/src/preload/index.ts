@@ -44,4 +44,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sttTranscribe: (audio: ArrayBuffer, url?: string): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio, url),
   listModels: (): Promise<ModelEntry[]> => ipcRenderer.invoke('list-models'),
   reloadWindow: () => ipcRenderer.invoke('reload-window'),
+
+  // ── 后台服务管理（STT/TTS 桥、GPT-SoVITS）──
+  listServices: () => ipcRenderer.invoke('services-list'),
+  startService: (id: string) => ipcRenderer.invoke('service-start', id),
+  stopService: (id: string) => ipcRenderer.invoke('service-stop', id),
+  restartService: (id: string) => ipcRenderer.invoke('service-restart', id),
+  getServiceLogs: (id: string): Promise<string[]> => ipcRenderer.invoke('service-logs', id),
+  getServicesConfig: () => ipcRenderer.invoke('services-get-config'),
+  setServicesConfig: (patch: unknown) => ipcRenderer.invoke('services-set-config', patch),
+  onServicesUpdate: (callback: (states: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, states: unknown) => callback(states)
+    ipcRenderer.on('services-update', listener)
+    return () => ipcRenderer.removeListener('services-update', listener)
+  },
+  onServiceLog: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('service-log', listener)
+    return () => ipcRenderer.removeListener('service-log', listener)
+  },
 })
