@@ -3,26 +3,25 @@ import { useDeskpetStore } from '@/stores/deskpet'
 import { useChatStore } from '@/stores/chat'
 import { useLipSync } from './useLipSync'
 import { isDeskpetEmotionValue } from '@/services/live2d/emotion-adapter'
+import { DEFAULT_WS_URL, type ServerMessage } from '@/services/protocol'
+
+/** TTS 停下后再静默一小段，避免尾音被 VAD 当成用户说话 */
+const SPEAKING_TAIL_MS = 400
+/** 待排队播放的音频上限，防止后端连续推送时无限堆积 */
+const MAX_AUDIO_QUEUE = 8
 
 function getWsUrl(): string {
   try {
     const custom = localStorage.getItem('deskpet/ws-url')
     if (custom) return custom
   } catch { /* localStorage blocked */ }
-  return 'ws://127.0.0.1:8523/ws'
+  return DEFAULT_WS_URL
 }
 
 function getWsToken(): string {
   try {
     return localStorage.getItem('deskpet/ws-token') || ''
   } catch { return '' }
-}
-
-interface WSMessage {
-  type: string
-  data: any
-  timestamp?: number
-  request_id?: string
 }
 
 export function useWebSocket() {
@@ -33,32 +32,84 @@ export function useWebSocket() {
   const { start: startLipSync, stop: stopLipSync } = useLipSync()
 
   let currentAudio: HTMLAudioElement | null = null
+  let currentAudioUrl: string | null = null
   let audioQueue: string[] = []
+  let speakingTailTimer: ReturnType<typeof setTimeout> | null = null
+
+  function releaseCurrentAudio() {
+    if (currentAudioUrl) {
+      URL.revokeObjectURL(currentAudioUrl)
+      currentAudioUrl = null
+    }
+    currentAudio = null
+  }
+
+  function markSpeakingEnded() {
+    if (speakingTailTimer) clearTimeout(speakingTailTimer)
+    speakingTailTimer = setTimeout(() => {
+      speakingTailTimer = null
+      if (!currentAudio) store.isSpeaking = false
+    }, SPEAKING_TAIL_MS)
+  }
 
   function playNextInQueue() {
-    currentAudio = null
-    if (audioQueue.length === 0) return
-    const b64 = audioQueue.shift()!
-    playAudioNow(b64)
+    releaseCurrentAudio()
+    stopLipSync()
+    if (audioQueue.length === 0) {
+      markSpeakingEnded()
+      return
+    }
+    playAudioNow(audioQueue.shift()!)
   }
 
   function playAudioNow(base64: string) {
-    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-    const blob = new Blob([bytes], { type: 'audio/wav' })
-    const audio = new Audio(URL.createObjectURL(blob))
+    let objectUrl: string
+    try {
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+      objectUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }))
+    } catch (err) {
+      console.warn('[Deskpet] Bad audio payload:', err)
+      playNextInQueue()
+      return
+    }
+
+    const audio = new Audio(objectUrl)
     currentAudio = audio
+    currentAudioUrl = objectUrl
+    if (speakingTailTimer) { clearTimeout(speakingTailTimer); speakingTailTimer = null }
+    store.isSpeaking = true
     startLipSync()
-    audio.onended = () => { stopLipSync(); playNextInQueue() }
-    audio.onerror = () => { stopLipSync(); playNextInQueue() }
-    audio.play()
+    audio.onended = () => playNextInQueue()
+    audio.onerror = () => playNextInQueue()
+    audio.play().catch((err) => {
+      console.warn('[Deskpet] Audio playback failed:', err)
+      playNextInQueue()
+    })
   }
 
   function playAudio(base64: string) {
     if (currentAudio) {
+      if (audioQueue.length >= MAX_AUDIO_QUEUE) {
+        console.warn('[Deskpet] Audio queue full, dropping oldest clip')
+        audioQueue.shift()
+      }
       audioQueue.push(base64)
       return
     }
     playAudioNow(base64)
+  }
+
+  function stopAllAudio() {
+    audioQueue = []
+    if (currentAudio) {
+      currentAudio.pause()
+      currentAudio.onended = null
+      currentAudio.onerror = null
+    }
+    releaseCurrentAudio()
+    stopLipSync()
+    if (speakingTailTimer) { clearTimeout(speakingTailTimer); speakingTailTimer = null }
+    store.isSpeaking = false
   }
 
   const ws = ref<WebSocket | null>(null)
@@ -66,13 +117,30 @@ export function useWebSocket() {
   const reconnectTimer = ref<ReturnType<typeof setTimeout> | null>(null)
   const reconnectAttempt = ref(0)
   const maxReconnectDelay = 30000
+  /** 连接活过这么久才算“稳定”，此时才把退避计数清零，防止“接受即断”时以 1s 下限死循环 */
+  const STABLE_AFTER_MS = 5000
+  /** 超过这么久没收到任何服务端消息（含心跳回显）就判定半开连接，强制重连 */
+  const LIVENESS_TIMEOUT_MS = 45000
+  let stableTimer: ReturnType<typeof setTimeout> | null = null
+  let lastActivity = 0
+  let closedByUs = false
+
+  function clearStableTimer() {
+    if (stableTimer) {
+      clearTimeout(stableTimer)
+      stableTimer = null
+    }
+  }
 
   function connect() {
-    if (ws.value?.readyState === WebSocket.OPEN) return
+    // CONNECTING 期间重复 connect 会孤儿化前一个 socket，双连接同时喂 store
+    const state = ws.value?.readyState
+    if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return
+    closedByUs = false
 
     try {
       ws.value = new WebSocket(url)
-    } catch (e) {
+    } catch {
       console.warn('[Deskpet] WebSocket connect failed, retrying...')
       scheduleReconnect()
       return
@@ -82,14 +150,19 @@ export function useWebSocket() {
       console.log('[Deskpet] WebSocket connected')
       store.wsConnected = true
       if (token) send('auth', { token })
-      reconnectAttempt.value = 0
+      lastActivity = Date.now()
+      clearStableTimer()
+      stableTimer = setTimeout(() => {
+        stableTimer = null
+        reconnectAttempt.value = 0
+      }, STABLE_AFTER_MS)
       startHeartbeat()
     }
 
     ws.value.onmessage = (event) => {
+      lastActivity = Date.now()
       try {
-        const msg: WSMessage = JSON.parse(event.data)
-        handleMessage(msg)
+        handleMessage(JSON.parse(event.data) as ServerMessage)
       } catch (e) {
         console.warn('[Deskpet] Failed to parse message:', e)
       }
@@ -98,8 +171,10 @@ export function useWebSocket() {
     ws.value.onclose = () => {
       console.log('[Deskpet] WebSocket disconnected')
       store.wsConnected = false
+      store.isThinking = false
+      clearStableTimer()
       stopHeartbeat()
-      scheduleReconnect()
+      if (!closedByUs) scheduleReconnect()
     }
 
     ws.value.onerror = () => {
@@ -107,29 +182,31 @@ export function useWebSocket() {
     }
   }
 
-  function handleMessage(msg: WSMessage) {
+  function handleMessage(msg: ServerMessage) {
     const { type, data, request_id } = msg
 
     switch (type) {
       case 'output:text:delta':
+        store.isThinking = false
         chatStore.appendChatText(data.delta, request_id || data.request_id || '')
         break
 
       case 'output:text:done':
+        store.isThinking = false
         chatStore.finishChatStream(request_id || data.request_id || '')
-        if (!data.error) {
-          setTimeout(() => chatStore.hideChatBubble(), 8000)
-        }
+        if (data.error) console.warn('[Deskpet] Reply failed:', data.error)
         break
 
       case 'output:text':
+        store.isThinking = false
         chatStore.showChatMessage(data.text)
-        setTimeout(() => chatStore.hideChatBubble(), 8000)
         break
 
       case 'state:emotion':
         if (isDeskpetEmotionValue(data.emotion)) {
+          // 同值赋值不会触发 watch，pulse 保证相同情绪连发也能重放并刷新回退窗口
           store.currentEmotion = data.emotion
+          store.emotionPulse++
         } else {
           console.debug('[Deskpet] Ignore unknown emotion:', data.emotion)
         }
@@ -149,6 +226,7 @@ export function useWebSocket() {
         break
 
       case 'output:emoji':
+        store.isThinking = false
         if (data.base64) chatStore.addEmojiMessage(data.base64, data.description || '')
         break
 
@@ -167,12 +245,19 @@ export function useWebSocket() {
   }
 
   function sendScreenshot(base64: string) {
-    send('input:screenshot', { image: base64 })
+    return send('input:screenshot', { image: base64 })
   }
 
   function startHeartbeat() {
     stopHeartbeat()
     heartbeatTimer.value = setInterval(() => {
+      // 睡眠唤醒/NAT 掉线后 TCP 半开，socket 仍显示 OPEN 但收不到任何东西；
+      // 服务端会回显心跳，超时没有任何入站消息就主动断开触发重连
+      if (lastActivity && Date.now() - lastActivity > LIVENESS_TIMEOUT_MS) {
+        console.warn('[Deskpet] No server activity, forcing reconnect')
+        ws.value?.close()
+        return
+      }
       send('heartbeat')
     }, 15000)
   }
@@ -196,11 +281,14 @@ export function useWebSocket() {
   }
 
   function disconnect() {
+    closedByUs = true
+    clearStableTimer()
     stopHeartbeat()
     if (reconnectTimer.value) {
       clearTimeout(reconnectTimer.value)
       reconnectTimer.value = null
     }
+    stopAllAudio()
     ws.value?.close()
     ws.value = null
   }

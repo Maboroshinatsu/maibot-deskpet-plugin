@@ -21,48 +21,35 @@
 - [imuncle/live2d](https://github.com/imuncle/live2d/tree/master)
 - [summerscar/live2dDemo](https://github.com/summerscar/live2dDemo)
 
-将模型文件夹放入 `deskpet-app/src/renderer/public/models/`，在设置面板中修改模型路径。
+将模型文件夹放入 `deskpet-app/src/renderer/public/models/`，然后在设置面板「显示 → Live2D 模型」的下拉框里选择即可，切换立即生效、无需重启。下拉框由主进程扫描该目录得到（递归查找 `*.model3.json`）；如果放模型时桌宠已经开着，点一下「重新扫描」。
+
+首次启动加载哪个模型由 `deskpet-app/src/renderer/services/model-config.ts` 的 `MODEL_PATH` 决定；用户在面板里选过之后，选择会记在本地并优先于这个默认值。
 
 ### 自定义模型适配
 
-每个 Live2D 模型可以在 `.model3.json` 同目录放置 `deskpet-adapter.json`，用于声明桌宠情绪到模型动作/表情/参数，以及语义动作到模型动作的映射。
+每个 Live2D 模型的图层、参数命名、动作分组都是作者自己定的，所以情绪/动作的映射没法内置。
+在 `.model3.json` 同目录放一个 `deskpet-adapter.json` 即可声明这张翻译表：
 
-示例：
+支持的情绪：`happy`、`sad`、`angry`、`surprise`、`thinking`、`shy`、`curious`、`neutral`、`idle`
+支持的语义动作：`wave`、`jump`、`spin`、`sit`、`sleep`、`wake`、`dance`、`cheer`
 
-```json
-{
-  "version": 1,
-  "modelId": "your-model",
-  "emotions": {
-    "happy": {
-      "expression": "smile",
-      "motion": { "group": "Tap", "index": 0 }
-    },
-    "sad": {
-      "expression": "sad"
-    },
-    "neutral": {
-      "expression": "default"
-    }
-  },
-  "animations": {
-    "wave": {
-      "motion": { "group": "Tap", "index": 1 }
-    },
-    "sleep": {
-      "motion": { "group": "FlickDown", "index": 0 }
-    }
-  }
-}
-```
+没有 `deskpet-adapter.json` 的模型仍可正常加载、跟随视线、口型同步，只是不响应情绪和动作指令。
 
-支持的情绪：`happy`、`sad`、`angry`、`surprise`、`thinking`、`shy`、`curious`、`neutral`、`idle`。
+**📖 完整规范：[docs/MODEL-ADAPTER-SPEC.md](docs/MODEL-ADAPTER-SPEC.md)**
 
-支持的语义动作：`wave`、`jump`、`spin`、`sit`、`sleep`、`wake`、`dance`、`cheer`。当前 `animations` 只支持 `motion`，不支持 `expression` / `parameters`；`expression` / `parameters` 仅用于情绪。
+这份规范是**给 AI 看的**——你不需要懂代码：
 
-如果模型配置了 `expression`，建议同时配置 `neutral` 的默认表情，方便非中性表情结束后恢复。
+1. 在桌宠里选中你的模型，按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> 打开控制台，运行 `deskpetInspectModel()` 导出模型能力清单
+2. 把规范全文 + 这份清单发给任意 AI，让它生成 `deskpet-adapter.json`
+3. 放进模型目录，重新选一次模型，控制台会输出**校验报告**——把报错原文发回给 AI 修正即可
+4. 校验通过后用 `deskpetTestEmotion('happy')` / `deskpetTestAnimation('wave')` 在控制台逐项预览观感
 
-没有 `deskpet-adapter.json` 的模型仍可正常加载，只是不会响应情绪动作/表情。
+之所以要这套流程：Cubism 运行时对不存在的参数是**静默接受**的（不报错也没效果），动作组名写错同样只是静默不播。
+所以适配写错的表现是「完全没反应」而不是报错，必须靠加载时校验来定位。
+参数 ID 又存在 `.moc3` 二进制里（`.cdi3.json` 是可选文件，很多模型没有），因此能力清单只能从运行时导出。
+
+机器可校验的 JSON Schema：[docs/deskpet-adapter.schema.json](docs/deskpet-adapter.schema.json)
+参考实现：`deskpet-app/src/renderer/public/models/hiyori_pro_zh/.../runtime/deskpet-adapter.json`
 
 ## 项目结构
 
@@ -127,9 +114,10 @@ maibot-deskpet-plugin/
 - **NapCat 兼容**：图片以 base64 + hash 格式通过管道，与 QQ 图片处理同路径
 
 ### 设置
-- **设置面板**：右侧滑入面板，连接地址/模型路径/VAD 参数/截图间隔/自动截图间隔
+- **设置面板**：右侧滑入面板，连接地址/模型下拉切换/VAD 参数/自动截图间隔
+- **模型热切换**：设置面板选中即换，无需重启；列表由主进程扫描 `public/models/` 得到
 - **托盘菜单**：显示/隐藏、置顶、锁定穿透、悬停淡化、截图、自动截图、重置布局
-- **快捷键**：Ctrl+Alt+H 显示隐藏、Ctrl+Alt+F 悬停淡化、Ctrl+Alt+L 锁定穿透
+- **快捷键**：Ctrl+Alt+H 显示隐藏、Ctrl+Alt+F 悬停淡化、Ctrl+Alt+L 锁定穿透、Ctrl+R/F5 重载、Ctrl+Shift+I 开发者工具
 
 ## 技术栈
 

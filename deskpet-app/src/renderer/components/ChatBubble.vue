@@ -2,6 +2,9 @@
   <!-- floating comic bubbles (text + emoji) -->
   <div class="comic-bubbles">
     <TransitionGroup name="comic-pop">
+      <div v-if="thinking" key="__thinking__" class="comic-bubble assistant thinking-bubble">
+        <span class="dot" /><span class="dot" /><span class="dot" />
+      </div>
       <div v-for="b in floatingBubbles" :key="b.id" class="comic-bubble" :class="b.role">
         <img v-if="b.type === 'emoji'" :src="'data:image/png;base64,' + b.base64" class="emoji-img" />
         <template v-else>{{ b.text }}<span v-if="b.streaming" class="msg-cursor">|</span></template>
@@ -15,9 +18,9 @@
       <div class="panel-messages" ref="messagesRef">
         <div v-for="msg in messages" :key="msg.id" :class="['msg-row', msg.role]">
           <div class="msg-label">{{ msg.role === 'user' ? '你' : '麦麦' }}</div>
-          <div class="msg-bubble" :class="{ streaming: 'streaming' in msg && msg.streaming }">
+          <div class="msg-bubble" :class="{ streaming: msg.type === 'text' && msg.streaming }">
             <img v-if="msg.type === 'emoji'" :src="'data:image/png;base64,' + msg.base64" class="emoji-img" />
-            <template v-else>{{ msg.text }}<span v-if="'streaming' in msg && msg.streaming" class="msg-cursor">|</span></template>
+            <template v-else>{{ msg.text }}<span v-if="msg.streaming" class="msg-cursor">|</span></template>
           </div>
         </div>
         <div v-if="messages.length === 0" class="msg-empty">暂无消息</div>
@@ -28,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onUnmounted } from 'vue'
 import type { ChatMessage } from '@/stores/chat'
 
 const BUBBLE_TTL = 5000
@@ -46,9 +49,10 @@ const props = defineProps<{
   messages: ChatMessage[]
   lastBubble: { text: string; visible: boolean; streaming: boolean }
   panelOpen: boolean
+  thinking: boolean
 }>()
 
-const emit = defineEmits<{ toggle: []; 'bubbles-cleared': [] }>()
+const emit = defineEmits<{ 'bubbles-cleared': [] }>()
 
 const floatingBubbles = ref<FloatingBubble[]>([])
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -63,16 +67,24 @@ function scheduleDismiss(msgId: string) {
   timers.set(msgId, t)
 }
 
-watch(() => props.messages.length, () => {
+// 不能只盯 length：流式 delta 只改 text 不改 length（气泡会冻结在第一个字块），
+// 消息数到达上限后 push+splice 使 length 恒定（之后所有新气泡都不出现）
+watch(() => {
+  const latest = props.messages[props.messages.length - 1]
+  if (!latest) return ''
+  return latest.type === 'text'
+    ? `${latest.id}:${latest.text.length}:${latest.streaming}`
+    : latest.id
+}, () => {
   const latest = props.messages[props.messages.length - 1]
   if (!latest || latest.role !== 'assistant') return
   const existing = floatingBubbles.value.find((b) => b.id === latest.id)
   if (existing) {
-    if (latest.type === 'text' && 'text' in latest) { existing.text = latest.text; existing.streaming = latest.streaming }
+    if (latest.type === 'text') { existing.text = latest.text; existing.streaming = latest.streaming }
   } else {
-    const fb: FloatingBubble = latest.type === 'emoji' && 'base64' in latest
+    const fb: FloatingBubble = latest.type === 'emoji'
       ? { id: latest.id, role: 'assistant', text: '', streaming: false, type: 'emoji', base64: latest.base64 }
-      : { id: latest.id, role: 'assistant', text: 'text' in latest ? latest.text : '', streaming: 'streaming' in latest ? latest.streaming : false, type: 'text' }
+      : { id: latest.id, role: 'assistant', text: latest.text, streaming: latest.streaming, type: 'text' }
     floatingBubbles.value.push(fb)
     if (floatingBubbles.value.length > 2) {
       const removed = floatingBubbles.value.shift()!
@@ -80,7 +92,7 @@ watch(() => props.messages.length, () => {
       if (t) { clearTimeout(t); timers.delete(removed.id) }
     }
   }
-  if (latest.type === 'emoji' || ('streaming' in latest && !latest.streaming)) scheduleDismiss(latest.id)
+  if (latest.type === 'emoji' || !latest.streaming) scheduleDismiss(latest.id)
 })
 
 watch(() => props.lastBubble.streaming, (streaming) => {
@@ -98,6 +110,11 @@ watch(() => props.panelOpen, (open) => {
 })
 watch(() => props.messages.length, () => {
   if (props.panelOpen) nextTick(() => { if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight })
+})
+
+onUnmounted(() => {
+  timers.forEach((t) => clearTimeout(t))
+  timers.clear()
 })
 </script>
 
@@ -139,6 +156,20 @@ watch(() => props.messages.length, () => {
 .comic-bubble.user .msg-cursor { color: #b0d0ff; }
 @keyframes blink { 50% { opacity: 0; } }
 .emoji-img { max-width: 180px; max-height: 180px; border-radius: 8px; display: block; }
+
+/* 「正在思考」指示器：后端发 state:thinking 时显示 */
+.thinking-bubble { display: flex; gap: 5px; align-items: center; padding: 14px 18px; }
+.thinking-bubble .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #888;
+  animation: think-bounce 1.2s ease-in-out infinite;
+}
+.thinking-bubble .dot:nth-child(2) { animation-delay: 0.15s; }
+.thinking-bubble .dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes think-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
 .comic-pop-enter-active { transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
 .comic-pop-leave-active { transition: all 0.4s ease; }
 .comic-pop-enter-from { opacity: 0; transform: translateY(16px) scale(0.9); }

@@ -2,6 +2,11 @@
   "version": 1,
   "modelId": "hiyori_pro_t11",
   "name": "Hiyori Pro",
+  "idleMotions": ["Idle"],
+  "lipSync": {
+    "mouthOpenParam": "ParamMouthOpenY",
+    "gain": 1.0
+  },
   "emotions": {
     "happy": {
       "motion": { "group": "Tap", "index": 1 },

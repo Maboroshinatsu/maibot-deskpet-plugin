@@ -1,19 +1,16 @@
 """GPT-SoVITS bridge — 接收简单文本，转发到 GPT-SoVITS API。"""
+import asyncio
 import io
 import json
+import os
 import urllib.request
 
 from aiohttp import web
 
 PORT = 9881
 SOVITS_URL = "http://127.0.0.1:9880/tts"
-
-# ── 配置你的角色 ──
-# 示例配置（已注释，请改成你自己的路径和文本）：
-# REF_AUDIO_PATH = r"D:\GPT-SoVITS-v2pro\角色\参考音频.wav"
-# PROMPT_TEXT = "参考音频里说的文本内容，用于音色克隆"
-REF_AUDIO_PATH = r""
-PROMPT_TEXT = ""
+REF_AUDIO_PATH = r"D:\GPT-SoVITS-v2pro-20250604\终末地全角色GSV模型\参考音（视）频\昼雪\昼雪\昼雪-cut-.wav_0000000000_0000153600.wav"
+PROMPT_TEXT = "这套装备充满了工匠的巧思呢，是新的外情任务吗？"
 PROMPT_LANG = "zh"
 TEXT_LANG = "zh"
 SPEED = 0.9        # 稍慢更自然
@@ -33,10 +30,14 @@ async def handle_tts(request: web.Request) -> web.Response:
     if not text:
         return web.json_response({"error": "text is empty"}, status=400)
 
+    ref_audio = body.get("ref_audio_path", REF_AUDIO_PATH)
+    if ref_audio != REF_AUDIO_PATH and not (isinstance(ref_audio, str) and os.path.isfile(ref_audio)):
+        return web.json_response({"error": "ref_audio_path not found"}, status=400)
+
     params = {
         "text": text,
         "text_lang": body.get("text_lang", TEXT_LANG),
-        "ref_audio_path": body.get("ref_audio_path", REF_AUDIO_PATH),
+        "ref_audio_path": ref_audio,
         "prompt_text": body.get("prompt_text", PROMPT_TEXT),
         "prompt_lang": body.get("prompt_lang", PROMPT_LANG),
         "speed_factor": body.get("speed_factor", SPEED),
@@ -47,7 +48,7 @@ async def handle_tts(request: web.Request) -> web.Response:
         "media_type": "wav",
     }
 
-    try:
+    def _synthesize() -> bytes:
         req_data = json.dumps(params).encode("utf-8")
         req = urllib.request.Request(
             SOVITS_URL, data=req_data,
@@ -55,7 +56,11 @@ async def handle_tts(request: web.Request) -> web.Response:
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=120) as resp:
-            audio = resp.read()
+            return resp.read()
+
+    try:
+        # 合成最长两分钟，同步跑会把整个事件循环冻住、后续请求全部排队超时
+        audio = await asyncio.to_thread(_synthesize)
         return web.Response(body=audio, content_type="audio/wav")
     except Exception as exc:
         return web.json_response({"error": str(exc)}, status=500)

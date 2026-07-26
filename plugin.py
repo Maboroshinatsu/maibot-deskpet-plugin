@@ -53,10 +53,20 @@ class ChatConfig(PluginConfigBase):
     stream_buffer_size: int = Field(default=50, description="流式文本每次推送的字符数")
 
 
+class TTSConfig(PluginConfigBase):
+    __ui_label__ = "语音合成"
+    __ui_icon__ = "volume-2"
+    __ui_order__ = 3
+    enabled: bool = Field(default=True, description="是否为回复生成语音")
+    url: str = Field(default="http://127.0.0.1:9881/tts", description="TTS 桥地址（gpt-sovits-bridge.py）")
+    timeout: int = Field(default=60, description="TTS 请求超时秒数")
+
+
 class DeskpetPluginConfig(PluginConfigBase):
     plugin: PluginCoreConfig = Field(default_factory=PluginCoreConfig)
     ws_server: WSServerConfig = Field(default_factory=WSServerConfig)
     chat: ChatConfig = Field(default_factory=ChatConfig)
+    tts: TTSConfig = Field(default_factory=TTSConfig)
 
 
 # ═══════════════════════════════════════════════
@@ -139,7 +149,9 @@ class DeskpetWSServer:
     async def broadcast(self, msg_type: str, data: dict, request_id: str = None):
         msg = DeskpetMessage(type=msg_type, data=data, request_id=request_id).to_json()
         disconnected = set()
-        for client in self._clients:
+        # 快照遍历：await send 期间 _handle_client 可能增删 _clients，
+        # 直接遍历活集合会 RuntimeError 并中断整条回复
+        for client in list(self._clients):
             try:
                 await client.send(msg)
             except websockets.ConnectionClosed:
@@ -152,18 +164,24 @@ class DeskpetWSServer:
 
     async def _handle_client(self, ws: websockets.WebSocketServerProtocol):
         if self.auth_token:
+            authorized = False
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=5)
                 msg = DeskpetMessage.from_json(raw)
-                if msg.type != "auth" or msg.data.get("token") != self.auth_token:
+                authorized = msg.type == "auth" and isinstance(msg.data, dict) and msg.data.get("token") == self.auth_token
+                if not authorized:
                     self.logger.warning(f"[Deskpet] Auth failed from {ws.remote_address}")
-                    await ws.close(4001, "Unauthorized")
-                    return
-                self.logger.info(f"[Deskpet] Client authenticated: {ws.remote_address}")
             except asyncio.TimeoutError:
                 self.logger.warning(f"[Deskpet] Auth timeout from {ws.remote_address}")
+            except websockets.ConnectionClosed:
+                return
+            except Exception as e:
+                # 畸形 JSON / 非 dict 帧等，不能让异常炸穿 handler
+                self.logger.warning(f"[Deskpet] Bad auth frame from {ws.remote_address}: {e}")
+            if not authorized:
                 await ws.close(4001, "Unauthorized")
                 return
+            self.logger.info(f"[Deskpet] Client authenticated: {ws.remote_address}")
 
         self._clients.add(ws)
         addr = ws.remote_address
@@ -172,7 +190,7 @@ class DeskpetWSServer:
             async for raw in ws:
                 try:
                     msg = DeskpetMessage.from_json(raw)
-                    await self.plugin.handle_client_message(msg)
+                    await self.plugin.handle_client_message(msg, ws)
                 except Exception as e:
                     self.logger.warning(f"[Deskpet] Bad message: {e}")
         except websockets.ConnectionClosed:
@@ -195,8 +213,16 @@ class DeskpetPlugin(MaiBotPlugin):
     async def on_load(self) -> None:
         self._last_tool_emotion_at = 0.0
         self._ws_server: Optional[DeskpetWSServer] = None
+        # 事件循环只持任务的弱引用，fire-and-forget 的 TTS 任务必须自己留强引用
+        self._bg_tasks: Set[asyncio.Task] = set()
         if not self.config.plugin.enabled:
             return
+
+        if self.config.ws_server.host not in ("127.0.0.1", "localhost", "::1") and not self.config.ws_server.auth_token:
+            self.ctx.logger.warning(
+                "[Deskpet] WebSocket 监听非回环地址且未设置 auth_token："
+                "任何局域网主机都能向 MaiBot 注入消息并接收全部回复，强烈建议配置鉴权令牌"
+            )
 
         self._ws_server = DeskpetWSServer(
             host=self.config.ws_server.host,
@@ -227,18 +253,19 @@ class DeskpetPlugin(MaiBotPlugin):
     async def on_config_update(self, scope: str, config_data: dict, version: str) -> None:
         self.ctx.logger.info(f"[Deskpet] Config updated: scope={scope}, version={version}")
 
-    TTS_URL = "http://127.0.0.1:9881/tts"
-
     async def _fetch_tts_audio(self, text: str) -> Optional[str]:
         """调用 TTS 桥获取音频 base64。"""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    self.TTS_URL, json={"text": text}, timeout=aiohttp.ClientTimeout(total=60),
+                    self.config.tts.url,
+                    json={"text": text},
+                    timeout=aiohttp.ClientTimeout(total=self.config.tts.timeout),
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.read()
                         return base64.b64encode(data).decode("ascii")
+                    self.ctx.logger.warning(f"[Deskpet] TTS returned HTTP {resp.status}")
         except Exception as e:
             self.ctx.logger.warning(f"[Deskpet] TTS fetch failed: {e}")
         return None
@@ -278,7 +305,8 @@ class DeskpetPlugin(MaiBotPlugin):
                 self.ctx.logger.debug(f"[Deskpet] Auto inferred emotion: {emotion}")
                 await self._ws_server.broadcast("state:emotion", {"emotion": emotion}, req_id)
 
-        buf = self.config.chat.stream_buffer_size
+        # 配置成 0/负数会让 range 步长非法，钳到至少 1
+        buf = max(1, self.config.chat.stream_buffer_size)
         for i in range(0, len(response_text), buf):
             chunk = response_text[i:i + buf]
             await self._ws_server.broadcast("output:text:delta", {"delta": chunk, "request_id": req_id})
@@ -287,18 +315,25 @@ class DeskpetPlugin(MaiBotPlugin):
         await self._ws_server.broadcast("output:text:done", {"request_id": req_id})
 
         # 异步取 TTS 音频
-        asyncio.create_task(self._send_tts_audio(response_text, req_id))
+        if self.config.tts.enabled:
+            task = asyncio.create_task(self._send_tts_audio(response_text, req_id))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
         return {"success": True}
 
     async def _send_tts_audio(self, text: str, req_id: str) -> None:
         """后台获取 TTS 音频并推送到前端。"""
         b64 = await self._fetch_tts_audio(text)
-        if b64:
-            await self._ws_server.broadcast("output:audio", {
-                "base64": b64,
-                "request_id": req_id,
-            })
+        if not b64:
+            return
+        # 取 TTS 期间插件可能已被卸载，这里要重新确认服务器还在
+        if not self._ws_server:
+            return
+        await self._ws_server.broadcast("output:audio", {
+            "base64": b64,
+            "request_id": req_id,
+        })
 
     def _extract_text_from_message(self, message: Dict[str, Any]) -> str:
         """从 MaiBot 出站消息字典中提取纯文本。"""
@@ -346,7 +381,7 @@ class DeskpetPlugin(MaiBotPlugin):
 
     # ── Client Messages (桌宠前端 → 插件) ──
 
-    async def handle_client_message(self, msg: DeskpetMessage) -> None:
+    async def handle_client_message(self, msg: DeskpetMessage, ws=None) -> None:
         if msg.type == "input:text":
             await self._handle_input_text(msg)
         elif msg.type == "input:click":
@@ -354,7 +389,12 @@ class DeskpetPlugin(MaiBotPlugin):
         elif msg.type == "input:screenshot":
             await self._handle_screenshot(msg)
         elif msg.type == "heartbeat":
-            pass  # silently ack
+            # 回显心跳：前端靠“有没有入站消息”检测半开 TCP 连接
+            if ws is not None:
+                try:
+                    await ws.send(DeskpetMessage(type="heartbeat").to_json())
+                except websockets.ConnectionClosed:
+                    pass
 
     async def _handle_input_text(self, msg: DeskpetMessage) -> None:
         text = msg.data.get("text", "").strip()

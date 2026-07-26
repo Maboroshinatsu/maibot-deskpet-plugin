@@ -27,19 +27,39 @@ export interface AnimationTarget {
   motion: EmotionMotionTarget
 }
 
+export interface LipSyncConfig {
+  /** 张嘴幅度参数 ID，不同模型可能不叫 ParamMouthOpenY */
+  mouthOpenParam: string
+  /** 幅度缩放，1 = 原样，0.6 = 收一点 */
+  gain: number
+}
+
+export const DEFAULT_LIP_SYNC: LipSyncConfig = {
+  mouthOpenParam: 'ParamMouthOpenY',
+  gain: 1,
+}
+
 export interface ModelEmotionAdapter {
   version: 1
   modelId?: string
   name?: string
+  /** 待机动作组，留空则退回按组名猜（idle/neutral/...） */
+  idleMotions: string[]
+  lipSync: LipSyncConfig
   emotions: Partial<Record<DeskpetEmotion, EmotionTarget>>
   animations: Record<string, AnimationTarget>
+  /** 是否真的读到了 deskpet-adapter.json（没有适配文件的模型不需要校验） */
+  loaded: boolean
 }
 
 const EMPTY_ADAPTER: ModelEmotionAdapter = {
   version: 1,
   modelId: 'empty',
+  idleMotions: [],
+  lipSync: { ...DEFAULT_LIP_SYNC },
   emotions: {},
-  animations: {}
+  animations: {},
+  loaded: false
 }
 
 function getAdapterUrl(modelUrl: string): string {
@@ -101,6 +121,23 @@ function normalizeAnimationTarget(target: unknown): AnimationTarget | null {
   }
 }
 
+function normalizeLipSync(raw: unknown): LipSyncConfig {
+  const entry = raw as any
+  if (!entry || typeof entry !== 'object') return { ...DEFAULT_LIP_SYNC }
+  const gain = typeof entry.gain === 'number' && entry.gain > 0 ? entry.gain : DEFAULT_LIP_SYNC.gain
+  return {
+    mouthOpenParam: typeof entry.mouthOpenParam === 'string' && entry.mouthOpenParam
+      ? entry.mouthOpenParam
+      : DEFAULT_LIP_SYNC.mouthOpenParam,
+    gain: Math.min(4, gain),
+  }
+}
+
+function normalizeIdleMotions(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((group): group is string => typeof group === 'string' && group.length > 0)
+}
+
 function normalizeAdapter(raw: any): ModelEmotionAdapter {
   const emotions: Partial<Record<DeskpetEmotion, EmotionTarget>> = {}
   const animations: Record<string, AnimationTarget> = {}
@@ -127,8 +164,11 @@ function normalizeAdapter(raw: any): ModelEmotionAdapter {
     version: 1,
     modelId: typeof raw?.modelId === 'string' ? raw.modelId : undefined,
     name: typeof raw?.name === 'string' ? raw.name : undefined,
+    idleMotions: normalizeIdleMotions(raw?.idleMotions),
+    lipSync: normalizeLipSync(raw?.lipSync),
     emotions,
-    animations
+    animations,
+    loaded: true
   }
 }
 
@@ -142,7 +182,15 @@ export async function loadEmotionAdapter(modelUrl: string): Promise<ModelEmotion
       return EMPTY_ADAPTER
     }
 
-    const raw = await resp.json()
+    // dev server 对不存在的文件会回 index.html（状态码 200），
+    // 直接 json() 会抛 SyntaxError，看起来像“适配器坏了”，其实是“没有适配器”
+    const text = await resp.text()
+    if (!text.trimStart().startsWith('{')) {
+      console.info(`[Deskpet] No emotion adapter for this model: ${adapterUrl}`)
+      return EMPTY_ADAPTER
+    }
+
+    const raw = JSON.parse(text)
     const adapter = normalizeAdapter(raw)
     const emotionKeys = Object.keys(adapter.emotions)
     const animationKeys = Object.keys(adapter.animations)

@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin/docs/deskpet-adapter.schema.json",
+  "title": "MaiBot Deskpet 模型适配文件",
+  "description": "把桌宠的抽象情绪/动作指令映射到具体 Live2D 模型的表情、动作组和参数。完整说明见 MODEL-ADAPTER-SPEC.md。",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "编辑器用的 schema 引用，桌宠会忽略"
+    },
+    "version": {
+      "const": 1,
+      "description": "适配文件格式版本，固定为 1"
+    },
+    "modelId": {
+      "type": "string",
+      "description": "模型标识，仅用于日志"
+    },
+    "name": {
+      "type": "string",
+      "description": "角色显示名，仅用于日志"
+    },
+    "idleMotions": {
+      "type": "array",
+      "description": "待机时随机播放的动作组名。留空则按组名启发式匹配；模型没有动作组时填 []",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "lipSync": {
+      "type": "object",
+      "description": "口型同步配置。模型张嘴参数不叫 ParamMouthOpenY 时必须声明",
+      "additionalProperties": false,
+      "properties": {
+        "mouthOpenParam": {
+          "type": "string",
+          "minLength": 1,
+          "default": "ParamMouthOpenY",
+          "description": "控制张嘴幅度的参数 ID，必须存在于模型参数清单中"
+        },
+        "gain": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 4,
+          "default": 1,
+          "description": "张嘴幅度缩放"
+        }
+      }
+    },
+    "emotions": {
+      "type": "object",
+      "description": "情绪映射，键为固定的 9 种情绪，可只写一部分",
+      "additionalProperties": false,
+      "properties": {
+        "happy": { "$ref": "#/definitions/emotionTarget" },
+        "sad": { "$ref": "#/definitions/emotionTarget" },
+        "angry": { "$ref": "#/definitions/emotionTarget" },
+        "surprise": { "$ref": "#/definitions/emotionTarget" },
+        "thinking": { "$ref": "#/definitions/emotionTarget" },
+        "shy": { "$ref": "#/definitions/emotionTarget" },
+        "curious": { "$ref": "#/definitions/emotionTarget" },
+        "neutral": { "$ref": "#/definitions/emotionTarget" },
+        "idle": { "$ref": "#/definitions/emotionTarget" }
+      }
+    },
+    "animations": {
+      "type": "object",
+      "description": "语义动作映射，键为固定的 8 种动作，可只写一部分；模型没有动作组时填 {}",
+      "additionalProperties": false,
+      "properties": {
+        "wave": { "$ref": "#/definitions/animationTarget" },
+        "jump": { "$ref": "#/definitions/animationTarget" },
+        "spin": { "$ref": "#/definitions/animationTarget" },
+        "sit": { "$ref": "#/definitions/animationTarget" },
+        "sleep": { "$ref": "#/definitions/animationTarget" },
+        "wake": { "$ref": "#/definitions/animationTarget" },
+        "dance": { "$ref": "#/definitions/animationTarget" },
+        "cheer": { "$ref": "#/definitions/animationTarget" }
+      }
+    }
+  },
+  "definitions": {
+    "motionRef": {
+      "type": "object",
+      "required": ["group"],
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "type": "string",
+          "minLength": 1,
+          "description": "动作组名，大小写敏感，必须与模型的 motionGroups 一致"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "组内第几条动作，从 0 开始，不能超过该组条数 - 1"
+        }
+      }
+    },
+    "emotionTarget": {
+      "type": "object",
+      "description": "三种手段可任意组合，至少写一种才有效果",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "description": "表情名，必须已注册进 .model3.json 的 Expressions 段"
+        },
+        "motion": { "$ref": "#/definitions/motionRef" },
+        "parameters": {
+          "type": "object",
+          "description": "参数 ID → 目标值。参数必须真实存在，否则会被静默丢弃",
+          "minProperties": 1,
+          "additionalProperties": { "type": "number" }
+        }
+      }
+    },
+    "animationTarget": {
+      "type": "object",
+      "required": ["motion"],
+      "additionalProperties": false,
+      "properties": {
+        "motion": { "$ref": "#/definitions/motionRef" }
+      }
+    }
+  }
+}

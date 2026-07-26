@@ -22,3 +22,4 @@ deskpet-app/piper/
 *.mp3
 plan.md
 .vscode/
+*.tsbuildinfo

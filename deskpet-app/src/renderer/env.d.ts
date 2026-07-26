@@ -15,6 +15,13 @@ interface GlobalCursorPosition {
   y: number
 }
 
+interface ModelEntry {
+  /** 展示名，取自模型文件夹名 + 文件名 */
+  name: string
+  /** 渲染层可直接加载的相对 URL，例如 ./models/xxx/xxx.model3.json */
+  url: string
+}
+
 interface ElectronAPI {
   dragWindow: (dx: number, dy: number) => Promise<void>
   setAlwaysOnTop: (flag: boolean) => Promise<void>
@@ -27,6 +34,8 @@ interface ElectronAPI {
   onScreenshotCaptured: (callback: (base64: string) => void) => () => void
   setAutoScreenshotInterval: (sec: number) => void
   sttTranscribe: (audio: ArrayBuffer, url?: string) => Promise<string | null>
+  listModels: () => Promise<ModelEntry[]>
+  reloadWindow: () => Promise<void>
 }
 
 interface Window {

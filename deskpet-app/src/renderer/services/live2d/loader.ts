@@ -2,14 +2,22 @@ import { Application } from '@pixi/app'
 import { extensions } from '@pixi/extensions'
 import { Ticker, TickerPlugin } from '@pixi/ticker'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
-import type { Cubism4ModelSettings } from 'pixi-live2d-display/cubism4'
+import type { Cubism4InternalModel } from 'pixi-live2d-display/cubism4'
 
 Live2DModel.registerTicker(Ticker)
 extensions.add(TickerPlugin)
 ;(window as any).PIXI = (window as any).PIXI || {}
 ;(window as any).PIXI.Ticker = Ticker
 
-const RESOLUTION = 2
+/**
+ * 画布按逻辑尺寸的 RESOLUTION 倍渲染再用 CSS 缩回去，用来换取清晰度。
+ * 因此：模型的 position/scale 用「逻辑坐标」，而 model.focus() 这类
+ * 走 worldTransform 的 API 需要「逻辑坐标 × RESOLUTION」。
+ */
+export const RESOLUTION = 2
+
+export type DeskpetModel = Live2DModel<Cubism4InternalModel>
+
 export let modelRefW = 100
 export let modelRefH = 100
 
@@ -33,8 +41,11 @@ export async function createPixiApp(container: HTMLElement, width: number, heigh
   return app
 }
 
-export async function loadLive2DModel(modelPath: string, app: Application): Promise<Live2DModel<Cubism4ModelSettings>> {
-  const model = await Live2DModel.from(modelPath, { autoInteract: false, autoUpdate: true })
+export async function loadLive2DModel(modelPath: string, app: Application): Promise<DeskpetModel> {
+  const model = (await Live2DModel.from(modelPath, {
+    autoInteract: false,
+    autoUpdate: true,
+  })) as DeskpetModel
   model.anchor.set(0.5, 0.5)
 
   const cw = app.view.width / RESOLUTION
@@ -50,7 +61,96 @@ export async function loadLive2DModel(modelPath: string, app: Application): Prom
   return model
 }
 
-export function playMotion(model: Live2DModel<Cubism4ModelSettings>, name: string, idx = 0) {
+/** 热切换模型时移除并释放旧模型，避免纹理/WebGL 资源泄漏。 */
+export function unloadLive2DModel(model: DeskpetModel, app: Application): void {
+  try {
+    app.stage.removeChild(model)
+    model.destroy({ children: true, texture: true, baseTexture: true })
+  } catch (err) {
+    console.warn('[Deskpet] Failed to destroy model cleanly:', err)
+  }
+}
+
+/** 模型实际拥有的 motion 组名（来自 .model3.json 的 Motions）。 */
+export function getMotionGroups(model: DeskpetModel): string[] {
+  const definitions = model.internalModel?.motionManager?.definitions
+  if (!definitions) return []
+  return Object.keys(definitions).filter((group) => (definitions[group]?.length ?? 0) > 0)
+}
+
+/** 每个 motion 组里有几条动作，写 adapter 时 index 不能越界。 */
+export function getMotionGroupSizes(model: DeskpetModel): Record<string, number> {
+  const definitions = model.internalModel?.motionManager?.definitions
+  const sizes: Record<string, number> = {}
+  if (!definitions) return sizes
+  for (const [group, list] of Object.entries(definitions)) {
+    sizes[group] = list?.length ?? 0
+  }
+  return sizes
+}
+
+/** 已注册到 .model3.json 的表情名。exp3 文件存在但没注册的话，这里是空的。 */
+export function getExpressionNames(model: DeskpetModel): string[] {
+  const definitions = (model.internalModel?.motionManager as any)?.expressionManager?.definitions
+  if (!Array.isArray(definitions)) return []
+  return definitions
+    .map((def: any) => def?.Name ?? def?.name)
+    .filter((name: unknown): name is string => typeof name === 'string' && name.length > 0)
+}
+
+export interface ParameterInfo {
+  id: string
+  min: number
+  max: number
+  default: number
+}
+
+/**
+ * 模型真实存在的参数清单。
+ *
+ * 这是写 adapter 时最关键、也最拿不到的信息：参数 ID 存在 .moc3 二进制里，
+ * .cdi3.json 会列出来但不是必需文件（很多模型没有）。所以只能从运行时的
+ * core model 里读。注意 setParameterValueById 对不存在的参数是静默写入
+ * 幻影槽位，不会报错 —— 所以必须显式对照这份清单校验。
+ */
+export function getParameterInfos(model: DeskpetModel): ParameterInfo[] {
+  const coreModel = (model.internalModel as any)?.coreModel
+  if (!coreModel?.getParameterCount) return []
+
+  const ids: string[] = coreModel._parameterIds ?? []
+  const count: number = coreModel.getParameterCount()
+  const infos: ParameterInfo[] = []
+  for (let i = 0; i < count; i++) {
+    const id = ids[i]
+    if (typeof id !== 'string') continue
+    infos.push({
+      id,
+      min: coreModel.getParameterMinimumValue?.(i) ?? 0,
+      max: coreModel.getParameterMaximumValue?.(i) ?? 0,
+      default: coreModel.getParameterDefaultValue?.(i) ?? 0,
+    })
+  }
+  return infos
+}
+
+export interface ModelCapabilities {
+  modelUrl: string
+  motionGroups: Record<string, number>
+  expressions: string[]
+  parameters: ParameterInfo[]
+}
+
+/** 汇总模型能力，用来喂给 AI 生成 deskpet-adapter.json。 */
+export function describeModel(model: DeskpetModel, modelUrl: string): ModelCapabilities {
+  return {
+    modelUrl,
+    motionGroups: getMotionGroupSizes(model),
+    expressions: getExpressionNames(model),
+    parameters: getParameterInfos(model),
+  }
+}
+
+export function playMotion(model: DeskpetModel, name: string, idx = 0) {
   try {
     model.motion(name, idx, MotionPriority.FORCE)
   } catch (err) {
@@ -58,7 +158,7 @@ export function playMotion(model: Live2DModel<Cubism4ModelSettings>, name: strin
   }
 }
 
-export function setExpression(model: Live2DModel<Cubism4ModelSettings>, id: string) {
+export function setExpression(model: DeskpetModel, id: string) {
   try {
     model.expression(id)
   } catch (err) {
@@ -66,12 +166,38 @@ export function setExpression(model: Live2DModel<Cubism4ModelSettings>, id: stri
   }
 }
 
+/**
+ * 淡出当前激活的表情。表情是 Add 混合、由 ExpressionManager 每帧叠加，
+ * 把底层参数写回 0 抵消不掉，必须走这里。
+ */
+export function clearExpression(model: DeskpetModel) {
+  try {
+    ;((model.internalModel?.motionManager as any)?.expressionManager)?.resetExpression?.()
+  } catch (err) {
+    console.debug('[Deskpet] Failed to reset expression', err)
+  }
+}
+
+const touchedParameterIds = new WeakMap<object, Set<string>>()
+
 export function applyParameters(
-  model: Live2DModel<Cubism4ModelSettings>,
+  model: DeskpetModel,
   parameters: Record<string, number>,
 ) {
   const coreModel = (model as any).internalModel?.coreModel
   if (!coreModel) return
+
+  const currentIds = new Set(Object.keys(parameters))
+  const previousIds = touchedParameterIds.get(model as unknown as object) ?? new Set<string>()
+
+  for (const id of previousIds) {
+    if (currentIds.has(id)) continue
+    try {
+      coreModel.setParameterValueById(id, 0)
+    } catch (err) {
+      console.debug(`[Deskpet] Parameter not available while resetting: ${id}`, err)
+    }
+  }
 
   for (const [id, value] of Object.entries(parameters)) {
     try {
@@ -80,10 +206,12 @@ export function applyParameters(
       console.debug(`[Deskpet] Parameter not available: ${id}`, err)
     }
   }
+
+  touchedParameterIds.set(model as unknown as object, currentIds)
 }
 
 export function resizeModel(
-  model: Live2DModel<Cubism4ModelSettings>,
+  model: DeskpetModel,
   cw: number, ch: number,
   zoom: number = 1.0,
   fx?: number, fy?: number,
@@ -106,7 +234,7 @@ export function resizeModel(
 }
 
 export function resizeModelFit(
-  model: Live2DModel<Cubism4ModelSettings>,
+  model: DeskpetModel,
   cw: number, ch: number,
   zoom: number = 1.0,
 ) {

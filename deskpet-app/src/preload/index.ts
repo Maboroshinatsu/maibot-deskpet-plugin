@@ -9,6 +9,11 @@ interface GlobalCursorPosition {
   y: number
 }
 
+interface ModelEntry {
+  name: string
+  url: string
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   dragWindow: (dx: number, dy: number) => ipcRenderer.invoke('drag-window', { dx, dy }),
   setAlwaysOnTop: (flag: boolean) => ipcRenderer.invoke('set-always-on-top', flag),
@@ -37,4 +42,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   setAutoScreenshotInterval: (sec: number) => ipcRenderer.invoke('set-auto-screenshot-interval', sec),
   sttTranscribe: (audio: ArrayBuffer, url?: string): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio, url),
+  listModels: (): Promise<ModelEntry[]> => ipcRenderer.invoke('list-models'),
+  reloadWindow: () => ipcRenderer.invoke('reload-window'),
 })
