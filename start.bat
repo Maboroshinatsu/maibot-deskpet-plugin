@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo =============================================
-echo   MaiBot Deskpet v0.3 — 一键启动
+echo   MaiBot Deskpet v0.5 — 一键启动
 echo =============================================
 echo.
 
@@ -45,6 +45,11 @@ if not exist "%ROOT%deskpet-app\node_modules" (
 :: GPT-SoVITS 整合包路径（可选：不设则跳过 TTS 语音合成）
 :: 下载地址: https://github.com/RVC-Boss/GPT-SoVITS
 set "GSV_DIR="
+
+:: GPT-SoVITS 角色声线：参考音频路径 + 该音频里说的文本
+:: （安装版桌宠请在设置面板 → 后台服务 → 服务路径配置 里填，那里更省心）
+set "DESKPET_GSV_REF_AUDIO="
+set "DESKPET_GSV_PROMPT_TEXT="
 
 :: PowerShell 脚本自动探测 GPT-SoVITS（常见路径）
 if "%GSV_DIR%"=="" (

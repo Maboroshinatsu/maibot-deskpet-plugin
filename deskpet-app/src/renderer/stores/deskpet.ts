@@ -81,6 +81,10 @@ export const useDeskpetStore = defineStore('deskpet', () => {
   const currentEmotion = ref('neutral')
   /** 每次收到情绪指令递增；同值情绪连发时 watch([currentEmotion, emotionPulse]) 仍会触发 */
   const emotionPulse = ref(0)
+  /** 当前模型声明的自定义情绪键（adapter / 立绘包清单的键），模型切换时更新 */
+  const modelEmotions = ref<string[]>([])
+  /** 情绪自动回退的目标（静态立绘包 = 清单标定的 default；Live2D 固定 neutral） */
+  const defaultEmotion = ref('neutral')
   const isThinking = ref(false)
   /** TTS 正在出声：VAD 靠它避免把桌宠自己的声音听回去 */
   const isSpeaking = ref(false)
@@ -136,6 +140,8 @@ export const useDeskpetStore = defineStore('deskpet', () => {
     hoverFadeEnabled,
     currentEmotion,
     emotionPulse,
+    modelEmotions,
+    defaultEmotion,
     isThinking,
     isSpeaking,
     pendingAnimation,

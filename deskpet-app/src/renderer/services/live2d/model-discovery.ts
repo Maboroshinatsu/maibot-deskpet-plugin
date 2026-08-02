@@ -12,6 +12,13 @@ import { MODEL_PATH } from '@/services/model-config'
 
 export const MODEL_PATH_KEY = 'deskpet/model-path'
 
+export type ModelKind = 'live2d' | 'image-set'
+
+/** 由模型 URL 判定渲染路径：立绘包清单 vs Live2D model3.json */
+export function kindOfModelUrl(url: string): ModelKind {
+  return /deskpet-images\.json(\?|#|$)/i.test(url) ? 'image-set' : 'live2d'
+}
+
 let cachedModelUrl: string | null = null
 let cachedModelList: ModelEntry[] | null = null
 

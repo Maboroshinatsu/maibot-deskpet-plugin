@@ -12,10 +12,13 @@ airi-main/
 *.7z
 .mcp.json
 .claude/
-deskpet-app/src/renderer/public/models/
+# 用 /* 而不是 /：整目录被排除时 git 不再进入枚举，内部的 ! 白名单会全部失效
+deskpet-app/src/renderer/public/models/*
 !deskpet-app/src/renderer/public/models/README.md
 !deskpet-app/src/renderer/public/models/hiyori_pro_zh/
 !deskpet-app/src/renderer/public/models/hiyori_pro_zh/**
+!deskpet-app/src/renderer/public/models/sample_static/
+!deskpet-app/src/renderer/public/models/sample_static/**
 hiyori_pro_zh.zip
 deskpet-app/piper/
 *.wav
@@ -25,3 +28,4 @@ plan.md
 *.tsbuildinfo
 deskpet-app/release/
 deskpet-app/sensevoice/
+deskpet-app/python-runtime/

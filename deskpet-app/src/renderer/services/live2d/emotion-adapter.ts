@@ -1,11 +1,14 @@
+/** 内置情绪词表；模型（adapter / 立绘包清单）还可以声明任意自定义情绪键 */
 export const DESKPET_EMOTIONS = [
   'happy',
   'sad',
   'angry',
   'surprise',
+  'embarrassed',
   'thinking',
   'shy',
   'curious',
+  'confused',
   'neutral',
   'idle'
 ] as const
@@ -46,7 +49,8 @@ export interface ModelEmotionAdapter {
   /** 待机动作组，留空则退回按组名猜（idle/neutral/...） */
   idleMotions: string[]
   lipSync: LipSyncConfig
-  emotions: Partial<Record<DeskpetEmotion, EmotionTarget>>
+  /** 情绪键 → 表现目标；键不限于内置词表，模型可声明任意自定义情绪 */
+  emotions: Record<string, EmotionTarget>
   animations: Record<string, AnimationTarget>
   /** 是否真的读到了 deskpet-adapter.json（没有适配文件的模型不需要校验） */
   loaded: boolean
@@ -139,12 +143,13 @@ function normalizeIdleMotions(raw: unknown): string[] {
 }
 
 function normalizeAdapter(raw: any): ModelEmotionAdapter {
-  const emotions: Partial<Record<DeskpetEmotion, EmotionTarget>> = {}
+  const emotions: Record<string, EmotionTarget> = {}
   const animations: Record<string, AnimationTarget> = {}
 
   if (raw?.emotions && typeof raw.emotions === 'object') {
     for (const [emotion, target] of Object.entries(raw.emotions)) {
-      if (!isDeskpetEmotion(emotion)) continue
+      // 不再限内置词表：自定义情绪键原样保留（模型自定义情绪的入口）
+      if (!emotion) continue
 
       const normalized = normalizeTarget(target)
       if (normalized) emotions[emotion] = normalized
@@ -208,7 +213,7 @@ export function getEmotionTarget(
   adapter: ModelEmotionAdapter | null,
   emotion: string
 ): EmotionTarget | null {
-  if (!adapter || !isDeskpetEmotion(emotion)) return null
+  if (!adapter || !emotion) return null
   return adapter.emotions[emotion] || null
 }
 

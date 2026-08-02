@@ -1,6 +1,6 @@
 {
   "name": "maibot-deskpet",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "MaiBot 桌面宠物 - Live2D Deskpet",
   "author": "Maboroshinatsu",
   "main": "./out/main/index.js",
@@ -19,7 +19,6 @@
     "@pixi/display": "^6.5.10",
     "@pixi/extensions": "^6.5.10",
     "@pixi/ticker": "^6.5.10",
-    "animejs": "^4.3.6",
     "pinia": "^2.3.0",
     "pixi-live2d-display": "^0.4.0",
     "vue": "^3.5.13"

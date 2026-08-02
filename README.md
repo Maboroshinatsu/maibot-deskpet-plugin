@@ -5,91 +5,86 @@
 ## 快速开始（安装版，推荐）
 
 1. 从 [Releases](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases) 下载 `MaiBot-Deskpet-Setup-x.x.x.exe` 并安装——内置全部 Live2D 模型和 SenseVoice 语音识别模型
-2. 安装 [Python](https://www.python.org/downloads/)（勾选 Add to PATH），然后 `pip install aiohttp numpy sherpa-onnx`（语音桥的运行时）
-3. 把本仓库放进 MaiBot 的 `plugins/` 目录，并完成下方「安装与运行 → 第零步」的 MaiBot 配置
-4. 启动 MaiBot，双击桌面「MaiBot 桌宠」——STT/TTS 桥随桌宠自动启动，状态灯和日志在设置面板 ⚙ →「后台服务」
+2. 把本仓库放进 MaiBot 的 `plugins/` 目录（语音桥的 Python 依赖由 manifest 声明，随插件装进 MaiBot 的 Python 环境），并完成下方「安装与运行 → 第零步」的 MaiBot 配置
+3. 启动 MaiBot，双击桌面「MaiBot 桌宠」——STT/TTS 桥随桌宠自动启动，直接复用 MaiBot 的 Python 环境，**不需要单独安装 Python**；状态灯和日志在设置面板 ⚙ →「后台服务」
 
 语音合成需要额外安装 GPT-SoVITS 整合包（可选），跑源码 / 二次开发请看下方「安装与运行」的完整流程。
 
-## 致谢
+## 功能一览
 
-本项目受到以下开源项目的启发和帮助：
+### 桌面交互
+- **Live2D 角色**：透明窗口，始终置顶，视线追踪（全局鼠标跟随）
+- **静态立绘模式**：无 Live2D 模型也可用，PNG/SVG 情绪换图 + VN 风小跳。见 [docs/IMAGE-SET.md](docs/IMAGE-SET.md)
+- **模型操控**：滚轮缩放（鼠标焦点）、拖拽平移、窗口拖动
+- **手动切表情**：右键点击桌宠循环切换情绪
+- **布局持久化**：缩放/偏移/窗口位置自动保存与恢复
+- **悬停淡化**：鼠标悬停时模型半透明
 
-- **[MaiBot](https://github.com/MaiM-with-u/MaiBot)** — 插件运行的宿主平台，提供消息管线和 AI 推理能力
-- **[Airi](https://github.com/moeru-ai/airi)** — PixiJS Live2D 渲染方案的重要参考
-- **[NachoBot](https://github.com/RachelForster/Shinsekai)** — GPT-SoVITS 集成方案与音频处理管线参考
-- **[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)** — 语音合成引擎
-- **[Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx)** — SenseVoice 语音识别运行时
-- **[NapCat](https://github.com/NapNeko/NapCatQQ)** — 图片消息格式参考
+### 对话
+- **双向对话**：经 MaiBot MessageGateway 接入完整推理管线
+- **聊天气泡**：漫画风格浮动气泡 + 聊天记录抽屉面板
+- **表情系统**：MaiBot 可通过 Tool 控制角色表情与动作动画
+- **表情包**：MaiBot 从表情库选取匹配表情包发到桌宠
+
+### 语音
+- **GPT-SoVITS TTS**：角色专属声线，HTTP 桥接（端口 9881）
+- **SenseVoice STT**：离线语音识别，支持中英日韩，HTTP 桥接（端口 18530）
+- **VAD 语音检测**：自动检测说话/静音，无需手动操作麦克风
+- **PTT 全局热键**：按住说话 / 开关切换，键位可配
+- **实时唇形同步**：多正弦波叠加算法（参考 NachoBot）
+- **音频顺序播放**：多条回复排队播放，不互相打断
+
+### 截图识图
+- **手动截图**：托盘「截图识图」，桌面截屏发送给 MaiBot 视觉模型分析
+- **自动截图**：定时截屏（间隔可配），MaiBot 主动根据屏幕内容搭话
+
+### 设置与服务管理
+- **后台服务管理**：STT/TTS 桥、GPT-SoVITS、PTT 热键随桌宠自动启动，面板内状态灯、启停/重启、实时日志；可选「终端窗口」模式；退出自动清理子进程
+- **模型热切换**：设置面板选中即换，无需重启
+- **托盘菜单**：显示/隐藏、置顶、锁定穿透、悬停淡化、截图、重置布局
+- **快捷键**：Ctrl+Alt+H 显示隐藏、Ctrl+Alt+F 悬停淡化、Ctrl+Alt+L 锁定穿透、Ctrl+R/F5 重载、Ctrl+Shift+I 开发者工具
 
 ## 模型资源
 
-项目默认使用 Live2D 官方免费示例模型 **Hiyori (日和)**。你也可以从以下渠道获取更多模型：
+项目默认使用 Live2D 官方免费示例模型 **Hiyori (日和)**。模型来源：
 
 - [Live2D 官方示例](https://www.live2d.com/zh-CHS/learn/sample/)
 - [imuncle/live2d](https://github.com/imuncle/live2d/tree/master)
 - [summerscar/live2dDemo](https://github.com/summerscar/live2dDemo)
 
-将模型文件夹放入 `deskpet-app/src/renderer/public/models/`，然后在设置面板「显示 → Live2D 模型」的下拉框里选择即可，切换立即生效、无需重启。下拉框由主进程扫描该目录得到（递归查找 `*.model3.json`）；如果放模型时桌宠已经开着，点一下「重新扫描」。
+把模型文件夹（或 `deskpet-images.json` 立绘包）放进 `deskpet-app/src/renderer/public/models/`，设置面板「显示」区选择即可，切换立即生效。首次加载的默认模型由 `src/renderer/services/model-config.ts` 的 `MODEL_PATH` 决定，面板选过之后优先记住你的选择。
 
-首次启动加载哪个模型由 `deskpet-app/src/renderer/services/model-config.ts` 的 `MODEL_PATH` 决定；用户在面板里选过之后，选择会记在本地并优先于这个默认值。
+## 文档
 
-### 自定义模型适配
-
-每个 Live2D 模型的图层、参数命名、动作分组都是作者自己定的，所以情绪/动作的映射没法内置。
-在 `.model3.json` 同目录放一个 `deskpet-adapter.json` 即可声明这张翻译表：
-
-支持的情绪：`happy`、`sad`、`angry`、`surprise`、`thinking`、`shy`、`curious`、`neutral`、`idle`
-支持的语义动作：`wave`、`jump`、`spin`、`sit`、`sleep`、`wake`、`dance`、`cheer`
-
-没有 `deskpet-adapter.json` 的模型仍可正常加载、跟随视线、口型同步，只是不响应情绪和动作指令。
-
-**📖 完整规范：[docs/MODEL-ADAPTER-SPEC.md](docs/MODEL-ADAPTER-SPEC.md)**
-
-这份规范是**给 AI 看的**——你不需要懂代码：
-
-1. 在桌宠里选中你的模型，按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> 打开控制台，运行 `deskpetInspectModel()` 导出模型能力清单
-2. 把规范全文 + 这份清单发给任意 AI，让它生成 `deskpet-adapter.json`
-3. 放进模型目录，重新选一次模型，控制台会输出**校验报告**——把报错原文发回给 AI 修正即可
-4. 校验通过后用 `deskpetTestEmotion('happy')` / `deskpetTestAnimation('wave')` 在控制台逐项预览观感
-
-之所以要这套流程：Cubism 运行时对不存在的参数是**静默接受**的（不报错也没效果），动作组名写错同样只是静默不播。
-所以适配写错的表现是「完全没反应」而不是报错，必须靠加载时校验来定位。
-参数 ID 又存在 `.moc3` 二进制里（`.cdi3.json` 是可选文件，很多模型没有），因此能力清单只能从运行时导出。
-
-机器可校验的 JSON Schema：[docs/deskpet-adapter.schema.json](docs/deskpet-adapter.schema.json)
-参考实现：`deskpet-app/src/renderer/public/models/hiyori_pro_zh/.../runtime/deskpet-adapter.json`
+| 文档 | 内容 |
+|------|------|
+| [完整安装与配置](docs/SETUP.md) | MaiBot 配置、插件安装、依赖、AI 模型、启动、排错、跨设备连接、配置项 |
+| [静态立绘模式](docs/IMAGE-SET.md) | 不用 Live2D，用图片当角色（清单格式、自定义情绪、特效） |
+| [Live2D 模型适配规范](docs/MODEL-ADAPTER-SPEC.md) | 让 AI 为你的模型生成适配文件（deskpet-adapter.json） |
 
 ## 项目结构
 
 ```
 maibot-deskpet-plugin/
 ├── README.md
-├── _manifest.json                # 插件清单
+├── _manifest.json                # 插件清单（含依赖声明）
 ├── config.toml                   # 运行时配置
 ├── plugin.py                     # 插件入口（MaiBot MessageGateway）
 ├── start.bat                     # 一键启动（源码/开发方式）
 ├── gpt-sovits-bridge.py          # GPT-SoVITS TTS 桥 (端口 9881)
 ├── stt-bridge.py                 # SenseVoice STT 桥 (端口 18530)
+├── hotkey-bridge.py              # PTT 全局热键桥（pynput）
 ├── docs/
+│   ├── SETUP.md                  # 完整安装与配置
+│   ├── IMAGE-SET.md              # 静态立绘模式
 │   ├── MODEL-ADAPTER-SPEC.md     # Live2D 模型适配规范（给 AI 看的）
 │   └── deskpet-adapter.schema.json
 └── deskpet-app/                  # Electron 前端
-    ├── package.json
-    ├── electron.vite.config.js
     ├── electron-builder.yml      # 安装包打包配置（npm run dist）
     └── src/
-        ├── main/                 # Electron 主进程
-        │   ├── index.ts
-        │   └── services.ts       # 后台服务管理器（桥进程 spawn/日志/健康探测）
+        ├── main/                 # 主进程（index.ts + services.ts 服务管理器）
         ├── preload/              # 预加载脚本
-        │   └── index.ts
         └── renderer/             # Vue3 渲染进程
-            ├── components/       # DeskpetStage, ChatBubble, QuickInput, SettingsPanel, ServicesSection
-            ├── composables/      # useWebSocket, useVad, useVoiceInput, useLipSync 等
-            ├── services/         # Live2D 加载/适配校验、Transport
-            ├── stores/           # Pinia 状态管理
-            └── public/           # Live2D Cubism 运行时 + 模型文件 + 图标
 ```
 
 ## 兼容性
@@ -98,41 +93,6 @@ maibot-deskpet-plugin/
 - **仅兼容 MaiBot 1.0.0 及以上版本**
 - **当前仅在 Windows 上测试通过**，macOS / Linux 理论兼容但未经测试
 - 支持本地使用和局域网/VPN 跨设备远程连接
-
-## 功能
-
-### 桌面交互
-- **Live2D 角色**：透明窗口，始终置顶，视线追踪（全局鼠标跟随）
-- **模型操控**：滚轮缩放（鼠标焦点）、拖拽平移、窗口拖动（底部导航条）
-- **布局持久化**：模型缩放/偏移、窗口位置/大小自动保存与恢复
-- **悬停淡化**：鼠标悬停时模型半透明，查看遮挡区域
-- **自定义图标**：托盘与任务栏图标使用 `public/icon.png`
-
-### 对话
-- **双向对话**：通过 MaiBot MessageGateway 接入完整推理管线（Planner → Replyer → 回复）
-- **聊天气泡**：漫画风格浮动气泡（左上角，5 秒自动消失） + 聊天记录面板
-- **消息流**：用户/AI 双色气泡，流式文字实时更新，自动滚屏
-- **表情系统**：MaiBot 可通过 Tool 控制角色表情与动作动画
-- **表情包**：MaiBot 可从表情库选取匹配表情包发送到桌宠显示
-
-### 语音
-- **GPT-SoVITS TTS**：角色专属声线，自然语气，HTTP 桥接（端口 9881）
-- **SenseVoice STT**：离线语音识别，支持中英日韩，HTTP 桥接（端口 18530）
-- **VAD 语音检测**：自动检测说话/静音，无需手动操作麦克风
-- **实时唇形同步**：多正弦波叠加算法（参考 NachoBot）
-- **音频顺序播放**：多条回复排队播放，不互相打断
-
-### 截图识图
-- **手动截图**：托盘「截图识图」，桌面截屏发送给 MaiBot 视觉模型分析
-- **自动截图**：定时截屏（间隔可配），MaiBot 主动根据屏幕内容搭话
-- **NapCat 兼容**：图片以 base64 + hash 格式通过管道，与 QQ 图片处理同路径
-
-### 设置与服务管理
-- **后台服务管理**：STT 桥 / TTS 桥 / GPT-SoVITS 随桌宠自动启动，面板内状态灯、启动/停止/重启、实时日志；每个服务可选「终端窗口」模式（在独立控制台里跑）；退出桌宠自动清理全部子进程
-- **设置面板**：右侧滑入面板，连接地址/模型下拉切换/VAD 参数/自动截图间隔/服务路径配置
-- **模型热切换**：设置面板选中即换，无需重启；列表由主进程扫描模型目录得到
-- **托盘菜单**：显示/隐藏、置顶、锁定穿透、悬停淡化、截图、自动截图、重置布局
-- **快捷键**：Ctrl+Alt+H 显示隐藏、Ctrl+Alt+F 悬停淡化、Ctrl+Alt+L 锁定穿透、Ctrl+R/F5 重载、Ctrl+Shift+I 开发者工具
 
 ## 技术栈
 
@@ -146,318 +106,45 @@ maibot-deskpet-plugin/
 | TTS | GPT-SoVITS (HTTP API v2, 角色声线克隆) |
 | STT | SenseVoice (sherpa-onnx, 本地离线) |
 
-## 安装与运行
-
-### 第零步：MaiBot 配置（必要）
-
-在安装插件前，需要先编辑 MaiBot 的 `config/bot_config.toml`，让 MaiBot 认识桌宠平台和用户。
-
-**1. 注册桌宠平台**
-
-在 `[bot]` 节的 `platforms` 数组中添加 `"deskpet:deskpet-user"`：
-
-```toml
-[bot]
-platforms = ["deskpet:deskpet-user"]
-```
-
-如果已经有其他平台（如 QQ），用逗号分隔：
-
-```toml
-[bot]
-platforms = ["qq:123456789", "deskpet:deskpet-user"]
-```
-
-**2. 为桌宠配置专属 Prompt（必读）**
-
-在 `[[chat.chat_prompts]]` 中新增一条，让 AI 知道桌宠场景下该怎样说话，以及桌宠用户对应哪个 QQ 用户。替换 `qq:12345678` 和昵称为你自己的：
-
-```toml
-[[chat.chat_prompts]]
-platform = "deskpet"
-item_id = "deskpet-user"
-rule_type = "private"
-prompt = "你是 Live2D 桌面宠物，正在和用户一对一私聊。回复简短自然，像朋友聊天。桌宠用户和 qq:12345678 (昵称:千石可乐) 是同一个人，共享记忆和对话上下文。可以使用 set_deskpet_emotion 和 trigger_deskpet_animation 工具。"
-```
-
-如果不需关联 QQ，去掉身份映射那句即可。
-
-### 第一步：安装插件到 MaiBot
-
-打开 MaiBot 目录，找到 `plugins` 文件夹，把本仓库整个放进去：
-
-```text
-你的MaiBot目录/
-└── plugins/
-    └── maibot-deskpet-plugin/    ← 整个仓库放这里
-        ├── _manifest.json
-        ├── plugin.py
-        ├── config.toml
-        ├── start.bat
-        ├── gpt-sovits-bridge.py
-        ├── stt-bridge.py
-        └── deskpet-app/          ← 前端代码
-```
-
-### 第二步：安装前端依赖（仅源码方式需要）
-
-> 用安装版 exe 的话跳过这一步——前端已经打进安装包里了。
-
-打开命令行（在桌宠目录里右键 → "在终端中打开"，或 `cd` 进去）：
-
-```bash
-cd 你的MaiBot目录/plugins/maibot-deskpet-plugin/deskpet-app
-npm install
-```
-
-> 如果 `npm install` 卡住不动，先设置国内镜像再重试：
-> ```bash
-> npm config set registry https://registry.npmmirror.com
-> npm install
-> ```
-
-安装成功后，`deskpet-app` 下会多出一个 `node_modules` 文件夹。
-
-### 第三步：安装 Python 依赖
-
-桌宠需要用 Python 跑 STT 和 TTS 桥，先装依赖包：
-
-> 如果还没有装 Python，先去 [python.org](https://www.python.org/downloads/) 下载安装（勾选"Add Python to PATH"）
-
-```bash
-pip install aiohttp websockets sherpa-onnx numpy
-```
-
-验证安装成功：
-
-```bash
-python -c "import aiohttp; import sherpa_onnx; print('OK')"
-```
-
-看到 `OK` 就说明装好了。
-
-### 第四步（可选）：安装 AI 模型
-
-> 没有模型也能用桌宠聊天，只是没有语音功能。不需要语音功能可以跳到第五步。
-
----
-
-**A. SenseVoice 语音识别模型**（约 900MB，离线识别用）
-
-> 安装版 exe 已内置该模型（在 `resources\bridges\sensevoice\`），跳过 A 节即可。以下仅源码方式需要。
-
-> ⚠️ 如果使用 PowerShell，请用下方「PowerShell」版命令。CMD / Git Bash 用户用「CMD」版。
-
-**CMD 版：**
-
-```bash
-mkdir deskpet-app\sensevoice 2>nul
-curl -L -o deskpet-app\sensevoice\model.onnx "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx"
-curl -L -o deskpet-app\sensevoice\tokens.txt "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt"
-```
-
-**PowerShell 版：**
-
-```powershell
-New-Item -ItemType Directory -Force -Path deskpet-app\sensevoice
-curl.exe -L -o deskpet-app\sensevoice\model.onnx "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx"
-curl.exe -L -o deskpet-app\sensevoice\tokens.txt "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt"
-```
-
-> PowerShell 的 `curl` 实际上是 `Invoke-WebRequest` 的别名，不支持 `-L` 参数。请使用 `curl.exe`（Windows 自带）。
-
-> 这两个文件正确路径：
-> ```text
-> deskpet-app/sensevoice/model.onnx      ← 约 900MB
-> deskpet-app/sensevoice/tokens.txt      ← 约 300KB
-> ```
-
----
-
-**B. GPT-SoVITS 语音合成**（需要 NVIDIA 显卡，CPU 也可但较慢）
-
-1. 下载 [GPT-SoVITS 整合包](https://github.com/RVC-Boss/GPT-SoVITS)，解压到任意位置
-2. 下载角色模型（权重文件 `.ckpt` + `.pth` + 参考音频 `.wav`）
-3. 打开 `gpt-sovits-bridge.py`，修改这三行：
-
-```python
-REF_AUDIO_PATH = r"你的参考音频路径.wav"
-PROMPT_TEXT = "参考音频里说的文本内容"
-```
-
-4. 告诉桌宠整合包在哪（二选一）：
-   - **安装版 exe**：设置面板 → 后台服务 → 服务路径配置 → 填「GPT-SoVITS 整合包目录」（常见路径会自动探测，探测到就不用填）
-   - **start.bat 启动**：改脚本里的 `GSV_DIR` 一行：`set "GSV_DIR=D:\你的GPT-SoVITS目录"`
-
-### 第五步：启动
-
-**方式 A（推荐）：安装版 exe**
-
-运行 `deskpet-app` 下的 `npm run dist` 得到 `release/MaiBot-Deskpet-Setup-x.x.x.exe`（或直接用发布的安装包），安装后桌面双击图标即可——**STT 桥 / TTS 桥 / GPT-SoVITS 会随桌宠自动启动**，不再弹一排命令行窗口。
-
-- 服务的状态灯、启动/停止/重启、日志都在 **设置面板 ⚙ → 后台服务** 里
-- 想看某个服务的原生控制台？勾选该服务的「终端窗口」再重启它
-- SenseVoice 语音识别模型已随包分发，装完即用
-- 桥脚本用系统 Python 运行（需要 `pip install aiohttp numpy sherpa-onnx`），Python 不在 PATH 时可在「服务路径配置」里指定
-
-**方式 B：start.bat（开发 / 跑源码）**
-
-双击 `start.bat`，会弹出 4 个命令行窗口：
-
-| 窗口标题 | 作用 | 必须？ |
-|---------|------|--------|
-| STT Bridge | 语音识别 | 可选 |
-| GPT-SoVITS API | 语音合成 | 可选 |
-| TTS Bridge | 文字→语音 | 可选 |
-| Deskpet | 桌宠前端 | ✅ 必须 |
-
-两种方式都需要**手动启动 MaiBot**（设置面板里的「MaiBot 插件」状态灯会告诉你连上没有）。
-
-> 如果 GPT-SoVITS 没配，TTS 服务会显示"未找到整合包"，不影响文字聊天。
-
-### 第六步：测试是否正常
-
-1. 确认桌宠窗口显示角色模型
-2. 双击模型弹出输入框，发一条消息
-3. 如果 MaiBot 回复了文字，说明**插件通信正常**
-4. 如果有 GPT-SoVITS，回复后应有语音朗读
-5. 点右下角 🎤 按钮测试语音输入
-
-### 常见问题
-
-| 问题 | 解决 |
-|------|------|
-| `npm install` 失败 | 设置国内镜像或挂代理 |
-| `python` 命令找不到 | 重新安装 Python，勾选"Add to PATH" |
-| `curl` 无法下载模型 | 用浏览器打开链接手动下载，放到对应目录 |
-| 桌宠窗口黑屏 | 检查 `deskpet-app/src/renderer/public/` 里的 Live2D 模型文件 |
-| 桌宠没连上 MaiBot | 确认 MaiBot 启动且有加载插件，检查 `config.toml` 端口 |
-| TTS 没声音 | `gpt-sovits-bridge.py` 的 `REF_AUDIO_PATH` 是否正确 |
-| STT 不识别 | `sensevoice/` 目录下两个文件是否齐全 |
-
-## 跨设备连接（局域网 / VPN）
-
-### 服务器端（运行 MaiBot 的机器）
-
-编辑 `config.toml`：
-
-```toml
-[ws_server]
-host = "0.0.0.0"
-port = 8523
-auth_token = "你的密码"
-```
-
-开放防火墙端口 8523。
-
-### 客户端（运行桌宠的机器）
-
-启动桌宠，打开设置面板（⚙ 按钮），填入服务器 IP 地址：
-
-- **WS 地址**：`ws://服务器IP:8523/ws`
-- **WS Token**：如果服务器端设置了
-- **STT 地址**：`http://服务器IP:18530/stt`
-
-修改后刷新页面。
-
-### 安全注意事项
-
-- **CORS 配置**：STT 桥（端口 18530）和 TTS 桥（端口 9881）默认允许所有来源的跨域请求（`Access-Control-Allow-Origin: *`），这是为了方便本地开发。如果对外暴露这些端口，请通过反向代理（如 nginx）添加访问控制。
-- **鉴权令牌**：`config.toml` 中的 `auth_token` 默认为空。在局域网或公网使用时务必设置强密码，并在客户端设置面板中填写对应的 WS Token。
-- **绑定地址**：默认绑定 `127.0.0.1`（仅本机）。如需跨设备使用，将 `host` 改为 `0.0.0.0`，但务必同时设置 `auth_token`。
-- **STT 地址可配**：客户端可自定义 STT 地址，指向任意服务器。仅在信任的网络环境中使用此功能。
-
-## 配置
-
-编辑 `config.toml`：
-
-```toml
-[plugin]
-enabled = true
-config_version = "1.0.0"
-
-[ws_server]
-host = "127.0.0.1"       # 本机；跨设备改为 "0.0.0.0"
-port = 8523
-auth_token = ""           # 跨设备时建议设置密码
-
-[chat]
-stream_buffer_size = 50
-```
-
-前端设置（快捷键 ⚙）：
-
-| 配置项 | 存储位置 | 默认值 |
-|--------|---------|--------|
-| WS 地址 | localStorage `deskpet/ws-url` | `ws://127.0.0.1:8523/ws` |
-| WS Token | localStorage `deskpet/ws-token` | 空 |
-| STT 地址 | localStorage `deskpet/stt-url` | `http://127.0.0.1:18530/stt` |
-| VAD 灵敏度 | localStorage `deskpet/vad-threshold` | `0.02` |
-| 静音判定秒数 | localStorage `deskpet/vad-silence` | `1.5` |
-| 自动截图间隔 | localStorage `deskpet/auto-screenshot-interval` | `60` |
-
-## 启发的方向与未来计划
-
-### 借鉴 Shinsekai / NachoBot
-
-本项目在 TTS 集成、音频处理管线、GPT-SoVITS 适配器模式方面受到以下项目的启发：
-
-- **NachoBot**：TTS 适配器中继网关模式、情感分类器、音频后处理
-- **Shinsekai**：TTSAdapter 抽象 + 工厂模式、角色卡片系统、DAG 工作流管道
-
-### 后续计划
-
-- [ ] 麦克风全局快捷键（按住说话，需解决原生键盘钩子兼容性）
-- [ ] 多角色声线切换（设置面板可选 GPT-SoVITS 预设）
-- [ ] 情绪驱动声线切换（根据文本情绪选不同参考音频）
-- [ ] 设置面板完善（更多配置项、一键恢复默认）
-- [ ] 窗口尺寸自动适配模型
-- [ ] 静态立绘模式（无需 Live2D 模型，PNG + 情绪标签切换）
-- [ ] 动作循环播放（`loop` 标志目前只播一次）
-- [ ] macOS 打包（DMG）
+## 致谢
+
+- **[MaiBot](https://github.com/MaiM-with-u/MaiBot)** — 插件运行的宿主平台
+- **[Airi](https://github.com/moeru-ai/airi)** — PixiJS Live2D 渲染方案的重要参考
+- **[NachoBot](https://github.com/RachelForster/Shinsekai)** — GPT-SoVITS 集成方案与音频处理管线参考
+- **[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)** — 语音合成引擎
+- **[Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx)** — SenseVoice 语音识别运行时
+- **[NapCat](https://github.com/NapNeko/NapCatQQ)** — 图片消息格式参考
 
 ## 更新日志
 
-### v0.5.0 — 产品化：安装版 + 后台服务管理（当前）
+### v0.6.0 — 开箱即用：复用 MaiBot Python 环境（当前）
 
-- [x] Windows NSIS 独立安装包（`npm run dist`，内置全部模型与 SenseVoice）
-- [x] 后台服务管理：STT/TTS 桥、GPT-SoVITS 随桌宠自启，状态灯/日志面板/可选终端窗口，退出自动清理进程树
-- [x] Live2D 模型适配规范 v1（docs/MODEL-ADAPTER-SPEC.md + JSON Schema + 加载时校验 + 控制台调试三件套）
-- [x] 全量代码审查修复 30 项（并发竞态、STT 中文乱码、TTS 自听回环、气泡流式冻结、半开连接检测等）
-- [x] UI 打磨：设置/聊天/输入框统一设计语言，聊天记录改为抽屉面板
+- [x] 静态立绘模式：不用 Live2D，图片当角色（清单格式、自定义情绪、交叉淡入、VN 风小跳、说话差分、待机随机）
+- [x] PTT 全局热键（pynput 桥，按住说话 / 开关切换）
+- [x] 桥脚本复用 MaiBot 的 Python（manifest 声明依赖，MaiBot 自动安装）
+- [x] TTS 角色声线可视化配置（参考音频 + 文本，不再改脚本）
+- [x] 模型自定义情绪上报（sys:emotions），AI 工具可用自定义键
+- [x] 文档拆分：README 瘦身 + docs/ 专题页
+
+### v0.5.0 — 产品化：安装版 + 后台服务管理
+
+- [x] Windows NSIS 独立安装包（内置全部模型与 SenseVoice）
+- [x] 后台服务管理：桥进程随桌宠自启、状态灯/日志/可选终端窗口、退出自动清理
+- [x] Live2D 模型适配规范 v1（docs/MODEL-ADAPTER-SPEC.md）
+- [x] 全量代码审查修复 30 项
+- [x] UI 打磨：设置/聊天/输入框统一设计语言
 
 ### v0.3.0 — AI 感官 + 设置面板
 
-- [x] GPT-SoVITS TTS 集成（HTTP 桥，角色声线，语音参数可调）
-- [x] SenseVoice STT 离线语音识别（sherpa-onnx，多语种）
-- [x] VAD 语音活动检测（自动检测说话/静音，灵敏度可配）
-- [x] 桌面截图识图（手动/自动，NapCat 兼容图片管道）
-- [x] 设置面板（连接/显示/VAD/截图配置，右侧滑入）
-- [x] 聊天气泡改版（漫画气泡 + 消息流面板 + 按钮栏纵向排列）
-- [x] NachoBot 多正弦波唇形同步算法
-- [x] 音频顺序播放队列
-- [x] 表情包支持（从 MaiBot 表情库选取）
-- [x] TTS 后端抽象（可插拔接口）
-- [x] 一键启动脚本 start.bat
-- [x] 跨设备远程连接支持（WS / STT 地址可配）
-- [x] 自动截图定时器 + 间隔可配
+- [x] GPT-SoVITS TTS、SenseVoice STT、VAD、截图识图、表情系统、唇形同步、音频队列、表情包
 
 ### v0.2.0 — TTS + 表情系统
 
-- [x] Piper 本地 TTS 语音合成（已替换为 GPT-SoVITS）
-- [x] 唇形同步
-- [x] 表情状态机（自动恢复 neutral）
-- [x] 动作优先级系统（Idle / Reply / Interaction 三层）
-- [x] 空闲动画调度器
-- [x] Store 拆分 + Composable 重构
-- [x] Transport Adapter 抽象
+- [x] Piper TTS（后替换为 GPT-SoVITS）、唇形同步、表情状态机
 
 ### v0.1.0 — 初始版本
 
-- [x] Live2D 角色透明窗口渲染
-- [x] MaiBot MessageGateway 双向消息管线
-- [x] 滚轮缩放、拖拽平移、视线追踪、窗口拖动
-- [x] 表情/动作 Tool 组件
+- [x] Live2D 透明窗口渲染、MaiBot MessageGateway 双向管线、滚轮缩放/拖拽/视线追踪、表情/动作 Tool
 
 ## 许可
 

@@ -150,6 +150,10 @@ export function useWebSocket() {
       console.log('[Deskpet] WebSocket connected')
       store.wsConnected = true
       if (token) send('auth', { token })
+      // 重连后插件端的 _model_emotions 可能已丢失或过时，补发当前模型声明的自定义情绪
+      if (store.modelEmotions.length > 0) {
+        send('sys:emotions', { emotions: store.modelEmotions })
+      }
       lastActivity = Date.now()
       clearStableTimer()
       stableTimer = setTimeout(() => {
@@ -203,7 +207,8 @@ export function useWebSocket() {
         break
 
       case 'state:emotion':
-        if (isDeskpetEmotionValue(data.emotion)) {
+        // 接受内置词表 + 当前模型声明的自定义情绪
+        if (isDeskpetEmotionValue(data.emotion) || store.modelEmotions.includes(data.emotion)) {
           // 同值赋值不会触发 watch，pulse 保证相同情绪连发也能重放并刷新回退窗口
           store.currentEmotion = data.emotion
           store.emotionPulse++
@@ -228,6 +233,13 @@ export function useWebSocket() {
       case 'output:emoji':
         store.isThinking = false
         if (data.base64) chatStore.addEmojiMessage(data.base64, data.description || '')
+        break
+
+      case 'sys:env':
+        // 插件上报 MaiBot 的 Python 解释器路径：桥进程复用同一环境，无需单独装 Python
+        if (typeof data.python === 'string' && data.python) {
+          void window.electronAPI?.setDetectedPython(data.python)
+        }
         break
 
       case 'heartbeat':

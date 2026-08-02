@@ -8,6 +8,8 @@ WebSocket 服务器监听 ws://127.0.0.1:8523，供 Electron 前端连接。
 import asyncio
 import hashlib
 import json
+import re
+import sys
 import time
 import uuid
 import base64
@@ -74,20 +76,23 @@ class DeskpetPluginConfig(PluginConfigBase):
 # ═══════════════════════════════════════════════
 
 EMOTION_LIST = [
-    "happy", "sad", "angry", "surprise",
-    "thinking", "shy", "curious", "neutral", "idle"
+    "happy", "sad", "angry", "surprise", "embarrassed",
+    "thinking", "shy", "curious", "confused", "neutral", "idle"
 ]
 
 TOOL_EMOTION_SUPPRESS_SECONDS = 3.0
 
+# 自动情绪推断的关键词（按 dict 顺序首个命中生效）
 EMOTION_KEYWORDS = {
     "surprise": ("哇", "竟然", "真的假的", "不会吧", "惊讶", "震惊"),
     "angry": ("生气", "讨厌", "烦", "过分", "不理你", "哼", "可恶"),
     "sad": ("难过", "伤心", "呜", "哭", "失落", "对不起", "抱歉"),
     "shy": ("害羞", "脸红", "不好意思", "欸嘿"),
+    "embarrassed": ("尴尬", "社死", "脚趾", "啊这", "汗颜", "无地自容", "呃呃"),
     "happy": ("开心", "高兴", "喜欢", "太好了", "好耶", "哈哈", "嘿嘿", "嘻嘻"),
     "thinking": ("我想想", "让我想想", "可能", "也许", "应该是", "大概"),
     "curious": ("为什么", "怎么会", "是什么", "好奇", "想知道"),
+    "confused": ("搞不懂", "什么情况", "怎么回事", "哈？", "啊？", "懵", "纳闷", "困惑"),
 }
 
 ACTION_LIST = [
@@ -186,6 +191,12 @@ class DeskpetWSServer:
         self._clients.add(ws)
         addr = ws.remote_address
         self.logger.info(f"[Deskpet] Client connected: {addr}")
+        # 上报插件所在 Python 解释器：桌宠的 STT/TTS 桥复用 MaiBot 的 Python 环境
+        # （依赖已按 manifest 装进同一环境），用户无需单独安装 Python
+        try:
+            await ws.send(DeskpetMessage(type="sys:env", data={"python": sys.executable}).to_json())
+        except websockets.ConnectionClosed:
+            return
         try:
             async for raw in ws:
                 try:
@@ -213,6 +224,8 @@ class DeskpetPlugin(MaiBotPlugin):
     async def on_load(self) -> None:
         self._last_tool_emotion_at = 0.0
         self._ws_server: Optional[DeskpetWSServer] = None
+        # 当前模型声明的自定义情绪（桌宠经 sys:emotions 上报，与内置词表取并集）
+        self._model_emotions: Set[str] = set()
         # 事件循环只持任务的弱引用，fire-and-forget 的 TTS 任务必须自己留强引用
         self._bg_tasks: Set[asyncio.Task] = set()
         if not self.config.plugin.enabled:
@@ -340,7 +353,6 @@ class DeskpetPlugin(MaiBotPlugin):
         plain = message.get("processed_plain_text") or ""
         if plain:
             # Strip MaiBot platform reply prefix (e.g. [回复消息], [回复])
-            import re
             cleaned = re.sub(r'^\[回复[^\]]*\]\s*', '', str(plain))
             return cleaned
 
@@ -388,6 +400,12 @@ class DeskpetPlugin(MaiBotPlugin):
             await self._handle_input_click(msg)
         elif msg.type == "input:screenshot":
             await self._handle_screenshot(msg)
+        elif msg.type == "sys:emotions":
+            # 模型（Live2D adapter / 立绘包清单）声明的自定义情绪键
+            emotions = msg.data.get("emotions", [])
+            if isinstance(emotions, list):
+                self._model_emotions = {str(e) for e in emotions if isinstance(e, str) and e}
+                self.ctx.logger.debug(f"[Deskpet] Model declared emotions: {sorted(self._model_emotions)}")
         elif msg.type == "heartbeat":
             # 回显心跳：前端靠“有没有入站消息”检测半开 TCP 连接
             if ws is not None:
@@ -482,20 +500,28 @@ class DeskpetPlugin(MaiBotPlugin):
     @Tool(
         "set_deskpet_emotion",
         brief_description="设置桌面宠物的情绪/表情",
-        detailed_description=f"控制桌面宠物 Live2D 角色表现的情绪。可选值: {', '.join(EMOTION_LIST)}。",
+        detailed_description=(
+            f"控制桌面宠物 Live2D 角色表现的情绪。基础可选值: {', '.join(EMOTION_LIST)}。"
+            "此外，当前模型（立绘包清单/Live2D adapter）声明的自定义情绪也可以使用；"
+            "拿不准时随便试一个，报错信息会列出当前全部可用值。"
+        ),
         parameters=[
             ToolParameterInfo(
                 name="emotion", param_type=ToolParamType.STRING,
-                description=f"情绪: {', '.join(EMOTION_LIST)}", required=True,
+                description=f"情绪: {', '.join(EMOTION_LIST)}，或模型自定义情绪", required=True,
             ),
         ],
     )
     async def handle_set_emotion(self, emotion: str, **kwargs) -> dict:
-        if emotion not in EMOTION_LIST:
-            return {"success": False, "error": f"未知情绪: {emotion}"}
-        if self._ws_server:
-            await self._ws_server.broadcast("state:emotion", {"emotion": emotion})
-            self._last_tool_emotion_at = time.time()
+        # 校验范围 = 内置词表 ∪ 当前模型声明的情绪（立绘包/adapter 的自定义键）
+        valid = set(EMOTION_LIST) | self._model_emotions
+        if emotion not in valid:
+            return {"success": False, "error": f"未知情绪: {emotion}（当前可用: {', '.join(sorted(valid))}）"}
+        # 无客户端时如实上报失败，否则 AI 会以为表情已生效并据此继续编排
+        if not self._ws_server or not self._ws_server.has_clients:
+            return {"success": False, "error": "桌宠未连接，表情未生效"}
+        await self._ws_server.broadcast("state:emotion", {"emotion": emotion})
+        self._last_tool_emotion_at = time.time()
         return {"success": True, "emotion": emotion}
 
     # ── Tool: 动作 ──
@@ -518,8 +544,9 @@ class DeskpetPlugin(MaiBotPlugin):
     async def handle_animation(self, animation: str, loop: bool = False, **kwargs) -> dict:
         if animation not in ACTION_LIST:
             return {"success": False, "error": f"未知动作: {animation}"}
-        if self._ws_server:
-            await self._ws_server.broadcast("state:animation", {"name": animation, "loop": loop})
+        if not self._ws_server or not self._ws_server.has_clients:
+            return {"success": False, "error": "桌宠未连接，动作未生效"}
+        await self._ws_server.broadcast("state:animation", {"name": animation, "loop": loop})
         return {"success": True, "animation": animation}
 
     # ── Tool: 表情包 ──
@@ -538,7 +565,12 @@ class DeskpetPlugin(MaiBotPlugin):
     async def handle_send_emoji(self, description: str, **kwargs) -> dict:
         try:
             result = await self.ctx.emoji.get_by_description(description)
-            self.ctx.logger.info(f"[Deskpet] get_by_description('{description}') => {result}")
+            # result 里带着 base64 图片数据，全量进日志会撑爆日志文件
+            hit = result.get("emoji") if isinstance(result, dict) else None
+            self.ctx.logger.info(
+                f"[Deskpet] get_by_description('{description}') => "
+                f"{'hit: ' + str(hit.get('description', '')) if hit else 'miss'}"
+            )
         except Exception as e:
             self.ctx.logger.warning(f"[Deskpet] Emoji lookup failed: {e}")
             return {"success": False, "error": str(e)}
@@ -548,20 +580,21 @@ class DeskpetPlugin(MaiBotPlugin):
             # fallback: random emoji
             try:
                 rand_result = await self.ctx.emoji.get_random(count=1)
-                self.ctx.logger.info(f"[Deskpet] get_random result: {rand_result}")
                 emojis = rand_result.get("emojis", []) if isinstance(rand_result, dict) else []
+                self.ctx.logger.info(f"[Deskpet] get_random fallback => {len(emojis)} emoji(s)")
                 emoji = emojis[0] if emojis else None
             except Exception as e:
                 self.ctx.logger.warning(f"[Deskpet] get_random failed: {e}")
         if not emoji:
             return {"success": True, "emoji": None, "message": "表情库为空，请先收集表情包"}
 
-        if self._ws_server:
-            await self._ws_server.broadcast("output:emoji", {
-                "base64": emoji.get("base64", ""),
-                "description": emoji.get("description", ""),
-                "emotion": emoji.get("emotion", ""),
-            })
+        if not self._ws_server or not self._ws_server.has_clients:
+            return {"success": False, "error": "桌宠未连接，表情包未送达"}
+        await self._ws_server.broadcast("output:emoji", {
+            "base64": emoji.get("base64", ""),
+            "description": emoji.get("description", ""),
+            "emotion": emoji.get("emotion", ""),
+        })
         return {"success": True, "emoji_sent": True, "description": emoji.get("description", "")}
 
 

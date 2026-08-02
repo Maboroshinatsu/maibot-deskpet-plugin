@@ -43,6 +43,8 @@ interface ModelEntry {
   name: string
   /** 渲染层可直接加载的相对 URL，例如 ./models/xxx/xxx.model3.json */
   url: string
+  /** live2d = .model3.json；image-set = 静态立绘包（deskpet-images.json） */
+  kind: 'live2d' | 'image-set'
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -146,6 +148,16 @@ function scanModelFiles(root: string): ModelEntry[] {
           // dev 下 vite 从 public/ 静态提供，相对路径即可；
           // 打包后相对路径解析到 out/renderer 之外就 404，必须走自定义协议
           url: app.isPackaged ? `deskpet://models/${relative}` : `./models/${relative}`,
+          kind: 'live2d',
+        })
+      } else if (entry.isFile() && entry.name === 'deskpet-images.json') {
+        // 静态立绘包：清单即模型入口，展示名直接用所在文件夹
+        const relative = path.relative(root, full).split(path.sep).join('/')
+        const topFolder = relative.includes('/') ? relative.split('/')[0] : ''
+        found.push({
+          name: topFolder || '立绘包',
+          url: app.isPackaged ? `deskpet://models/${relative}` : `./models/${relative}`,
+          kind: 'image-set',
         })
       }
     }
@@ -590,6 +602,8 @@ app.whenReady().then(() => {
   ipcMain.handle('service-logs', (_event, id: ServiceId) => serviceManager.logsOf(id))
   ipcMain.handle('services-get-config', () => serviceManager.getConfig())
   ipcMain.handle('services-set-config', (_event, patch: Partial<ServicesConfig>) => serviceManager.setConfig(patch))
+  // 插件通过 WS 上报的 MaiBot Python 解释器路径（桥进程复用同一环境）
+  ipcMain.handle('services-set-detected-python', (_event, pythonPath: string) => serviceManager.setDetectedPython(pythonPath))
 
   // 一键启动的核心：应用起来就把配置为自启的后台服务拉起来
   serviceManager.autoStartAll()

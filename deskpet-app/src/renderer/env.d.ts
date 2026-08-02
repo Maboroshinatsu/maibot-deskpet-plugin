@@ -20,9 +20,11 @@ interface ModelEntry {
   name: string
   /** 渲染层可直接加载的相对 URL，例如 ./models/xxx/xxx.model3.json */
   url: string
+  /** live2d = .model3.json；image-set = 静态立绘包（deskpet-images.json） */
+  kind: 'live2d' | 'image-set'
 }
 
-type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits'
+type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits' | 'hotkey'
 type ServiceStatus = 'stopped' | 'starting' | 'running' | 'error'
 
 interface ServiceState {
@@ -40,6 +42,9 @@ interface ServiceState {
 interface ServicesConfig {
   pythonPath: string
   gsvDir: string
+  ttsRefAudio: string
+  ttsPromptText: string
+  pttKey: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
@@ -65,6 +70,8 @@ interface ElectronAPI {
   getServiceLogs: (id: ServiceId) => Promise<string[]>
   getServicesConfig: () => Promise<ServicesConfig>
   setServicesConfig: (patch: Partial<ServicesConfig>) => Promise<ServicesConfig>
+  setDetectedPython: (pythonPath: string) => Promise<void>
+  onPttEvent: (callback: (state: 'down' | 'up') => void) => () => void
   onServicesUpdate: (callback: (states: ServiceState[]) => void) => () => void
   onServiceLog: (callback: (payload: { id: ServiceId; lines: string[] }) => void) => () => void
 }

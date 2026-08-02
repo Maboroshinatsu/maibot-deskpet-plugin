@@ -1,0 +1,16 @@
+{
+  "name": "示例立绘·团子",
+  "default": "neutral",
+  "images": {
+    "neutral": "neutral.svg",
+    "idle": "neutral.svg",
+    "happy": "happy.svg",
+    "sad": "sad.svg",
+    "thinking": "thinking.svg",
+    "confused": "confused.svg",
+    "embarrassed": "embarrassed.svg"
+  },
+  "talk": "talk.svg",
+  "idleEmotions": ["happy", "curious", "confused", "embarrassed"],
+  "idleIntervalSec": [12, 25]
+}

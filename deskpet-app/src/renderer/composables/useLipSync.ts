@@ -1,3 +1,10 @@
+/**
+ * 唇形同步状态（NachoBot 多正弦波叠加算法）
+ *
+ * 注意：这是**模块级单例**——useWebSocket（TTS 播放时 start/stop）与
+ * DeskpetStage（每帧 getMouthOpen 渲染嘴型）刻意共享同一份状态。
+ * 拆成每组件独立实例会导致「在播放但嘴不动」，改动时保持单例语义。
+ */
 let phase = 0
 let speaking = false
 let mouthValue = 0

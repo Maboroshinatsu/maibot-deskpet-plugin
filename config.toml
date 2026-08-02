@@ -3,8 +3,9 @@ enabled = true
 config_version = "1.0.0"
 
 [ws_server]
-host = "127.0.0.1"
+host = "127.0.0.1"       # 本机；跨设备改为 "0.0.0.0"
 port = 8523
+auth_token = ""           # 鉴权令牌；跨设备/局域网使用时务必设置
 
 [chat]
 stream_buffer_size = 50

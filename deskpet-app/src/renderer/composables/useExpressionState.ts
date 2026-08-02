@@ -26,6 +26,10 @@ export function useExpressionState(store: ReturnType<typeof useDeskpetStore>) {
     }
     if (target?.parameters) {
       applyParameters(model, target.parameters)
+    } else {
+      // 目标情绪没有声明参数（含 6 秒后回退到的 neutral）时必须显式释放，
+      // 否则上一个情绪的 parameters（腮红/眼泪等）会永久残留在模型上
+      applyParameters(model, {})
     }
   }
 
@@ -43,10 +47,11 @@ export function useExpressionState(store: ReturnType<typeof useDeskpetStore>) {
       clearRevertTimer()
       applyEmotionState(emotion)
 
-      if (emotion !== 'neutral' && emotion !== 'idle') {
+      // 回退目标：静态立绘包标定的 default；Live2D 的 neutral/idle 视为常态不回退
+      if (emotion !== store.defaultEmotion && emotion !== 'neutral' && emotion !== 'idle') {
         revertTimer = setTimeout(() => {
           revertTimer = null
-          store.currentEmotion = 'neutral'
+          store.currentEmotion = store.defaultEmotion || 'neutral'
         }, EXPRESSION_DURATION_MS)
       }
     },

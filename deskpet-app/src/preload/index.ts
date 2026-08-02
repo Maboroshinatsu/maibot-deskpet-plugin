@@ -53,6 +53,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getServiceLogs: (id: string): Promise<string[]> => ipcRenderer.invoke('service-logs', id),
   getServicesConfig: () => ipcRenderer.invoke('services-get-config'),
   setServicesConfig: (patch: unknown) => ipcRenderer.invoke('services-set-config', patch),
+  setDetectedPython: (pythonPath: string) => ipcRenderer.invoke('services-set-detected-python', pythonPath),
+  onPttEvent: (callback: (state: 'down' | 'up') => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: 'down' | 'up') => callback(state)
+    ipcRenderer.on('ptt-event', listener)
+    return () => ipcRenderer.removeListener('ptt-event', listener)
+  },
   onServicesUpdate: (callback: (states: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, states: unknown) => callback(states)
     ipcRenderer.on('services-update', listener)

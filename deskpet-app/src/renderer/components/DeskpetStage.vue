@@ -1,12 +1,22 @@
 <template>
-  <div class="deskpet-stage" :class="{ hovered: isHovered, 'hover-fade-enabled': store.hoverFadeEnabled }" @dblclick="onDoubleClick" @mousedown.left="onModelMouseDown" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
-    <div ref="stageRef" class="live2d-stage" />
-    <div class="nav-bar" title="拖动窗口，双击重置模型位置和缩放" @mousedown.stop="onNavMouseDown" @dblclick.stop="resetModelView" />
+  <div class="deskpet-stage" :class="{ hovered: isHovered, 'hover-fade-enabled': store.hoverFadeEnabled }" @dblclick="onDoubleClick" @mousedown.left="onModelMouseDown" @contextmenu.prevent="onStageRightClick" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
+    <div v-show="modelKind === 'live2d'" ref="stageRef" class="live2d-stage" />
+    <StaticStage v-if="modelKind === 'image-set'" :hovered="isHovered" />
+    <div class="nav-bar" title="拖动窗口；双击重置模型位置和缩放；右键循环切换情绪" @mousedown.stop="onNavMouseDown" @dblclick.stop="resetModelView" />
 
-    <!-- bottom-right button bar -->
-    <div class="btn-bar">
-      <div class="btn-bar-item" @mousedown.stop @click.stop="openSettings" title="设置">⚙</div>
-      <div class="btn-bar-item" @mousedown.stop @click.stop="openChatPanel" title="聊天记录">💬</div>
+    <!-- bottom-right floating toolbar：悬停窗口才浮现（录音/VAD/面板打开时常驻） -->
+    <div class="btn-bar" :class="{ visible: controlsVisible }">
+      <div class="btn-bar-item" @mousedown.stop @click.stop="openSettings" title="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </div>
+      <div class="btn-bar-item" @mousedown.stop @click.stop="openChatPanel" title="聊天记录">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
+        </svg>
+      </div>
       <div
         class="btn-bar-item"
         :class="{ recording: recordingActive, vad: vadActive }"
@@ -14,7 +24,13 @@
         @click.stop="toggleVad"
         @contextmenu.prevent.stop="toggleManualRecording"
         :title="micTitle"
-      >🎤</div>
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" x2="12" y1="19" y2="22"/>
+        </svg>
+      </div>
     </div>
 
     <SettingsPanel :open="showSettings" @close="showSettings = false" />
@@ -50,10 +66,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import ChatBubble from './ChatBubble.vue'
 import QuickInput from './QuickInput.vue'
 import SettingsPanel from './SettingsPanel.vue'
+import StaticStage from './StaticStage.vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 import { useChatStore } from '@/stores/chat'
 import { useChimeraTransport } from '@/services/transport/chimera'
@@ -70,7 +87,7 @@ import {
   createPixiApp, loadLive2DModel, unloadLive2DModel, getMotionGroups, describeModel,
   resizeModel, resizeModelFit, modelRefW, modelRefH, RESOLUTION,
 } from '@/services/live2d/loader'
-import { discoverModel, clearModelCache, setStoredModelPath } from '@/services/live2d/model-discovery'
+import { discoverModel, clearModelCache, setStoredModelPath, kindOfModelUrl } from '@/services/live2d/model-discovery'
 import {
   getAnimationTarget, getEmotionTarget, loadEmotionAdapter,
   DEFAULT_LIP_SYNC, DESKPET_EMOTIONS, isDeskpetEmotionValue,
@@ -91,6 +108,9 @@ const chatPanelOpen = ref(false)
 const showSettings = ref(false)
 const modelError = ref('')
 
+/** 当前模型走哪条渲染路径：Live2D 还是静态立绘包 */
+const modelKind = computed(() => (store.modelUrl ? kindOfModelUrl(store.modelUrl) : 'live2d'))
+
 // 两个右侧抽屉互斥：打开一个就收起另一个
 function openSettings() {
   chatPanelOpen.value = false
@@ -101,11 +121,17 @@ function openChatPanel() {
   chatPanelOpen.value = true
 }
 
+/** 悬停窗口才显示工具条；但面板开着 / 录音或 VAD 进行中时常驻（状态可见性优先） */
+const controlsVisible = computed(
+  () => isHovered.value || showSettings.value || chatPanelOpen.value || vadActive.value || recordingActive.value,
+)
+
 let animFrameId = 0
 let unsubscribeGlobalCursor: (() => void) | null = null
 let unsubscribeResetModelView: (() => void) | null = null
 let unsubscribeSetHoverFade: (() => void) | null = null
 let unsubscribeScreenshot: (() => void) | null = null
+let unsubscribePtt: (() => void) | null = null
 
 /** 当前模型实际拥有的待机 motion 组，模型切换后重新计算 */
 let idleGroups: string[] = []
@@ -125,6 +151,10 @@ async function mountModel(url: string): Promise<void> {
     return
   }
   store.emotionAdapter = adapter
+  // adapter 声明的情绪键（含自定义）登记到 store，随连接上报给插件
+  store.modelEmotions = Object.keys(adapter.emotions)
+  // Live2D 的情绪回退目标固定为 neutral（立绘包则由清单标定）
+  store.defaultEmotion = 'neutral'
   resizeModel(model, window.innerWidth, window.innerHeight, store.modelZoom)
   model.position.x += store.modelOffsetX
   model.position.y += store.modelOffsetY
@@ -153,9 +183,30 @@ async function mountModel(url: string): Promise<void> {
   idleScheduler.start()
 }
 
-/** 设置面板里换模型：卸掉旧模型再装新的，不用重启 */
+/** Pixi 应用只在 Live2D 路径需要；立绘模式下首次切回 Live2D 时按需创建 */
+async function ensurePixiApp(): Promise<boolean> {
+  if (store.pixiApp) return true
+  if (typeof (window as any).Live2DCubismCore === 'undefined') {
+    modelError.value = '缺少 Cubism 4 运行时'
+    return false
+  }
+  try {
+    const app = await createPixiApp(stageRef.value!, window.innerWidth, window.innerHeight)
+    store.pixiApp = app
+    const canvas = app.view as HTMLCanvasElement
+    canvas.addEventListener('wheel', onWheel as any, { passive: false } as any)
+    return true
+  } catch (err) {
+    console.error('[Deskpet] Failed to create PixiJS app:', err)
+    modelError.value = `渲染初始化失败: ${err}`
+    return false
+  }
+}
+
+/** 设置面板里换模型：卸掉旧模型再装新的，不用重启；Live2D 与立绘包可互切 */
 async function switchModel(url: string): Promise<void> {
-  if (!store.pixiApp || url === store.modelUrl) return
+  if (url === store.modelUrl) return
+  const kind = kindOfModelUrl(url)
 
   idleScheduler.stop()
   stopAnim()
@@ -167,9 +218,22 @@ async function switchModel(url: string): Promise<void> {
   store.modelLoaded = false
   store.emotionAdapter = null
   store.modelCapabilities = null
-  if (previous) unloadLive2DModel(previous, store.pixiApp)
+  store.modelEmotions = []
+  store.defaultEmotion = 'neutral'
+  if (previous && store.pixiApp) unloadLive2DModel(previous, store.pixiApp)
 
   clearModelCache()
+
+  // 静态立绘包：StaticStage 监听 modelUrl 自行接管加载，modelLoaded 由它在加载成功后置位
+  if (kind === 'image-set') {
+    store.modelUrl = url
+    setStoredModelPath(url)
+    modelError.value = ''
+    console.log(`[Deskpet] Switched to image-set: ${previousUrl || '(none)'} → ${url}`)
+    return
+  }
+
+  if (!(await ensurePixiApp())) return
   try {
     await mountModel(url)
     setStoredModelPath(url)
@@ -208,17 +272,25 @@ function installModelInspector() {
   }
 
   ;(window as any).deskpetTestEmotion = (emotion: string) => {
-    if (!isDeskpetEmotionValue(emotion)) {
-      console.warn(`[Deskpet] 未知情绪 "${emotion}"，可用：${DESKPET_EMOTIONS.join(', ')}`)
-      return
-    }
-    if (!getEmotionTarget(store.emotionAdapter, emotion)) {
-      console.warn(`[Deskpet] adapter 里没有映射情绪 "${emotion}"，不会有任何效果`)
-      return
+    // 立绘模式按清单键检查；Live2D 保持内置词表 + adapter 映射双重校验
+    if (modelKind.value === 'image-set') {
+      if (!store.modelEmotions.includes(emotion)) {
+        console.warn(`[Deskpet] 立绘包里没有 "${emotion}"，可用：${store.modelEmotions.join(', ')}`)
+        return
+      }
+    } else {
+      if (!isDeskpetEmotionValue(emotion)) {
+        console.warn(`[Deskpet] 未知情绪 "${emotion}"，可用：${DESKPET_EMOTIONS.join(', ')}`)
+        return
+      }
+      if (!getEmotionTarget(store.emotionAdapter, emotion)) {
+        console.warn(`[Deskpet] adapter 里没有映射情绪 "${emotion}"，不会有任何效果`)
+        return
+      }
     }
     store.currentEmotion = emotion
     store.emotionPulse++
-    console.info(`[Deskpet] 测试情绪：${emotion}（6 秒后自动回 neutral）`)
+    console.info(`[Deskpet] 测试情绪：${emotion}（6 秒后自动回默认表情）`)
   }
 
   ;(window as any).deskpetTestAnimation = (name: string) => {
@@ -249,36 +321,27 @@ onMounted(async () => {
     return
   }
 
-  if (typeof (window as any).Live2DCubismCore === 'undefined') {
-    modelError.value = '缺少 Cubism 4 运行时'
-    return
-  }
-
-  // Pixi 应用、滚轮缩放、调试助手先就位再谈模型 ——
-  // 否则「models 目录为空 / 首个模型损坏」会把之后的切换功能一并打坏
-  try {
-    const app = await createPixiApp(container, window.innerWidth, window.innerHeight)
-    store.pixiApp = app
-    const canvas = app.view as HTMLCanvasElement
-    canvas.addEventListener('wheel', onWheel as any, { passive: false } as any)
-  } catch (err) {
-    console.error('[Deskpet] Failed to create PixiJS app:', err)
-    modelError.value = `渲染初始化失败: ${err}`
-    return
-  }
   installModelInspector()
 
   const modelUrl = await discoverModel()
   if (!modelUrl) {
     // 不 return：用户放入模型后点「重新扫描」再切换仍然可用
-    modelError.value = '未找到 Live2D 模型文件，请将模型放入 public/models/ 目录'
+    modelError.value = '未找到模型文件，请将 Live2D 模型或立绘包放入 public/models/ 目录'
+  } else if (kindOfModelUrl(modelUrl) === 'image-set') {
+    // 静态立绘包：不需要 Pixi/Cubism，StaticStage 监听 modelUrl 自行加载，成功后才置 modelLoaded
+    store.modelUrl = modelUrl
+    console.log('[Deskpet] 静态立绘模式:', modelUrl)
   } else {
-    try {
-      await mountModel(modelUrl)
-      console.log('[Deskpet] Live2D model loaded successfully')
-    } catch (err) {
-      console.error('[Deskpet] Failed to load Live2D model:', err)
-      modelError.value = `模型加载失败: ${err}`
+    // Pixi 应用、滚轮缩放先就位再谈模型 ——
+    // 否则「models 目录为空 / 首个模型损坏」会把之后的切换功能一并打坏
+    if (await ensurePixiApp()) {
+      try {
+        await mountModel(modelUrl)
+        console.log('[Deskpet] Live2D model loaded successfully')
+      } catch (err) {
+        console.error('[Deskpet] Failed to load Live2D model:', err)
+        modelError.value = `模型加载失败: ${err}`
+      }
     }
   }
 
@@ -295,6 +358,10 @@ onMounted(async () => {
   unsubscribeScreenshot = window.electronAPI?.onScreenshotCaptured?.((base64) => {
     transport.sendScreenshot(base64)
   }) ?? null
+  unsubscribePtt = window.electronAPI?.onPttEvent?.((state) => {
+    if (state === 'down') void onPttDown()
+    else void onPttUp()
+  }) ?? null
 
   startAnimationPoll()
 })
@@ -307,6 +374,15 @@ watch(() => [store.currentEmotion, store.emotionPulse] as const, ([emotion]) => 
     idleScheduler.notifyInteraction()
   }
 })
+
+// 模型声明的情绪键（含自定义）变化时上报插件，set_deskpet_emotion 才能用这些键
+watch(
+  () => store.modelEmotions,
+  (emotions) => {
+    transport.sendModelEmotions([...emotions])
+  },
+  { deep: true },
+)
 
 let lastW = window.innerWidth
 let lastH = window.innerHeight
@@ -368,6 +444,68 @@ async function toggleManualRecording() {
     await startRecord()
   } catch (err) {
     console.warn('[Deskpet] Failed to start recording:', err)
+  }
+}
+
+// ── 全局 PTT 热键（hotkey-bridge 经主进程转发 ptt-event）──
+
+/** 热键模式：ptt = 按住说话松开发送；toggle = 按一下开/再按一下关 */
+function getPttMode(): 'ptt' | 'toggle' {
+  try {
+    return localStorage.getItem('deskpet/ptt-mode') === 'toggle' ? 'toggle' : 'ptt'
+  } catch {
+    return 'ptt'
+  }
+}
+
+let pttHeld = false
+
+/** 统一处理 stopRecord 可能抛异常：录音中途设备拔出等情况不能产生 unhandled rejection */
+async function stopRecordSafe(): Promise<string | null> {
+  try {
+    return await stopRecord()
+  } catch (err) {
+    console.warn('[Deskpet] Failed to stop recording:', err)
+    return null
+  }
+}
+
+async function onPttDown() {
+  // 与 VAD 互斥：VAD 开着时热键不抢它的录音通道（和右键手动录音同一规则）
+  if (vadActive.value) {
+    console.debug('[Deskpet] PTT ignored while VAD is active')
+    return
+  }
+  if (getPttMode() === 'toggle') {
+    if (recordingActive.value) {
+      const text = await stopRecordSafe()
+      if (text) sendVoiceText(text)
+    } else {
+      try {
+        await startRecord()
+      } catch (err) {
+        console.warn('[Deskpet] PTT toggle start failed:', err)
+      }
+    }
+    return
+  }
+  if (pttHeld) return // 桥侧已去重，这里双保险
+  pttHeld = true
+  try {
+    await startRecord()
+  } catch (err) {
+    pttHeld = false
+    console.warn('[Deskpet] PTT start failed:', err)
+  }
+}
+
+async function onPttUp() {
+  if (getPttMode() === 'toggle') return
+  if (!pttHeld) return
+  pttHeld = false
+  if (recordingActive.value) {
+    const text = await stopRecordSafe()
+    if (text) sendVoiceText(text)
   }
 }
 
@@ -447,6 +585,8 @@ onUnmounted(() => {
   unsubscribeSetHoverFade = null
   unsubscribeScreenshot?.()
   unsubscribeScreenshot = null
+  unsubscribePtt?.()
+  unsubscribePtt = null
   cleanupExpression()
   cleanupVoice()
   idleScheduler.stop()
@@ -469,6 +609,18 @@ onUnmounted(() => {
 
 function onDoubleClick() {
   showInput.value = true
+}
+
+/** 右键：循环切换当前模型的情绪（跳过默认/常态；6 秒后自动回默认表情） */
+function onStageRightClick() {
+  const pool = store.modelEmotions.filter(
+    (e) => e !== store.defaultEmotion && e !== 'neutral' && e !== 'idle',
+  )
+  if (pool.length === 0) return
+  const idx = pool.indexOf(store.currentEmotion)
+  const next = pool[(idx + 1) % pool.length]
+  store.currentEmotion = next
+  store.emotionPulse++
 }
 
 function sendText() {
@@ -552,6 +704,7 @@ function resetModelView() {
   background: rgba(255, 255, 255, 0.5);
 }
 
+/* ── 右侧竖排悬浮工具条：深色玻璃胶囊，悬停窗口才浮现 ── */
 .btn-bar {
   position: absolute;
   bottom: 44px;
@@ -559,29 +712,48 @@ function resetModelView() {
   z-index: 65;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 13px;
+  background: rgba(22, 22, 26, 0.68);
+  backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  transform: translateX(6px);
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-bar.visible {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
 }
 .btn-bar-item {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
-  backdrop-filter: blur(4px);
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  line-height: 1;
-  transition: background 0.2s;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.1s ease;
   user-select: none;
 }
-.btn-bar-item:hover { background: rgba(255, 255, 255, 0.6); }
-.btn-bar-item.recording { background: rgba(255, 60, 60, 0.6); animation: mic-pulse 1s ease-in-out infinite; }
-.btn-bar-item.vad { background: rgba(60, 200, 120, 0.6); }
+.btn-bar-item:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.btn-bar-item:active { transform: scale(0.92); }
+.btn-bar-item svg { width: 16px; height: 16px; }
+.btn-bar-item.recording {
+  background: rgba(239, 68, 68, 0.22);
+  color: #f87171;
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+.btn-bar-item.vad { background: rgba(52, 211, 153, 0.16); color: #34d399; }
 @keyframes mic-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 60, 60, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 60, 60, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.35); }
+  50% { box-shadow: 0 0 0 7px rgba(248, 113, 113, 0); }
 }
 
 .model-error {

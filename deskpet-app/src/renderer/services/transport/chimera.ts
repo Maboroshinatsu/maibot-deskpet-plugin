@@ -10,5 +10,6 @@ export function useChimeraTransport(): DeskpetTransport {
     sendHeartbeat: () => send('heartbeat'),
     sendUserText: (text: string) => send('input:text', { text }),
     sendScreenshot: (base64: string) => wsSendScreenshot(base64),
+    sendModelEmotions: (emotions: string[]) => send('sys:emotions', { emotions }),
   }
 }

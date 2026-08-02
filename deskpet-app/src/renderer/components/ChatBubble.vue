@@ -47,6 +47,8 @@ import { ref, watch, nextTick, onUnmounted } from 'vue'
 import type { ChatMessage } from '@/stores/chat'
 
 const BUBBLE_TTL = 5000
+/** 流式气泡的兜底存活时间：output:text:done 帧丢失时不至于永久挂在屏幕上 */
+const STREAMING_BUBBLE_TTL = 30_000
 
 interface FloatingBubble {
   id: string
@@ -69,13 +71,17 @@ const emit = defineEmits<{ 'bubbles-cleared': []; close: [] }>()
 const floatingBubbles = ref<FloatingBubble[]>([])
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
-function scheduleDismiss(msgId: string) {
-  if (timers.has(msgId)) return
+function scheduleDismiss(msgId: string, ttl = BUBBLE_TTL, replace = false) {
+  const existing = timers.get(msgId)
+  if (existing) {
+    if (!replace) return
+    clearTimeout(existing)
+  }
   const t = setTimeout(() => {
     timers.delete(msgId)
     floatingBubbles.value = floatingBubbles.value.filter((b) => b.id !== msgId)
     if (floatingBubbles.value.length === 0) emit('bubbles-cleared')
-  }, BUBBLE_TTL)
+  }, ttl)
   timers.set(msgId, t)
 }
 
@@ -104,7 +110,12 @@ watch(() => {
       if (t) { clearTimeout(t); timers.delete(removed.id) }
     }
   }
-  if (latest.type === 'emoji' || !latest.streaming) scheduleDismiss(latest.id)
+  if (latest.type === 'emoji' || !latest.streaming) {
+    scheduleDismiss(latest.id)
+  } else {
+    // 流式气泡也挂兜底：正常结束时会被 5 秒的正式 TTL 替换
+    scheduleDismiss(latest.id, STREAMING_BUBBLE_TTL)
+  }
 })
 
 watch(() => props.lastBubble.streaming, (streaming) => {
@@ -113,7 +124,8 @@ watch(() => props.lastBubble.streaming, (streaming) => {
   if (!latest || latest.role !== 'assistant') return
   const fb = floatingBubbles.value.find((b) => b.id === latest.id)
   if (fb) fb.streaming = false
-  scheduleDismiss(latest.id)
+  // 流正常结束：把 30 秒兜底换成 5 秒正式 TTL
+  scheduleDismiss(latest.id, BUBBLE_TTL, true)
 })
 
 const messagesRef = ref<HTMLElement>()

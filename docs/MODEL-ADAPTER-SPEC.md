@@ -103,8 +103,10 @@ public/models/your_model/
   },
 
   // ── 情绪映射 ──────────────────────────────
-  // 键必须是这 9 个之一，可以只写一部分：
-  //   happy sad angry surprise thinking shy curious neutral idle
+  // 内置情绪键（可以只写一部分）：
+  //   happy sad angry surprise embarrassed thinking shy curious confused neutral idle
+  // 也接受自定义键（如 "wink"）：桌宠会把你声明的键上报给插件，
+  // AI 之后就能用 set_deskpet_emotion 触发它
   "emotions": {
     "happy": {
       "expression": "smile",         // 选填，必须是 expressions 清单里的名字

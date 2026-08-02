@@ -6,7 +6,7 @@
     <div class="svc-row">
       <span class="dot" :class="store.wsConnected ? 'dot-running' : 'dot-stopped'" />
       <div class="svc-main">
-        <div class="svc-name">MaiBot 插件<span class="svc-port">:8523</span></div>
+        <div class="svc-name">MaiBot 插件<span class="svc-port">:{{ maibotPort }}</span></div>
         <div class="svc-detail">{{ store.wsConnected ? '已连接' : '未连接（请启动 MaiBot）' }}</div>
       </div>
     </div>
@@ -15,7 +15,7 @@
       <div class="svc-row">
         <span class="dot" :class="dotClass(svc)" />
         <div class="svc-main">
-          <div class="svc-name">{{ svc.name }}<span class="svc-port">:{{ svc.port }}</span></div>
+          <div class="svc-name">{{ svc.name }}<span v-if="svc.port" class="svc-port">:{{ svc.port }}</span></div>
           <div class="svc-detail" :class="{ 'svc-error': svc.status === 'error' }">
             {{ statusText(svc) }}
           </div>
@@ -61,20 +61,34 @@
     <!-- 路径配置 -->
     <details class="svc-config">
       <summary>服务路径配置</summary>
-      <label>Python 路径（留空用系统 PATH）</label>
-      <input :value="config?.pythonPath ?? ''" @change="setPythonPath($event)" placeholder="python" />
+      <label>Python 路径（留空复用 MaiBot 的 Python，未连接时用系统 PATH）</label>
+      <input :value="config?.pythonPath ?? ''" @change="setPythonPath($event)" placeholder="留空即可" />
       <label>GPT-SoVITS 整合包目录（留空自动探测）</label>
       <input :value="config?.gsvDir ?? ''" @change="setGsvDir($event)" placeholder="D:\GPT-SoVITS-v2pro-xxxx" />
+      <label>GPT-SoVITS 参考音频（角色声线 .wav）</label>
+      <input :value="config?.ttsRefAudio ?? ''" @change="setTtsRefAudio($event)" placeholder="D:\...\角色参考音频.wav" />
+      <label>参考音频文本（这段音频里说的话）</label>
+      <input :value="config?.ttsPromptText ?? ''" @change="setTtsPromptText($event)" placeholder="参考音频里说的文本内容" />
       <p class="hint">修改后对下一次启动生效；运行中的服务需手动重启</p>
     </details>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 
 const store = useDeskpetStore()
+
+/** MaiBot 插件端口跟随设置面板里的 WS 地址，不写死 */
+const maibotPort = computed(() => {
+  try {
+    const raw = localStorage.getItem('deskpet/ws-url') || 'ws://127.0.0.1:8523/ws'
+    return new URL(raw).port || '8523'
+  } catch {
+    return '8523'
+  }
+})
 
 const services = ref<ServiceState[]>([])
 const config = ref<ServicesConfig | null>(null)
@@ -151,6 +165,14 @@ function setPythonPath(e: Event) {
 
 function setGsvDir(e: Event) {
   void window.electronAPI?.setServicesConfig({ gsvDir: (e.target as HTMLInputElement).value.trim() })
+}
+
+function setTtsRefAudio(e: Event) {
+  void window.electronAPI?.setServicesConfig({ ttsRefAudio: (e.target as HTMLInputElement).value.trim() })
+}
+
+function setTtsPromptText(e: Event) {
+  void window.electronAPI?.setServicesConfig({ ttsPromptText: (e.target as HTMLInputElement).value.trim() })
 }
 
 onMounted(() => {

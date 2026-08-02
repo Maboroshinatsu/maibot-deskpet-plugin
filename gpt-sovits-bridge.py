@@ -1,16 +1,35 @@
-"""GPT-SoVITS bridge — 接收简单文本，转发到 GPT-SoVITS API。"""
+"""GPT-SoVITS bridge — 接收简单文本，转发到 GPT-SoVITS API。
+
+参考音频（角色声线）配置优先级：请求体字段 > 环境变量 > 下方脚本常量。
+
+环境变量（桌宠设置面板「服务路径配置」里填好后，启动桥时会自动注入）：
+  DESKPET_GSV_REF_AUDIO    参考音频路径（.wav，建议 3~10 秒干净人声）
+  DESKPET_GSV_PROMPT_TEXT  参考音频里说的文本内容
+  DESKPET_GSV_API_URL      GPT-SoVITS API 地址（默认 http://127.0.0.1:9880/tts）
+"""
 import asyncio
-import io
 import json
 import os
 import urllib.request
 
-from aiohttp import web
+try:
+    from aiohttp import web
+except ImportError:
+    import sys
+    print(
+        "[gpt-sovits-bridge] ERROR: 缺少依赖 aiohttp。"
+        "该依赖由 MaiBot 插件自动安装，请先启动 MaiBot 加载插件；"
+        "或手动执行：pip install aiohttp",
+        file=sys.stderr,
+    )
+    raise
 
 PORT = 9881
-SOVITS_URL = "http://127.0.0.1:9880/tts"
-REF_AUDIO_PATH = r"D:\GPT-SoVITS-v2pro-20250604\终末地全角色GSV模型\参考音（视）频\昼雪\昼雪\昼雪-cut-.wav_0000000000_0000153600.wav"
-PROMPT_TEXT = "这套装备充满了工匠的巧思呢，是新的外情任务吗？"
+SOVITS_URL = os.environ.get("DESKPET_GSV_API_URL", "http://127.0.0.1:9880/tts")
+
+# ── 默认角色声线：手动跑脚本时改这里；由桌宠拉起时以设置面板/环境变量为准 ──
+REF_AUDIO_PATH = os.environ.get("DESKPET_GSV_REF_AUDIO", "")
+PROMPT_TEXT = os.environ.get("DESKPET_GSV_PROMPT_TEXT", "")
 PROMPT_LANG = "zh"
 TEXT_LANG = "zh"
 SPEED = 0.9        # 稍慢更自然
@@ -18,6 +37,14 @@ FRAGMENT_INTERVAL = 0.5  # 句间停顿
 TEMPERATURE = 0.9  # 轻微随机感
 TOP_K = 10         # 采样多样性
 TOP_P = 0.9
+
+
+def _resolve_ref_audio(body: dict) -> str:
+    """请求体优先，其次桥默认配置；非字符串/空白一律视为未指定。"""
+    raw = body.get("ref_audio_path")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return REF_AUDIO_PATH
 
 
 async def handle_tts(request: web.Request) -> web.Response:
@@ -30,9 +57,16 @@ async def handle_tts(request: web.Request) -> web.Response:
     if not text:
         return web.json_response({"error": "text is empty"}, status=400)
 
-    ref_audio = body.get("ref_audio_path", REF_AUDIO_PATH)
-    if ref_audio != REF_AUDIO_PATH and not (isinstance(ref_audio, str) and os.path.isfile(ref_audio)):
-        return web.json_response({"error": "ref_audio_path not found"}, status=400)
+    # 默认路径也必须过 isfile 校验 —— 此前默认路径被跳过，
+    # 配置错了会一路捅到 GPT-SoVITS 才报一个看不懂的错
+    ref_audio = _resolve_ref_audio(body)
+    if not ref_audio:
+        return web.json_response({
+            "error": "未配置参考音频：桌宠设置面板 → 后台服务 → 服务路径配置，"
+                     "或设置环境变量 DESKPET_GSV_REF_AUDIO"
+        }, status=400)
+    if not os.path.isfile(ref_audio):
+        return web.json_response({"error": f"参考音频不存在: {ref_audio}"}, status=400)
 
     params = {
         "text": text,
@@ -75,12 +109,25 @@ async def handle_options(_request: web.Request) -> web.Response:
 
 
 def main() -> None:
+    # 桌宠退出后自动跟着退出，避免孤儿进程占着端口
+    try:
+        import watchdog
+        watchdog.start_watchdog()
+    except ImportError:
+        pass
+
     app = web.Application()
     app.router.add_post("/tts", handle_tts)
     app.router.add_route("OPTIONS", "/tts", handle_options)
     print(f"[gpt-sovits-bridge] listening on http://127.0.0.1:{PORT}/tts")
     print(f"[gpt-sovits-bridge] forwarding to {SOVITS_URL}")
-    print("[gpt-sovits-bridge] TODO: edit REF_AUDIO_PATH and PROMPT_TEXT in the script")
+    # 未配置/配置错误不算致命（请求方还能自带 ref_audio_path），但必须把话说清楚
+    if not REF_AUDIO_PATH:
+        print("[gpt-sovits-bridge] WARNING: 未配置参考音频，/tts 将返回 400。配置方式：")
+        print("  桌宠启动：设置面板 → 后台服务 → 服务路径配置 → GPT-SoVITS 参考音频")
+        print("  手动启动：设置环境变量 DESKPET_GSV_REF_AUDIO / DESKPET_GSV_PROMPT_TEXT，或改脚本顶部常量")
+    elif not os.path.isfile(REF_AUDIO_PATH):
+        print(f"[gpt-sovits-bridge] WARNING: 参考音频不存在: {REF_AUDIO_PATH}")
     web.run_app(app, host="127.0.0.1", port=PORT)
 
 

@@ -15,7 +15,7 @@ import path from 'path'
 import fs from 'fs'
 import { app } from 'electron'
 
-export type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits'
+export type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits' | 'hotkey'
 export type ServiceStatus = 'stopped' | 'starting' | 'running' | 'error'
 
 export interface ServicesConfig {
@@ -23,6 +23,12 @@ export interface ServicesConfig {
   pythonPath: string
   /** GPT-SoVITS 整合包目录；空串 = 按常见路径自动探测 */
   gsvDir: string
+  /** GPT-SoVITS 参考音频路径（角色声线）；空串 = 未配置，TTS 桥会拒绝合成 */
+  ttsRefAudio: string
+  /** 参考音频里说的文本内容 */
+  ttsPromptText: string
+  /** 全局 PTT 热键（pynput 键名，如 f9 / scroll_lock / mouse_x1）；空串 = 热键桥不可用 */
+  pttKey: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
@@ -54,8 +60,11 @@ const PROBE_INTERVAL_MS = 2000
 const DEFAULT_CONFIG: ServicesConfig = {
   pythonPath: '',
   gsvDir: '',
-  autoStart: { 'stt-bridge': true, 'tts-bridge': true, 'gpt-sovits': true },
-  showTerminal: { 'stt-bridge': false, 'tts-bridge': false, 'gpt-sovits': false },
+  ttsRefAudio: '',
+  ttsPromptText: '',
+  pttKey: 'f9',
+  autoStart: { 'stt-bridge': true, 'tts-bridge': true, 'gpt-sovits': true, hotkey: true },
+  showTerminal: { 'stt-bridge': false, 'tts-bridge': false, 'gpt-sovits': false, hotkey: false },
 }
 
 const GSV_CANDIDATES = [
@@ -72,6 +81,8 @@ export class ServiceManager {
   private logs = new Map<ServiceId, string[]>()
   /** 用户主动 stop 的进程退出不算 error */
   private stopping = new Set<ServiceId>()
+  /** stdout 按行解析时的跨 chunk 余量（事件行可能被两次 data 事件切断） */
+  private lineBuffers = new Map<ServiceId, string>()
   private probeTimer: ReturnType<typeof setInterval> | null = null
   private emit: (channel: string, payload: unknown) => void
 
@@ -92,6 +103,9 @@ export class ServiceManager {
       return {
         pythonPath: typeof raw.pythonPath === 'string' ? raw.pythonPath : '',
         gsvDir: typeof raw.gsvDir === 'string' ? raw.gsvDir : '',
+        ttsRefAudio: typeof raw.ttsRefAudio === 'string' ? raw.ttsRefAudio : '',
+        ttsPromptText: typeof raw.ttsPromptText === 'string' ? raw.ttsPromptText : '',
+        pttKey: typeof raw.pttKey === 'string' ? raw.pttKey : 'f9',
         autoStart: { ...DEFAULT_CONFIG.autoStart, ...(raw.autoStart ?? {}) },
         showTerminal: { ...DEFAULT_CONFIG.showTerminal, ...(raw.showTerminal ?? {}) },
       }
@@ -107,6 +121,9 @@ export class ServiceManager {
   setConfig(patch: Partial<ServicesConfig>): ServicesConfig {
     if (typeof patch.pythonPath === 'string') this.config.pythonPath = patch.pythonPath
     if (typeof patch.gsvDir === 'string') this.config.gsvDir = patch.gsvDir
+    if (typeof patch.ttsRefAudio === 'string') this.config.ttsRefAudio = patch.ttsRefAudio
+    if (typeof patch.ttsPromptText === 'string') this.config.ttsPromptText = patch.ttsPromptText
+    if (typeof patch.pttKey === 'string') this.config.pttKey = patch.pttKey
     if (patch.autoStart) this.config.autoStart = { ...this.config.autoStart, ...patch.autoStart }
     if (patch.showTerminal) this.config.showTerminal = { ...this.config.showTerminal, ...patch.showTerminal }
     try {
@@ -145,8 +162,38 @@ export class ServiceManager {
     return null
   }
 
+  /**
+   * 桌宠连上 MaiBot 后，插件上报的 Python 解释器路径（sys.executable，内存态不持久化，
+   * 每次 WS 连接都会重新上报）。桥脚本复用 MaiBot 的 Python 环境 —— 插件依赖
+   * 就装在同一个环境里，用户无需单独安装 Python。
+   */
+  private detectedPython: string | null = null
+
+  /**
+   * Python 解析顺序：设置面板显式指定 > MaiBot 插件上报 > 系统 PATH。
+   */
   private python(): string {
-    return this.config.pythonPath.trim() || 'python'
+    const configured = this.config.pythonPath.trim()
+    if (configured) return configured
+    return this.detectedPython ?? 'python'
+  }
+
+  /** WS 连上 MaiBot 后由渲染层转发过来；对因找不到 Python 而失败的服务补一次启动 */
+  setDetectedPython(pythonPath: string): void {
+    if (typeof pythonPath !== 'string' || !pythonPath.trim()) return
+    if (this.detectedPython === pythonPath) return
+    this.detectedPython = pythonPath.trim()
+    console.info(`[services] MaiBot python detected: ${this.detectedPython}`)
+    for (const def of this.defs()) {
+      if (def.id === 'gpt-sovits') continue // 用整合包自带 runtime，与此无关
+      if (!this.config.autoStart[def.id]) continue
+      const failedForMissingPython =
+        this.status.get(def.id) === 'error' && /ENOENT|找不到可执行文件/.test(this.detail.get(def.id) ?? '')
+      if (failedForMissingPython) {
+        this.appendLog(def.id, `[launcher] 拿到 MaiBot Python 路径，重试启动`)
+        this.start(def.id)
+      }
+    }
   }
 
   /** Python 输出强制 UTF-8，否则 Windows 上中文日志按 GBK 编码全是乱码 */
@@ -177,7 +224,13 @@ export class ServiceManager {
         resolve: () => {
           const root = this.bridgesRoot()
           if (!root) return { unavailable: '未找到 gpt-sovits-bridge.py（插件目录缺失）' }
-          return { command: this.python(), args: ['-u', path.join(root, 'gpt-sovits-bridge.py')], cwd: root, env: this.pythonEnv() }
+          const env: Record<string, string> = { ...this.pythonEnv() }
+          // 角色声线透传给桥脚本（与桥脚本认的环境变量名一一对应）
+          const refAudio = this.config.ttsRefAudio.trim()
+          if (refAudio) env.DESKPET_GSV_REF_AUDIO = refAudio
+          const promptText = this.config.ttsPromptText.trim()
+          if (promptText) env.DESKPET_GSV_PROMPT_TEXT = promptText
+          return { command: this.python(), args: ['-u', path.join(root, 'gpt-sovits-bridge.py')], cwd: root, env }
         },
       },
       {
@@ -188,6 +241,23 @@ export class ServiceManager {
           const dir = this.gsvDir()
           if (!dir) return { unavailable: '未找到 GPT-SoVITS 整合包，在下方填写目录后重试' }
           return { command: path.join(dir, 'runtime', 'python.exe'), args: ['api_v2.py', '-p', '9880'], cwd: dir }
+        },
+      },
+      {
+        id: 'hotkey',
+        name: 'PTT 热键桥',
+        port: 0, // 无端口服务：stdout 即事件通道
+        resolve: () => {
+          const root = this.bridgesRoot()
+          if (!root) return { unavailable: '未找到 hotkey-bridge.py（插件目录缺失）' }
+          const key = this.config.pttKey.trim()
+          if (!key) return { unavailable: '未配置 PTT 热键（设置面板 → 麦克风里设置）' }
+          return {
+            command: this.python(),
+            args: ['-u', path.join(root, 'hotkey-bridge.py')],
+            cwd: root,
+            env: { ...this.pythonEnv(), DESKPET_PTT_KEY: key },
+          }
         },
       },
     ]
@@ -236,6 +306,27 @@ export class ServiceManager {
     this.emit('service-log', { id, lines })
   }
 
+  /**
+   * hotkey 桥的 stdout 是事件流而不是普通日志：PTT_DOWN/PTT_UP 独占一行，
+   * 解析出来经 emit 转发渲染层，其余行进日志面板。
+   */
+  private handleServiceOutput(id: ServiceId, chunk: string): void {
+    if (id !== 'hotkey') {
+      this.appendLog(id, chunk)
+      return
+    }
+    const buf = (this.lineBuffers.get(id) ?? '') + chunk
+    const lines = buf.split(/\r?\n/)
+    this.lineBuffers.set(id, lines.pop() ?? '') // 末段可能不完整，留给下个 chunk
+    const logs: string[] = []
+    for (const line of lines) {
+      if (line === 'PTT_DOWN') this.emit('ptt-event', 'down')
+      else if (line === 'PTT_UP') this.emit('ptt-event', 'up')
+      else if (line) logs.push(line)
+    }
+    if (logs.length > 0) this.appendLog(id, logs.join('\n'))
+  }
+
   // ── 生命周期 ────────────────────────────────
 
   start(id: ServiceId): void {
@@ -255,10 +346,12 @@ export class ServiceManager {
     try {
       proc = spawn(resolved.command, resolved.args, {
         cwd: resolved.cwd,
-        env: { ...process.env, ...(resolved.env ?? {}) },
+        // 把桌宠主进程 PID 传给桥：桥的看门狗轮询它，一旦消失就自杀，
+        // 保证桌宠无论正常退出 / 崩溃 / 被任务管理器强杀，桥都不残留
+        env: { ...process.env, ...(resolved.env ?? {}), DESKPET_PARENT_PID: String(process.pid) },
         // 终端模式：python.exe 是控制台程序，不加 CREATE_NO_WINDOW 就会带出自己的控制台窗口
         windowsHide: !showTerminal,
-        // 终端模式下输出留给控制台窗口；隐藏模式下接管进日志缓冲
+        // 终端模式：输出留给控制台窗口；隐藏模式：接管进日志缓冲
         stdio: showTerminal ? 'ignore' : ['ignore', 'pipe', 'pipe'],
       })
     } catch (err) {
@@ -272,17 +365,19 @@ export class ServiceManager {
 
     proc.stdout?.setEncoding('utf-8')
     proc.stderr?.setEncoding('utf-8')
-    proc.stdout?.on('data', (chunk: string) => this.appendLog(id, chunk))
+    proc.stdout?.on('data', (chunk: string) => this.handleServiceOutput(id, chunk))
     proc.stderr?.on('data', (chunk: string) => this.appendLog(id, chunk))
 
     proc.on('error', (err) => {
       this.processes.delete(id)
+      this.lineBuffers.delete(id)
       const hint = /ENOENT/.test(String(err)) ? '（找不到可执行文件，检查 Python 路径）' : ''
       this.setStatus(id, 'error', `${err}${hint}`)
     })
 
     proc.on('exit', (code) => {
       this.processes.delete(id)
+      this.lineBuffers.delete(id)
       if (this.stopping.has(id)) {
         this.stopping.delete(id)
         this.setStatus(id, 'stopped')
@@ -364,6 +459,11 @@ export class ServiceManager {
       }
       for (const def of this.defs()) {
         if (!this.processes.has(def.id)) continue
+        if (def.port === 0) {
+          // 无端口服务（hotkey 桥）：进程在跑且没退出就算 running
+          if (this.status.get(def.id) === 'starting') this.setStatus(def.id, 'running')
+          continue
+        }
         this.probePort(def.port).then((open) => {
           const current = this.status.get(def.id)
           if (open && current === 'starting') this.setStatus(def.id, 'running')
