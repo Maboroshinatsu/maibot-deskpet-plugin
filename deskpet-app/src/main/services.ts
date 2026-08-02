@@ -329,7 +329,60 @@ export class ServiceManager {
 
   // ── 生命周期 ────────────────────────────────
 
-  start(id: ServiceId): void {
+  /** 列出正在 LISTEN 指定端口的 PID（清理残留旧桥用；gpt-sovits 不在其列） */
+  private findPortPids(port: number): Promise<number[]> {
+    return new Promise((resolve) => {
+      exec(`netstat -ano | findstr LISTENING`, (err, stdout) => {
+        if (err || !stdout) return resolve([])
+        const pids = new Set<number>()
+        for (const line of stdout.split(/\r?\n/)) {
+          const t = line.trim().split(/\s+/)
+          // TCP  127.0.0.1:18530  0.0.0.0:0  LISTENING  12345
+          if (t.length < 5) continue
+          const pid = Number(t[t.length - 1])
+          if (t[1]?.endsWith(`:${port}`) && Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
+            pids.add(pid)
+          }
+        }
+        resolve([...pids])
+      })
+    })
+  }
+
+  /**
+   * 终端窗口模式：Node spawn 不给 console 子进程开新控制台（GUI 父进程 + 无
+   * CREATE_NEW_CONSOLE），必须走 cmd start —— start 必然拉出新控制台窗口；
+   * /wait 让外层 cmd 挂到 python 退出才走，进程树跟踪与 taskkill 语义不变。
+   * 另外 MaiBot 一键包常给的是 pythonw.exe（永远无控制台），自动换同目录 python.exe。
+   */
+  private spawnTerminal(
+    resolved: { command: string; args: string[]; cwd: string; env?: Record<string, string> },
+    title: string,
+  ): ChildProcess {
+    let command = resolved.command
+    if (/pythonw\.exe$/i.test(command)) {
+      const sibling = command.replace(/pythonw\.exe$/i, 'python.exe')
+      try {
+        if (fs.statSync(sibling).isFile()) command = sibling
+      } catch { /* 没有同目录 python.exe 就照旧 */ }
+    }
+    return spawn(
+      'cmd.exe',
+      [
+        '/c', 'start', `"${title}"`, '/wait', '/D', `"${resolved.cwd}"`,
+        command, ...resolved.args.map((a) => (a.includes(' ') ? `"${a}"` : a)),
+      ],
+      {
+        cwd: resolved.cwd,
+        env: { ...process.env, ...(resolved.env ?? {}), DESKPET_PARENT_PID: String(process.pid) },
+        // 外层 cmd 藏起来；python 的控制台窗口由 start 创建
+        windowsHide: true,
+        stdio: 'ignore',
+      },
+    )
+  }
+
+  async start(id: ServiceId): Promise<void> {
     if (this.processes.has(id)) return
     const def = this.defs().find((d) => d.id === id)
     if (!def) return
@@ -339,21 +392,34 @@ export class ServiceManager {
       return
     }
 
+    // 残留旧桥会占着端口让新桥秒退 (code 1)：先按 PID 清场再拉起。
+    // 只清 stt/tts 这两个自家桥；gpt-sovits 可能是用户自己在跑的实例，不动。
+    if ((id === 'stt-bridge' || id === 'tts-bridge') && def.port > 0) {
+      const squatters = await this.findPortPids(def.port)
+      for (const pid of squatters) {
+        this.appendLog(id, `[launcher] 端口 ${def.port} 被残留进程 ${pid} 占用，按旧桥清理`)
+        exec(`taskkill /F /PID ${pid}`, () => { /* 不管结果，600ms 后照常拉起 */ })
+      }
+      if (squatters.length > 0) {
+        await new Promise((r) => setTimeout(r, 600))
+      }
+    }
+
     const showTerminal = this.config.showTerminal[id]
     this.appendLog(id, `[launcher] ${resolved.command} ${resolved.args.join(' ')}`)
 
     let proc: ChildProcess
     try {
-      proc = spawn(resolved.command, resolved.args, {
-        cwd: resolved.cwd,
-        // 把桌宠主进程 PID 传给桥：桥的看门狗轮询它，一旦消失就自杀，
-        // 保证桌宠无论正常退出 / 崩溃 / 被任务管理器强杀，桥都不残留
-        env: { ...process.env, ...(resolved.env ?? {}), DESKPET_PARENT_PID: String(process.pid) },
-        // 终端模式：python.exe 是控制台程序，不加 CREATE_NO_WINDOW 就会带出自己的控制台窗口
-        windowsHide: !showTerminal,
-        // 终端模式：输出留给控制台窗口；隐藏模式：接管进日志缓冲
-        stdio: showTerminal ? 'ignore' : ['ignore', 'pipe', 'pipe'],
-      })
+      proc = showTerminal
+        ? this.spawnTerminal(resolved, def.name)
+        : spawn(resolved.command, resolved.args, {
+            cwd: resolved.cwd,
+            // 把桌宠主进程 PID 传给桥：桥的看门狗轮询它，一旦消失就自杀，
+            // 保证桌宠无论正常退出 / 崩溃 / 被任务管理器强杀，桥都不残留
+            env: { ...process.env, ...(resolved.env ?? {}), DESKPET_PARENT_PID: String(process.pid) },
+            windowsHide: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
     } catch (err) {
       this.setStatus(id, 'error', `启动失败: ${err}`)
       return

@@ -29,6 +29,7 @@ extraResources:
     to: bridges/watchdog.py
   - from: sensevoice
     to: bridges/sensevoice
+  # 只随包分发默认模型与静态立绘示例包；个人测试模型不进安装包
   - from: src/renderer/public/models/hiyori_pro_zh
     to: models/hiyori_pro_zh
   - from: src/renderer/public/models/sample_static

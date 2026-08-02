@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAutoScreenshotInterval: (sec: number) => ipcRenderer.invoke('set-auto-screenshot-interval', sec),
   sttTranscribe: (audio: ArrayBuffer, url?: string): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio, url),
   listModels: (): Promise<ModelEntry[]> => ipcRenderer.invoke('list-models'),
+  openModelsFolder: () => ipcRenderer.invoke('open-models-folder'),
   reloadWindow: () => ipcRenderer.invoke('reload-window'),
 
   // ── 后台服务管理（STT/TTS 桥、GPT-SoVITS）──

@@ -113,8 +113,11 @@ def main() -> None:
     try:
         import watchdog
         watchdog.start_watchdog()
-    except ImportError:
-        pass
+    except ImportError as exc:
+        print(f"[gpt-sovits-bridge] WARNING: watchdog 不可用，桥进程不会随桌宠退出: {exc!r}", flush=True)
+    except Exception as exc:
+        print(f"[gpt-sovits-bridge] ERROR: watchdog 启动失败: {exc!r}", flush=True)
+        raise
 
     app = web.Application()
     app.router.add_post("/tts", handle_tts)

@@ -62,6 +62,7 @@ interface ElectronAPI {
   setAutoScreenshotInterval: (sec: number) => void
   sttTranscribe: (audio: ArrayBuffer, url?: string) => Promise<string | null>
   listModels: () => Promise<ModelEntry[]>
+  openModelsFolder: () => Promise<string>
   reloadWindow: () => Promise<void>
   listServices: () => Promise<ServiceState[]>
   startService: (id: ServiceId) => Promise<void>

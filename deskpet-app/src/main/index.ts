@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalShortcut, desktopCapturer, protocol, net } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalShortcut, desktopCapturer, protocol, net, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import http from 'http'
@@ -121,9 +121,38 @@ function getModelsRoot(): string | null {
   return null
 }
 
-function scanModelFiles(root: string): ModelEntry[] {
+/**
+ * 用户模型目录：重装打包版时 NSIS 会清空安装目录（resources/models 里的
+ * 自定义模型全没），而 userData 不动 —— 自定义模型/立绘包都应放这里。
+ */
+function getUserModelsRoot(): string {
+  return path.join(app.getPath('userData'), 'models')
+}
+
+interface ModelRoot {
+  fsPath: string
+  /** bundled = 随包/源码目录（dev 下走 vite 相对 URL）；user = userData（一律走 deskpet://） */
+  kind: 'bundled' | 'user'
+}
+
+/** 扫描顺序：用户目录在前（允许覆盖随包模型），随包目录在后 */
+function getModelsRoots(): ModelRoot[] {
+  const roots: ModelRoot[] = [{ fsPath: getUserModelsRoot(), kind: 'user' }]
+  const bundled = getModelsRoot()
+  if (bundled) roots.push({ fsPath: bundled, kind: 'bundled' })
+  return roots
+}
+
+function scanModelFiles(root: ModelRoot): ModelEntry[] {
   const found: ModelEntry[] = []
   const MAX_DEPTH = 5
+
+  const makeUrl = (relative: string): string => {
+    // userData 的模型 dev/打包都走 deskpet://（vite 管不到那里）；
+    // bundled 模型 dev 走 vite 相对路径，打包走 deskpet://
+    if (root.kind === 'user' || app.isPackaged) return `deskpet://models/${relative}`
+    return `./models/${relative}`
+  }
 
   const walk = (dir: string, depth: number): void => {
     if (depth > MAX_DEPTH) return
@@ -138,42 +167,65 @@ function scanModelFiles(root: string): ModelEntry[] {
       if (entry.isDirectory()) {
         walk(full, depth + 1)
       } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.model3.json')) {
-        const relative = path.relative(root, full).split(path.sep).join('/')
+        const relative = path.relative(root.fsPath, full).split(path.sep).join('/')
         const base = entry.name.replace(/\.model3\.json$/i, '')
         // 用 models/ 下的顶层文件夹做前缀，而不是紧邻的父目录 ——
         // 后者常常是 runtime/ 这种通用容器名，看不出是哪个模型
         const topFolder = relative.includes('/') ? relative.split('/')[0] : ''
         found.push({
           name: !topFolder || topFolder === base ? base : `${topFolder} / ${base}`,
-          // dev 下 vite 从 public/ 静态提供，相对路径即可；
-          // 打包后相对路径解析到 out/renderer 之外就 404，必须走自定义协议
-          url: app.isPackaged ? `deskpet://models/${relative}` : `./models/${relative}`,
+          url: makeUrl(relative),
           kind: 'live2d',
         })
       } else if (entry.isFile() && entry.name === 'deskpet-images.json') {
         // 静态立绘包：清单即模型入口，展示名直接用所在文件夹
-        const relative = path.relative(root, full).split(path.sep).join('/')
+        const relative = path.relative(root.fsPath, full).split(path.sep).join('/')
         const topFolder = relative.includes('/') ? relative.split('/')[0] : ''
         found.push({
           name: topFolder || '立绘包',
-          url: app.isPackaged ? `deskpet://models/${relative}` : `./models/${relative}`,
+          url: makeUrl(relative),
           kind: 'image-set',
         })
       }
     }
   }
 
-  walk(root, 0)
+  walk(root.fsPath, 0)
   return found.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 function listModels(): ModelEntry[] {
-  const root = getModelsRoot()
-  if (!root) {
-    console.warn('[deskpet] models directory not found')
-    return []
+  const merged: ModelEntry[] = []
+  const seenRel = new Set<string>()
+  for (const root of getModelsRoots()) {
+    for (const entry of scanModelFiles(root)) {
+      // 用户目录与随包目录出现同名相对路径时，用户目录的赢（它排在前面）
+      const relKey = entry.url.replace(/^deskpet:\/\/models\//, '').replace(/^\.\/models\//, '')
+      if (seenRel.has(relKey)) continue
+      seenRel.add(relKey)
+      merged.push(entry)
+    }
   }
-  return scanModelFiles(root)
+  return merged.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** 随包目录里非自带的文件夹视为用户模型，一次性迁到 userData（之后重装不再丢） */
+function migrateUserModelsOnce(): void {
+  const bundled = getModelsRoot()
+  if (!bundled) return
+  const BUNDLED_SET = new Set(['hiyori_pro_zh', 'sample_static', 'README.md'])
+  const userRoot = getUserModelsRoot()
+  try {
+    for (const entry of fs.readdirSync(bundled, { withFileTypes: true })) {
+      if (!entry.isDirectory() || BUNDLED_SET.has(entry.name)) continue
+      const dest = path.join(userRoot, entry.name)
+      if (fs.existsSync(dest)) continue // 已有同名就不覆盖
+      fs.cpSync(path.join(bundled, entry.name), dest, { recursive: true })
+      console.info(`[deskpet] 用户模型已从安装目录迁移到 userData: ${entry.name}`)
+    }
+  } catch (err) {
+    console.warn('[deskpet] 用户模型迁移失败:', err)
+  }
 }
 
 function loadWindowState(): WindowState {
@@ -507,19 +559,27 @@ function createTray(): void {
 app.whenReady().then(() => {
   protocol.handle('deskpet', async (request) => {
     const url = new URL(request.url)
-    const root = getModelsRoot()
-    if (!root || url.host !== 'models') return new Response('Not Found', { status: 404 })
+    if (url.host !== 'models') return new Response('Not Found', { status: 404 })
     const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '')
-    const full = path.normalize(path.join(root, rel))
-    // 防目录穿越：解析后的路径必须仍在 models 根之内
-    if (!full.startsWith(path.normalize(root + path.sep))) {
-      return new Response('Forbidden', { status: 403 })
+    // 用户目录优先，随包目录兜底：同名相对路径用户的赢
+    let full: string | null = null
+    for (const root of getModelsRoots()) {
+      const candidate = path.normalize(path.join(root.fsPath, rel))
+      // 防目录穿越：解析后的路径必须仍在该 models 根之内
+      if (!candidate.startsWith(path.normalize(root.fsPath + path.sep))) continue
+      if (fs.existsSync(candidate)) {
+        full = candidate
+        break
+      }
     }
+    if (!full) return new Response('Not Found', { status: 404 })
     const resp = await net.fetch(pathToFileURL(full).toString())
     const headers = new Headers(resp.headers)
     headers.set('Access-Control-Allow-Origin', '*')
     return new Response(resp.body, { status: resp.status, headers })
   })
+
+  migrateUserModelsOnce()
 
   createWindow()
   createTray()
@@ -594,6 +654,12 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('list-models', () => listModels())
+
+  ipcMain.handle('open-models-folder', () => {
+    const dir = getUserModelsRoot()
+    fs.mkdirSync(dir, { recursive: true })
+    return shell.openPath(dir)
+  })
 
   ipcMain.handle('services-list', () => serviceManager.list())
   ipcMain.handle('service-start', (_event, id: ServiceId) => serviceManager.start(id))

@@ -120,8 +120,11 @@ def main() -> None:
     try:
         import watchdog
         watchdog.start_watchdog()
-    except ImportError:
-        pass
+    except ImportError as exc:
+        print(f"[stt-bridge] WARNING: watchdog 不可用，桥进程不会随桌宠退出: {exc!r}", flush=True)
+    except Exception as exc:
+        print(f"[stt-bridge] ERROR: watchdog 启动失败: {exc!r}", flush=True)
+        sys.exit(1)
 
     app = web.Application(client_max_size=MAX_AUDIO_BYTES)
     app.router.add_post("/stt", handle_stt)

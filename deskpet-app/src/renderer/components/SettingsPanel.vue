@@ -35,10 +35,11 @@
             </select>
             <div class="row">
               <button class="btn" @click="rescan" :disabled="switching">重新扫描</button>
+              <button class="btn" @click="openModelsFolder">打开模型目录</button>
               <span v-if="switching" class="hint">切换中…</span>
             </div>
             <p class="hint">切换后立即生效，无需重启</p>
-            <p class="hint">模型放在 public/models/，识别 *.model3.json</p>
+            <p class="hint">自定义模型/立绘包放「用户模型目录」（userData/models，重装不丢）；安装目录里的 models 会被安装包清空</p>
           </div>
           <!-- 麦克风 -->
           <div class="section">
@@ -141,6 +142,10 @@ watch(() => store.modelUrl, (url) => { if (url) selectedModel.value = url })
 
 async function rescan() {
   await loadModels(true)
+}
+
+function openModelsFolder() {
+  void window.electronAPI?.openModelsFolder()
 }
 
 async function onModelChange(e: Event) {
