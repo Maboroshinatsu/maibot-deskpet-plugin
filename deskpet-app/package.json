@@ -1,6 +1,6 @@
 {
   "name": "maibot-deskpet",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "description": "MaiBot 桌面宠物 - Live2D Deskpet",
   "author": "Maboroshinatsu",
   "main": "./out/main/index.js",
