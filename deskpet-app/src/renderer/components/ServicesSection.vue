@@ -71,6 +71,23 @@
       <input :value="config?.ttsPromptText ?? ''" @change="setTtsPromptText($event)" placeholder="参考音频里说的文本内容" />
       <p class="hint">修改后对下一次启动生效；运行中的服务需手动重启</p>
     </details>
+
+    <!-- 云 TTS 配置 -->
+    <details class="svc-config">
+      <summary>云 TTS 配置（MiMo / CosyVoice / GSV2P）</summary>
+      <label>云 TTS 后端</label>
+      <select :value="config?.ttsBackend ?? ''" @change="setTtsBackend($event)">
+        <option value="">（未启用）</option>
+        <option value="mimo">小米 MiMo</option>
+        <option value="cosyvoice">阿里云 CosyVoice</option>
+        <option value="gsv2p">GSV2P（云端 GPT-SoVITS）</option>
+      </select>
+      <label>API Key / Token（后端对应的那把）</label>
+      <input :value="config?.ttsApiKey ?? ''" @change="setTtsApiKey($event)" placeholder="sk-... / Bearer Key / Token" />
+      <label>音色（留空用默认音色）</label>
+      <input :value="config?.ttsVoice ?? ''" @change="setTtsVoice($event)" placeholder="mimo_default / cherry / 原神-中文-派蒙_ZH" />
+      <p class="hint">配置后在「后台服务」里启动「云 TTS 桥」；把 TTS 桥地址指向 9882 即用云合成</p>
+    </details>
   </div>
 </template>
 
@@ -173,6 +190,18 @@ function setTtsRefAudio(e: Event) {
 
 function setTtsPromptText(e: Event) {
   void window.electronAPI?.setServicesConfig({ ttsPromptText: (e.target as HTMLInputElement).value.trim() })
+}
+
+function setTtsBackend(e: Event) {
+  void window.electronAPI?.setServicesConfig({ ttsBackend: (e.target as HTMLSelectElement).value.trim() })
+}
+
+function setTtsApiKey(e: Event) {
+  void window.electronAPI?.setServicesConfig({ ttsApiKey: (e.target as HTMLInputElement).value.trim() })
+}
+
+function setTtsVoice(e: Event) {
+  void window.electronAPI?.setServicesConfig({ ttsVoice: (e.target as HTMLInputElement).value.trim() })
 }
 
 onMounted(() => {

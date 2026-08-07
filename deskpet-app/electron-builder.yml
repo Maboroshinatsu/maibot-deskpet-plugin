@@ -23,6 +23,8 @@ extraResources:
     to: bridges/stt-bridge.py
   - from: ../gpt-sovits-bridge.py
     to: bridges/gpt-sovits-bridge.py
+  - from: ../cloud-tts-bridge.py
+    to: bridges/cloud-tts-bridge.py
   - from: ../hotkey-bridge.py
     to: bridges/hotkey-bridge.py
   - from: ../watchdog.py

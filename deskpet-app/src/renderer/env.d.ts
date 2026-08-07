@@ -45,6 +45,9 @@ interface ServicesConfig {
   ttsRefAudio: string
   ttsPromptText: string
   pttKey: string
+  ttsBackend: string
+  ttsApiKey: string
+  ttsVoice: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }

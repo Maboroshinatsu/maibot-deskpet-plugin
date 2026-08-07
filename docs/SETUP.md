@@ -154,6 +154,24 @@ Invoke-WebRequest -Uri "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice
    - **start.bat 启动**：改脚本里的 `GSV_DIR` 一行：`set "GSV_DIR=D:\你的GPT-SoVITS目录"`
 4. 配置参考音频（角色声线 `.wav`）和它对应的文本（设置面板 → 服务路径配置）
 
+**C. 云 TTS（可选，免本地部署）**
+
+不想跑本地 GPT-SoVITS？桌宠内置云 TTS 桥，支持三个线上后端，填 API Key 即用：
+
+| 后端 | 特点 | 凭证获取 |
+|------|------|---------|
+| 小米 MiMo | OpenAI 兼容，支持风格标签（开心/方言/唱歌） | [mimo.mi.com](https://mimo.mi.com) 控制台 |
+| 阿里云 CosyVoice | 音色多、质量高，付费按量 | [阿里云百炼控制台](https://bailian.console.aliyun.com) 获取 DashScope API Key |
+| GSV2P | 云端 GPT-SoVITS，接口与本地一致 | [tts.acgnai.top](https://tts.acgnai.top) 获取 Token |
+
+配置步骤：
+
+1. 设置面板 ⚙ → 后台服务 →「云 TTS 配置」：选择后端、填 API Key / Token、选音色（留空用默认）
+2. 在「后台服务」列表里启动「云 TTS 桥」（端口 9882）
+3. 把聊天设置里的 **TTS 桥地址** 改为 `http://127.0.0.1:9882/tts` 即用云合成；改回 9881 即回到本地 GPT-SoVITS
+
+> 常用音色示例：MiMo `mimo_default`；CosyVoice `cherry`、`longanhuan_v3.6`；GSV2P `原神-中文-派蒙_ZH`。MiMo 可用 `<style>开心</style>` 前缀控制语气。
+
 ---
 
 ## 第五步：启动

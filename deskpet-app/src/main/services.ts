@@ -15,7 +15,7 @@ import path from 'path'
 import fs from 'fs'
 import { app } from 'electron'
 
-export type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits' | 'hotkey'
+export type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits' | 'hotkey' | 'cloud-tts'
 export type ServiceStatus = 'stopped' | 'starting' | 'running' | 'error'
 
 export interface ServicesConfig {
@@ -29,6 +29,12 @@ export interface ServicesConfig {
   ttsPromptText: string
   /** 全局 PTT 热键（pynput 键名，如 f9 / scroll_lock / mouse_x1）；空串 = 热键桥不可用 */
   pttKey: string
+  /** 云 TTS 后端：mimo / cosyvoice / gsv2p；空串 = 云 TTS 桥不可用 */
+  ttsBackend: string
+  /** 云 TTS 的 API Key / Token（后端对应的那把） */
+  ttsApiKey: string
+  /** 云 TTS 音色名（空 = 各后端默认音色） */
+  ttsVoice: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
@@ -63,8 +69,11 @@ const DEFAULT_CONFIG: ServicesConfig = {
   ttsRefAudio: '',
   ttsPromptText: '',
   pttKey: 'f9',
-  autoStart: { 'stt-bridge': true, 'tts-bridge': true, 'gpt-sovits': true, hotkey: true },
-  showTerminal: { 'stt-bridge': false, 'tts-bridge': false, 'gpt-sovits': false, hotkey: false },
+  ttsBackend: '',
+  ttsApiKey: '',
+  ttsVoice: '',
+  autoStart: { 'stt-bridge': true, 'tts-bridge': true, 'gpt-sovits': true, hotkey: true, 'cloud-tts': false },
+  showTerminal: { 'stt-bridge': false, 'tts-bridge': false, 'gpt-sovits': false, hotkey: false, 'cloud-tts': false },
 }
 
 const GSV_CANDIDATES = [
@@ -106,6 +115,9 @@ export class ServiceManager {
         ttsRefAudio: typeof raw.ttsRefAudio === 'string' ? raw.ttsRefAudio : '',
         ttsPromptText: typeof raw.ttsPromptText === 'string' ? raw.ttsPromptText : '',
         pttKey: typeof raw.pttKey === 'string' ? raw.pttKey : 'f9',
+        ttsBackend: typeof raw.ttsBackend === 'string' ? raw.ttsBackend : '',
+        ttsApiKey: typeof raw.ttsApiKey === 'string' ? raw.ttsApiKey : '',
+        ttsVoice: typeof raw.ttsVoice === 'string' ? raw.ttsVoice : '',
         autoStart: { ...DEFAULT_CONFIG.autoStart, ...(raw.autoStart ?? {}) },
         showTerminal: { ...DEFAULT_CONFIG.showTerminal, ...(raw.showTerminal ?? {}) },
       }
@@ -124,6 +136,9 @@ export class ServiceManager {
     if (typeof patch.ttsRefAudio === 'string') this.config.ttsRefAudio = patch.ttsRefAudio
     if (typeof patch.ttsPromptText === 'string') this.config.ttsPromptText = patch.ttsPromptText
     if (typeof patch.pttKey === 'string') this.config.pttKey = patch.pttKey
+    if (typeof patch.ttsBackend === 'string') this.config.ttsBackend = patch.ttsBackend
+    if (typeof patch.ttsApiKey === 'string') this.config.ttsApiKey = patch.ttsApiKey
+    if (typeof patch.ttsVoice === 'string') this.config.ttsVoice = patch.ttsVoice
     if (patch.autoStart) this.config.autoStart = { ...this.config.autoStart, ...patch.autoStart }
     if (patch.showTerminal) this.config.showTerminal = { ...this.config.showTerminal, ...patch.showTerminal }
     try {
@@ -231,6 +246,30 @@ export class ServiceManager {
           const promptText = this.config.ttsPromptText.trim()
           if (promptText) env.DESKPET_GSV_PROMPT_TEXT = promptText
           return { command: this.python(), args: ['-u', path.join(root, 'gpt-sovits-bridge.py')], cwd: root, env }
+        },
+      },
+      {
+        id: 'cloud-tts',
+        name: '云 TTS 桥',
+        port: 9882,
+        resolve: () => {
+          const root = this.bridgesRoot()
+          if (!root) return { unavailable: '未找到 cloud-tts-bridge.py（插件目录缺失）' }
+          const backend = this.config.ttsBackend.trim()
+          if (!backend) return { unavailable: '未配置云 TTS 后端（在下方选择 mimo / cosyvoice / gsv2p）' }
+          const apiKey = this.config.ttsApiKey.trim()
+          if (!apiKey) return { unavailable: '未配置云 TTS API Key（在下方的云 TTS 配置里填写）' }
+          const env: Record<string, string> = { ...this.pythonEnv(), DESKPET_TTS_BACKEND: backend }
+          if (backend === 'mimo') env.DESKPET_MIMO_API_KEY = apiKey
+          else if (backend === 'cosyvoice') env.DESKPET_COSYVOICE_API_KEY = apiKey
+          else if (backend === 'gsv2p') env.DESKPET_GSV2P_TOKEN = apiKey
+          const voice = this.config.ttsVoice.trim()
+          if (voice) {
+            if (backend === 'mimo') env.DESKPET_MIMO_VOICE = voice
+            else if (backend === 'cosyvoice') env.DESKPET_COSYVOICE_VOICE = voice
+            else if (backend === 'gsv2p') env.DESKPET_GSV2P_VOICE = voice
+          }
+          return { command: this.python(), args: ['-u', path.join(root, 'cloud-tts-bridge.py')], cwd: root, env }
         },
       },
       {
