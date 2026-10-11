@@ -545,7 +545,7 @@ function startAnimationPoll() {
     if (store.live2dModel) {
       const cw = window.innerWidth
       const ch = window.innerHeight
-      if (cw !== lastW || ch !== lastH) {
+      if (Math.abs(cw - lastW) > 2 || Math.abs(ch - lastH) > 2) {
         store.pixiApp!.renderer.resize(cw * RESOLUTION, ch * RESOLUTION)
         store.pixiApp!.stage.scale.set(RESOLUTION)
         lastW = cw
@@ -711,7 +711,7 @@ function resetModelView() {
   transform: translateX(-50%);
   width: 160px;
   height: 32px;
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
   z-index: 50;
   cursor: move;
   display: flex;

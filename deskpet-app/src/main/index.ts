@@ -56,16 +56,23 @@ function clampWindowBounds(bounds: WindowBoundsState): WindowBoundsState {
   const display = screen.getDisplayMatching(bounds)
   const area = display.workArea
   const minVisibleSize = 120
+  const navBarHalfSpan = 88 // 底部居中导航条宽 160px（半宽 80px + 8px 余量）
   const width = Math.max(bounds.width, MIN_WINDOW_WIDTH)
   const height = Math.max(bounds.height, MIN_WINDOW_HEIGHT)
 
-  // 四个方向都只要求留出 minVisibleSize 的可见区域，
-  // 这样桌宠可以贴到屏幕底部（压住任务栏），而不是被强制卡在工作区内。
+  // 水平方向保证居中导航条始终留在工作区内；
+  // 垂直方向保证窗口底边（导航条所在处 bottom: 4px）绝不越过工作区底边进入任务栏。
+  const minVisibleX = Math.min(width, Math.max(minVisibleSize, Math.ceil(width / 2 + navBarHalfSpan)))
+  const minX = area.x + minVisibleX - width
+  const maxX = area.x + area.width - minVisibleX
+  const maxY = area.y + area.height - height
+  const minY = Math.min(area.y + minVisibleSize - height, maxY)
+
   return {
     width,
     height,
-    x: clamp(bounds.x, area.x + minVisibleSize - width, area.x + area.width - minVisibleSize),
-    y: clamp(bounds.y, area.y + minVisibleSize - height, area.y + area.height - minVisibleSize),
+    x: clamp(bounds.x, Math.min(minX, maxX), Math.max(minX, maxX)),
+    y: clamp(bounds.y, minY, maxY),
   }
 }
 
@@ -84,9 +91,8 @@ function getDefaultWindowBounds(width = 600, height = 800): WindowBoundsState {
 
 function resetWindowPosition(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  const { width, height } = mainWindow.getBounds()
-  const bounds = getDefaultWindowBounds(width, height)
-  mainWindow.setBounds(bounds)
+  const bounds = getDefaultWindowBounds(lastSavedBounds.width, lastSavedBounds.height)
+  applyWindowBounds(bounds)
   saveWindowState()
 }
 
@@ -262,19 +268,33 @@ function loadWindowState(): WindowState {
 }
 
 let enforcingWindowBounds = false
+let lastDragAt = 0
+
+function applyWindowBounds(next: WindowBoundsState): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  enforcingWindowBounds = true
+  try {
+    lastSavedBounds = next
+    mainWindow.setBounds(next)
+  } finally {
+    enforcingWindowBounds = false
+  }
+}
 
 function enforceWindowBounds(): void {
   if (!mainWindow || mainWindow.isDestroyed() || enforcingWindowBounds) return
-  enforcingWindowBounds = true
-  try {
-    const current = mainWindow.getBounds()
-    const next = clampWindowBounds(current)
-    if (current.x !== next.x || current.y !== next.y || current.width !== next.width || current.height !== next.height) {
-      mainWindow.setBounds(next)
-      lastSavedBounds = next
-    }
-  } finally {
-    enforcingWindowBounds = false
+  if (Date.now() - lastDragAt < 150) return
+  const current = mainWindow.getBounds()
+  // Windows 高分屏（如 125%/150% 缩放）下，仅移动窗口位置也会令 getBounds() 的宽高产生 1~2px 的取整抖动；
+  // 若直接把抖动后的宽高喂回 setBounds，每次移动都会把窗口撑大 1~2px。
+  const width = Math.abs(current.width - lastSavedBounds.width) > 2 ? current.width : lastSavedBounds.width
+  const height = Math.abs(current.height - lastSavedBounds.height) > 2 ? current.height : lastSavedBounds.height
+  const candidate = { x: current.x, y: current.y, width, height }
+  const next = clampWindowBounds(candidate)
+  if (current.x !== next.x || current.y !== next.y || width !== next.width || height !== next.height) {
+    applyWindowBounds(next)
+  } else {
+    lastSavedBounds = next
   }
 }
 
@@ -294,9 +314,6 @@ function saveWindowState(): void {
     saveStateTimer = null
   }
   try {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      lastSavedBounds = mainWindow.getBounds()
-    }
     fs.mkdirSync(app.getPath('userData'), { recursive: true })
     fs.writeFileSync(getWindowStatePath(), JSON.stringify({
       bounds: lastSavedBounds,
@@ -593,10 +610,16 @@ app.whenReady().then(() => {
 
   ipcMain.handle('drag-window', (event, { dx, dy }: { dx: number; dy: number }) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    if (!win) return
-    const bounds = win.getBounds()
-    const nextBounds = clampWindowBounds({ ...bounds, x: bounds.x + dx, y: bounds.y + dy })
-    win.setPosition(nextBounds.x, nextBounds.y)
+    if (!win || win !== mainWindow) return
+    lastDragAt = Date.now()
+    const nextBounds = clampWindowBounds({
+      width: lastSavedBounds.width,
+      height: lastSavedBounds.height,
+      x: lastSavedBounds.x + dx,
+      y: lastSavedBounds.y + dy,
+    })
+    applyWindowBounds(nextBounds)
+    scheduleSaveWindowState()
   })
 
   ipcMain.handle('set-always-on-top', (_event, flag: boolean) => {
