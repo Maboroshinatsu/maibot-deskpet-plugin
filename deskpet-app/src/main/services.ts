@@ -1,19 +1,20 @@
 /**
  * 后台服务管理器 —— 取代 start.bat 的"一键启动"
  *
- * 管理三个子进程：STT 桥（SenseVoice）、TTS 桥（GPT-SoVITS 中继）、GPT-SoVITS API。
+ * 管理 STT、本地/云 TTS、GPT-SoVITS API 与 PTT 热键桥。
  * MaiBot 本体不归它管（独立的 OneKey 安装），前端只做连通性显示。
  *
- * 每个服务两种运行模式（对应"可选终端显示"）：
+ * 普通服务两种运行模式（PTT 热键桥固定使用隐藏模式保留事件管道）：
  *   - 隐藏模式（默认）：stdout/stderr 进环形日志缓冲，通过 IPC 推给设置面板
- *   - 终端模式：windowsHide=false 让 python.exe 自带控制台窗口，日志在窗口里看
+ *   - 终端模式：隐藏的 cmd 通过 start 创建用户选择的控制台窗口
  * 两种模式下进程句柄都在我们手里，退出时统一 taskkill /T 杀进程树。
  */
-import { spawn, exec, ChildProcess } from 'child_process'
+import { spawn, execFile, execFileSync, ChildProcess } from 'child_process'
 import net from 'net'
 import path from 'path'
 import fs from 'fs'
 import { app } from 'electron'
+import { validateDetectedPython } from './runtime-policy'
 
 export type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits' | 'hotkey' | 'cloud-tts'
 export type ServiceStatus = 'stopped' | 'starting' | 'running' | 'error'
@@ -37,6 +38,12 @@ export interface ServicesConfig {
   ttsVoice: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
+}
+
+export interface RuntimeCandidate {
+  id: string
+  pythonPath: string
+  sourceUrl: string
 }
 
 export interface ServiceState {
@@ -89,9 +96,19 @@ export class ServiceManager {
   private detail = new Map<ServiceId, string>()
   private logs = new Map<ServiceId, string[]>()
   /** 用户主动 stop 的进程退出不算 error */
-  private stopping = new Set<ServiceId>()
+  private stopping = new Map<ChildProcess, object>()
+  private starts = new Map<ServiceId, Promise<void>>()
+  private generations = new Map<ServiceId, number>()
+  private restarts = new Map<ServiceId, {
+    proc: ChildProcess
+    generation: number
+    timer: ReturnType<typeof setTimeout>
+  }>()
+  private quitting = false
   /** stdout 按行解析时的跨 chunk 余量（事件行可能被两次 data 事件切断） */
-  private lineBuffers = new Map<ServiceId, string>()
+  private lineBuffers = new Map<ChildProcess, string>()
+  private pttHeld = new WeakSet<ChildProcess>()
+  private pttCancelled = new WeakSet<ChildProcess>()
   private probeTimer: ReturnType<typeof setInterval> | null = null
   private emit: (channel: string, payload: unknown) => void
 
@@ -119,7 +136,7 @@ export class ServiceManager {
         ttsApiKey: typeof raw.ttsApiKey === 'string' ? raw.ttsApiKey : '',
         ttsVoice: typeof raw.ttsVoice === 'string' ? raw.ttsVoice : '',
         autoStart: { ...DEFAULT_CONFIG.autoStart, ...(raw.autoStart ?? {}) },
-        showTerminal: { ...DEFAULT_CONFIG.showTerminal, ...(raw.showTerminal ?? {}) },
+        showTerminal: { ...DEFAULT_CONFIG.showTerminal, ...(raw.showTerminal ?? {}), hotkey: false },
       }
     } catch {
       return JSON.parse(JSON.stringify(DEFAULT_CONFIG))
@@ -141,6 +158,8 @@ export class ServiceManager {
     if (typeof patch.ttsVoice === 'string') this.config.ttsVoice = patch.ttsVoice
     if (patch.autoStart) this.config.autoStart = { ...this.config.autoStart, ...patch.autoStart }
     if (patch.showTerminal) this.config.showTerminal = { ...this.config.showTerminal, ...patch.showTerminal }
+    // 热键事件依赖 stdout；旧配置和直接 IPC 调用也不能启用会丢事件的终端模式。
+    this.config.showTerminal.hotkey = false
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true })
       fs.writeFileSync(this.configPath(), JSON.stringify(this.config, null, 2), 'utf-8')
@@ -177,38 +196,86 @@ export class ServiceManager {
     return null
   }
 
-  /**
-   * 桌宠连上 MaiBot 后，插件上报的 Python 解释器路径（sys.executable，内存态不持久化，
-   * 每次 WS 连接都会重新上报）。桥脚本复用 MaiBot 的 Python 环境 —— 插件依赖
-   * 就装在同一个环境里，用户无需单独安装 Python。
-   */
+  /** 仅用户在主进程原生确认框批准的、本次连接的解释器。 */
   private detectedPython: string | null = null
+  private runtimeCandidate: RuntimeCandidate | null = null
+  private candidateSequence = 0
+  private runtimeFailures = new Map<ServiceId, 'missing-dependency'>()
 
-  /**
-   * Python 解析顺序：设置面板显式指定 > MaiBot 插件上报 > 系统 PATH。
-   */
   private python(): string {
     const configured = this.config.pythonPath.trim()
-    if (configured) return configured
-    return this.detectedPython ?? 'python'
+    return configured || this.detectedPython || 'python'
   }
 
-  /** WS 连上 MaiBot 后由渲染层转发过来；对因找不到 Python 而失败的服务补一次启动 */
-  setDetectedPython(pythonPath: string): void {
-    if (typeof pythonPath !== 'string' || !pythonPath.trim()) return
-    if (this.detectedPython === pythonPath) return
-    this.detectedPython = pythonPath.trim()
-    console.info(`[services] MaiBot python detected: ${this.detectedPython}`)
-    for (const def of this.defs()) {
-      if (def.id === 'gpt-sovits') continue // 用整合包自带 runtime，与此无关
-      if (!this.config.autoStart[def.id]) continue
-      const failedForMissingPython =
-        this.status.get(def.id) === 'error' && /ENOENT|找不到可执行文件/.test(this.detail.get(def.id) ?? '')
-      if (failedForMissingPython) {
-        this.appendLog(def.id, `[launcher] 拿到 MaiBot Python 路径，重试启动`)
-        this.start(def.id)
+  getRuntimeCandidate(): RuntimeCandidate | null {
+    return this.runtimeCandidate ? { ...this.runtimeCandidate } : null
+  }
+
+  /** WS 只能提交待审核候选，绝不凭一帧消息执行程序。 */
+  setDetectedPython(pythonPath: unknown, sourceUrl: unknown): void {
+    if (this.quitting) return
+    const result = validateDetectedPython(pythonPath, sourceUrl)
+    if (!result.ok) {
+      this.clearDetectedPython()
+      return
+    }
+    if (this.runtimeCandidate?.pythonPath === result.pythonPath &&
+        this.runtimeCandidate.sourceUrl === result.sourceUrl) return
+    // 已批准的同一路径在同一连接重复上报时无需反复确认。
+    if (this.detectedPython === result.pythonPath && this.approvedSource === result.sourceUrl) return
+    this.clearDetectedPython()
+    this.runtimeCandidate = {
+      id: String(++this.candidateSequence), pythonPath: result.pythonPath, sourceUrl: result.sourceUrl,
+    }
+    this.pushAllStates()
+  }
+
+  private approvedSource: string | null = null
+
+  /** 只由主进程确认处理器调用；renderer 没有绕过确认的直接入口。 */
+  approveDetectedPython(id: string): boolean {
+    const candidate = this.runtimeCandidate
+    if (this.quitting || !candidate || candidate.id !== id) return false
+    const result = validateDetectedPython(candidate.pythonPath, candidate.sourceUrl)
+    if (!result.ok || result.pythonPath !== candidate.pythonPath || result.sourceUrl !== candidate.sourceUrl) {
+      this.clearDetectedPython()
+      return false
+    }
+    this.detectedPython = result.pythonPath
+    this.approvedSource = result.sourceUrl
+    this.runtimeCandidate = null
+    this.pushAllStates()
+    // 显式指定优先；只对确定的环境类失败补一次，不重启已运行或用户停止的服务。
+    if (!this.config.pythonPath.trim()) {
+      for (const def of this.defs()) {
+        if (def.id === 'gpt-sovits' || !this.config.autoStart[def.id] || this.processes.has(def.id)) continue
+        if (this.status.get(def.id) !== 'error') continue
+        const missingRuntime = /ENOENT|找不到可执行文件/.test(this.detail.get(def.id) ?? '')
+        if (missingRuntime || this.runtimeFailures.get(def.id) === 'missing-dependency') {
+          this.appendLog(def.id, '[launcher] 本机解释器已由用户确认，重试环境类启动失败')
+          void this.start(def.id)
+        }
       }
     }
+    return true
+  }
+
+  /** 断线/刷新使未决审核与自动解释器授权失效，不停止已运行服务。 */
+  clearDetectedPython(): void {
+    const hadRuntime = this.detectedPython !== null
+    this.detectedPython = null
+    this.approvedSource = null
+    this.runtimeCandidate = null
+    this.candidateSequence++
+    if (hadRuntime && !this.config.pythonPath.trim()) {
+      for (const id of this.starts.keys()) {
+        if (id === 'gpt-sovits' || this.processes.has(id)) continue
+        this.nextGeneration(id)
+        this.starts.delete(id)
+        this.setStatus(id, 'stopped', '连接已失效，取消使用自动发现解释器的待启动任务')
+      }
+    }
+    this.pushAllStates()
   }
 
   /** Python 输出强制 UTF-8，否则 Windows 上中文日志按 GBK 编码全是乱码 */
@@ -349,43 +416,57 @@ export class ServiceManager {
    * hotkey 桥的 stdout 是事件流而不是普通日志：PTT_DOWN/PTT_UP 独占一行，
    * 解析出来经 emit 转发渲染层，其余行进日志面板。
    */
-  private handleServiceOutput(id: ServiceId, chunk: string): void {
+  private handleServiceOutput(id: ServiceId, proc: ChildProcess, chunk: string, active: boolean): void {
     if (id !== 'hotkey') {
-      this.appendLog(id, chunk)
+      this.appendProcessLog(id, proc, chunk)
       return
     }
-    const buf = (this.lineBuffers.get(id) ?? '') + chunk
+    const buf = (this.lineBuffers.get(proc) ?? '') + chunk
     const lines = buf.split(/\r?\n/)
-    this.lineBuffers.set(id, lines.pop() ?? '') // 末段可能不完整，留给下个 chunk
+    this.lineBuffers.set(proc, lines.pop() ?? '')
     const logs: string[] = []
     for (const line of lines) {
-      if (line === 'PTT_DOWN') this.emit('ptt-event', 'down')
-      else if (line === 'PTT_UP') this.emit('ptt-event', 'up')
-      else if (line) logs.push(line)
+      if (line === 'PTT_DOWN') {
+        if (active && !this.pttHeld.has(proc)) {
+          this.pttHeld.add(proc)
+          this.emit('ptt-event', 'down')
+        }
+      } else if (line === 'PTT_UP') {
+        if (active && this.pttHeld.delete(proc)) this.emit('ptt-event', 'up')
+      } else if (line) logs.push(line)
     }
-    if (logs.length > 0) this.appendLog(id, logs.join('\n'))
+    if (logs.length > 0) this.appendProcessLog(id, proc, logs.join('\n'))
+  }
+
+  private appendProcessLog(id: ServiceId, proc: ChildProcess, chunk: string): void {
+    const prefix = this.processes.get(id) === proc ? '' : `[已退出实例 ${proc.pid ?? '?'}] `
+    this.appendLog(id, prefix + chunk)
+  }
+
+  private cancelPtt(id: ServiceId, proc: ChildProcess): void {
+    if (id !== 'hotkey' || this.pttCancelled.has(proc)) return
+    this.pttCancelled.add(proc)
+    this.pttHeld.delete(proc)
+    // cancel 不等于松开：前端必须丢弃半截录音，不能自动发送。
+    if (!this.quitting) this.emit('ptt-event', 'cancel')
   }
 
   // ── 生命周期 ────────────────────────────────
 
-  /** 列出正在 LISTEN 指定端口的 PID（清理残留旧桥用；gpt-sovits 不在其列） */
-  private findPortPids(port: number): Promise<number[]> {
-    return new Promise((resolve) => {
-      exec(`netstat -ano | findstr LISTENING`, (err, stdout) => {
-        if (err || !stdout) return resolve([])
-        const pids = new Set<number>()
-        for (const line of stdout.split(/\r?\n/)) {
-          const t = line.trim().split(/\s+/)
-          // TCP  127.0.0.1:18530  0.0.0.0:0  LISTENING  12345
-          if (t.length < 5) continue
-          const pid = Number(t[t.length - 1])
-          if (t[1]?.endsWith(`:${port}`) && Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
-            pids.add(pid)
-          }
-        }
-        resolve([...pids])
-      })
-    })
+  private nextGeneration(id: ServiceId): number {
+    const generation = (this.generations.get(id) ?? 0) + 1
+    this.generations.set(id, generation)
+    return generation
+  }
+
+  private cancelRestart(id: ServiceId): void {
+    const pending = this.restarts.get(id)
+    if (pending) clearTimeout(pending.timer)
+    this.restarts.delete(id)
+  }
+
+  private isCurrentStart(id: ServiceId, generation: number): boolean {
+    return !this.quitting && this.generations.get(id) === generation
   }
 
   /**
@@ -421,8 +502,21 @@ export class ServiceManager {
     )
   }
 
-  async start(id: ServiceId): Promise<void> {
-    if (this.processes.has(id)) return
+  start(id: ServiceId): Promise<void> {
+    if (this.quitting || this.processes.has(id)) return Promise.resolve()
+    const existing = this.starts.get(id)
+    if (existing) return existing
+    const generation = this.nextGeneration(id)
+    // 延后一微任务：第一个 await/状态通知发生前先登记单飞锁。
+    const task = Promise.resolve().then(() => this.startProcess(id, generation)).finally(() => {
+      if (this.starts.get(id) === task) this.starts.delete(id)
+    })
+    this.starts.set(id, task)
+    return task
+  }
+
+  private async startProcess(id: ServiceId, generation: number): Promise<void> {
+    if (!this.isCurrentStart(id, generation)) return
     const def = this.defs().find((d) => d.id === id)
     if (!def) return
     const resolved = def.resolve()
@@ -431,30 +525,32 @@ export class ServiceManager {
       return
     }
 
-    // 残留旧桥会占着端口让新桥秒退 (code 1)：先按 PID 清场再拉起。
-    // 只清 stt/tts 这两个自家桥；gpt-sovits 可能是用户自己在跑的实例，不动。
-    if ((id === 'stt-bridge' || id === 'tts-bridge') && def.port > 0) {
-      const squatters = await this.findPortPids(def.port)
-      for (const pid of squatters) {
-        this.appendLog(id, `[launcher] 端口 ${def.port} 被残留进程 ${pid} 占用，按旧桥清理`)
-        exec(`taskkill /F /PID ${pid}`, () => { /* 不管结果，600ms 后照常拉起 */ })
+    this.setStatus(id, 'starting', '检查启动条件')
+    try {
+      if (def.port > 0) {
+        const occupied = await this.probePort(def.port)
+        if (!this.isCurrentStart(id, generation)) return
+        if (occupied) {
+          // 端口不是所有权凭据。保留外部服务，由用户选择使用或手动停止。
+          this.setStatus(id, 'error', `端口 ${def.port} 已被占用，未启动新进程；现有服务未被终止`)
+          return
+        }
       }
-      if (squatters.length > 0) {
-        await new Promise((r) => setTimeout(r, 600))
-      }
+    } catch (err) {
+      if (this.isCurrentStart(id, generation)) this.setStatus(id, 'error', `无法确认端口是否可用: ${err}`)
+      return
     }
+    if (!this.isCurrentStart(id, generation)) return
 
-    const showTerminal = this.config.showTerminal[id]
+    const showTerminal = id !== 'hotkey' && this.config.showTerminal[id]
     this.appendLog(id, `[launcher] ${resolved.command} ${resolved.args.join(' ')}`)
-
+    if (!this.isCurrentStart(id, generation)) return
     let proc: ChildProcess
     try {
       proc = showTerminal
         ? this.spawnTerminal(resolved, def.name)
         : spawn(resolved.command, resolved.args, {
             cwd: resolved.cwd,
-            // 把桌宠主进程 PID 传给桥：桥的看门狗轮询它，一旦消失就自杀，
-            // 保证桌宠无论正常退出 / 崩溃 / 被任务管理器强杀，桥都不残留
             env: { ...process.env, ...(resolved.env ?? {}), DESKPET_PARENT_PID: String(process.pid) },
             windowsHide: true,
             stdio: ['ignore', 'pipe', 'pipe'],
@@ -465,65 +561,111 @@ export class ServiceManager {
     }
 
     this.processes.set(id, proc)
-    this.stopping.delete(id)
-    this.setStatus(id, 'starting')
-
+    this.runtimeFailures.delete(id)
+    let startupStderr = ''
+    const isCurrent = () => !this.quitting && this.processes.get(id) === proc
+    let outputClosed = false
     proc.stdout?.setEncoding('utf-8')
     proc.stderr?.setEncoding('utf-8')
-    proc.stdout?.on('data', (chunk: string) => this.handleServiceOutput(id, chunk))
-    proc.stderr?.on('data', (chunk: string) => this.appendLog(id, chunk))
+    proc.stdout?.on('data', (chunk: string) => {
+      if (outputClosed || this.quitting) return
+      const active = isCurrent() && this.generations.get(id) === generation && !this.pttCancelled.has(proc)
+      this.handleServiceOutput(id, proc, chunk, active)
+    })
+    proc.stderr?.on('data', (chunk: string) => {
+      startupStderr = (startupStderr + chunk).slice(-8192)
+      if (!outputClosed && !this.quitting) this.appendProcessLog(id, proc, chunk)
+    })
+    // exit 不保证 stdio 已排空：日志保留到 close，旧实例控制事件则绝不再转发。
+    proc.on('close', () => {
+      outputClosed = true
+      const tail = this.lineBuffers.get(proc)
+      if (tail && !this.quitting && tail !== 'PTT_DOWN' && tail !== 'PTT_UP') this.appendProcessLog(id, proc, tail)
+      this.lineBuffers.delete(proc)
+    })
 
     proc.on('error', (err) => {
-      this.processes.delete(id)
-      this.lineBuffers.delete(id)
+      if (!isCurrent()) return
       const hint = /ENOENT/.test(String(err)) ? '（找不到可执行文件，检查 Python 路径）' : ''
-      this.setStatus(id, 'error', `${err}${hint}`)
-    })
-
-    proc.on('exit', (code) => {
-      this.processes.delete(id)
-      this.lineBuffers.delete(id)
-      if (this.stopping.has(id)) {
-        this.stopping.delete(id)
-        this.setStatus(id, 'stopped')
-      } else if (code === 0) {
-        this.setStatus(id, 'stopped', '进程自行退出')
+      // spawn 失败没有 PID；已有 PID 的 error 不等于退出，不能丢掉所有权。
+      if (proc.pid == null) {
+        this.finishProcess(id, proc, 'error', `${err}${hint}`)
       } else {
-        this.setStatus(id, 'error', `进程异常退出 (code ${code})，看日志排查`)
+        this.cancelRestart(id)
+        this.stopping.delete(proc)
+        this.setStatus(id, 'error', `进程操作失败（仍保留进程句柄）: ${err}`)
       }
     })
+    proc.on('exit', (code) => {
+      if (!isCurrent()) return
+      const stopped = this.stopping.has(proc)
+      if (!stopped && code !== 0 && /ModuleNotFoundError|ImportError[^\n]*(?:No module named|cannot import name)/.test(startupStderr)) {
+        this.runtimeFailures.set(id, 'missing-dependency')
+      }
+      this.finishProcess(id, proc, stopped || code === 0 ? 'stopped' : 'error',
+        stopped ? '' : code === 0 ? '进程自行退出' : `进程异常退出 (code ${code})，看日志排查`)
+    })
 
+    this.setStatus(id, 'starting')
     this.ensureProbeLoop()
   }
 
+  private finishProcess(id: ServiceId, proc: ChildProcess, status: ServiceStatus, detail: string): void {
+    if (this.processes.get(id) !== proc) return
+    this.cancelPtt(id, proc)
+    this.processes.delete(id)
+    this.stopping.delete(proc)
+    this.starts.delete(id)
+    const pending = this.restarts.get(id)
+    const shouldRestart = pending?.proc === proc && this.isCurrentStart(id, pending.generation)
+    this.cancelRestart(id)
+    this.setStatus(id, status, detail)
+    if (shouldRestart) void this.start(id)
+  }
+
   stop(id: ServiceId): void {
+    this.nextGeneration(id) // 取消正在检查端口、尚未 spawn 的启动任务。
+    this.starts.delete(id)
+    this.cancelRestart(id)
     const proc = this.processes.get(id)
-    if (!proc || proc.pid == null) return
-    this.stopping.add(id)
-    // GPT-SoVITS 的 runtime\python 会再拉子进程，必须整树杀干净
-    exec(`taskkill /pid ${proc.pid} /T /F`, () => { /* exit 事件里统一收尾 */ })
+    if (!proc) {
+      this.setStatus(id, 'stopped')
+      return
+    }
+    this.cancelPtt(id, proc)
+    if (this.stopping.has(proc)) return
+    const attempt = {}
+    this.stopping.set(proc, attempt)
+    if (proc.pid == null) return // 等待 spawn 的 error/exit 事件统一收尾。
+    // 只结束本实例 spawn 并且仍持有句柄的进程，不按端口猜测 PID。
+    execFile('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true }, (err) => {
+      if (!err || this.quitting || this.processes.get(id) !== proc || this.stopping.get(proc) !== attempt) return
+      this.stopping.delete(proc)
+      // taskkill 失败可能只是目标已自行退出，仍等真实 exit；超时/显式 stop 才撤销重启。
+      this.setStatus(id, 'error', `停止命令失败，等待确认退出；尚未启动替代进程: ${err.message}`)
+    })
   }
 
   restart(id: ServiceId): void {
+    if (this.quitting) return
+    this.stop(id)
     const proc = this.processes.get(id)
     if (!proc) {
-      this.start(id)
+      void this.start(id)
       return
     }
-    const once = (state: ServiceState[]) => {
-      const entry = state.find((s) => s.id === id)
-      if (entry && entry.status !== 'starting' && entry.status !== 'running') {
-        this.start(id)
-        return true
+    if (!this.stopping.has(proc)) return
+    const generation = this.generations.get(id)!
+    const timer = setTimeout(() => {
+      const pending = this.restarts.get(id)
+      if (pending?.generation !== generation || pending.proc !== proc) return
+      this.cancelRestart(id)
+      if (this.processes.get(id) === proc) {
+        this.stopping.delete(proc) // 允许用户再次停止；旧 taskkill 回调已失效。
+        this.setStatus(id, 'error', '等待进程退出超时，已取消自动重启；可重试停止')
       }
-      return false
-    }
-    // 简单轮询等退出完成再拉起（exit 事件驱动 pushAllStates，这里不重复接线）
-    this.stop(id)
-    const timer = setInterval(() => {
-      if (once(this.list())) clearInterval(timer)
-    }, 300)
-    setTimeout(() => clearInterval(timer), 10_000)
+    }, 10_000)
+    this.restarts.set(id, { proc, generation, timer })
   }
 
   autoStartAll(): void {
@@ -540,16 +682,22 @@ export class ServiceManager {
 
   /** 应用退出时同步杀掉所有子进程树（不能等异步回调，quit 不会等我们） */
   stopAllSync(): void {
+    this.quitting = true
+    for (const id of this.restarts.keys()) this.cancelRestart(id)
+    this.starts.clear() // isCurrentStart 会让在途端口检查失效，退出后不再 spawn。
     if (this.probeTimer) { clearInterval(this.probeTimer); this.probeTimer = null }
-    for (const [id, proc] of this.processes) {
-      this.stopping.add(id)
+    for (const proc of this.processes.values()) {
       if (proc.pid != null) {
         try {
-          require('child_process').execSync(`taskkill /pid ${proc.pid} /T /F`, { stdio: 'ignore', timeout: 5000 })
-        } catch { /* 进程可能已经没了 */ }
+          execFileSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], {
+            stdio: 'ignore', windowsHide: true, timeout: 5000,
+          })
+        } catch { /* 进程可能已经没了；桥自身的 watchdog 仍会兜底。 */ }
       }
     }
     this.processes.clear()
+    this.stopping.clear()
+    this.lineBuffers.clear()
   }
 
   // ── 健康探测 ────────────────────────────────
@@ -563,32 +711,42 @@ export class ServiceManager {
         return
       }
       for (const def of this.defs()) {
-        if (!this.processes.has(def.id)) continue
+        const proc = this.processes.get(def.id)
+        if (!proc || this.stopping.has(proc)) continue
+        const generation = this.generations.get(def.id)
         if (def.port === 0) {
           // 无端口服务（hotkey 桥）：进程在跑且没退出就算 running
           if (this.status.get(def.id) === 'starting') this.setStatus(def.id, 'running')
           continue
         }
         this.probePort(def.port).then((open) => {
+          if (this.quitting || this.processes.get(def.id) !== proc ||
+              this.generations.get(def.id) !== generation || this.stopping.has(proc)) return
           const current = this.status.get(def.id)
           if (open && current === 'starting') this.setStatus(def.id, 'running')
-          // 端口关了但进程还在：保持 starting/running 不动，交给 exit 事件定性
-        })
+          // 端口关了但进程还在：保留所有权，交给 exit 事件定性。
+        }).catch(() => { /* 不确定的探测不能确认运行健康。 */ })
       }
     }, PROBE_INTERVAL_MS)
   }
 
   private probePort(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const socket = net.connect({ port, host: '127.0.0.1' })
-      const done = (result: boolean) => {
+      let settled = false
+      const done = (result: boolean, error?: Error) => {
+        if (settled) return
+        settled = true
         socket.destroy()
-        resolve(result)
+        if (error) reject(error)
+        else resolve(result)
       }
       socket.setTimeout(1500)
       socket.once('connect', () => done(true))
-      socket.once('timeout', () => done(false))
-      socket.once('error', () => done(false))
+      socket.once('timeout', () => done(false, new Error(`端口 ${port} 探测超时`)))
+      socket.once('error', (error: NodeJS.ErrnoException) => {
+        done(false, error.code === 'ECONNREFUSED' ? undefined : error)
+      })
     })
   }
 }

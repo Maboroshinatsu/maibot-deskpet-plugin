@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="section">
     <div class="section-title">后台服务</div>
 
@@ -22,7 +22,7 @@
         </div>
         <div class="svc-actions">
           <button
-            v-if="svc.status === 'stopped' || svc.status === 'error'"
+            v-if="(svc.status === 'stopped' || svc.status === 'error') && svc.pid === null"
             class="btn btn-sm" :disabled="!svc.available"
             @click="startService(svc.id)"
           >启动</button>
@@ -41,8 +41,17 @@
           <input type="checkbox" :checked="svc.autoStart" @change="setAutoStart(svc.id, $event)" />
           随桌宠自启
         </label>
-        <label class="opt" :title="'开启后在独立终端窗口运行（重启该服务生效），日志不再进入下方面板'">
-          <input type="checkbox" :checked="svc.showTerminal" @change="setShowTerminal(svc.id, $event)" />
+        <label
+          class="opt"
+          :class="{ 'opt-disabled': svc.id === 'hotkey' }"
+          :title="svc.id === 'hotkey' ? '全局 PTT 需保留事件管道向桌宠传递按键状态，暂不支持独立终端窗口；日志可在面板查看' : '开启后在独立终端窗口运行（重启该服务生效），日志不再进入下方面板'"
+        >
+          <input
+            type="checkbox"
+            :checked="svc.id === 'hotkey' ? false : svc.showTerminal"
+            :disabled="svc.id === 'hotkey'"
+            @change="setShowTerminal(svc.id, $event)"
+          />
           终端窗口
         </label>
       </div>
@@ -61,8 +70,28 @@
     <!-- 路径配置 -->
     <details class="svc-config">
       <summary>服务路径配置</summary>
-      <label>Python 路径（留空复用 MaiBot 的 Python，未连接时用系统 PATH）</label>
+      <label>Python 路径（显式指定优先；自动发现需确认；否则使用系统 PATH）</label>
       <input :value="config?.pythonPath ?? ''" @change="setPythonPath($event)" placeholder="留空即可" />
+
+      <!-- MaiBot 上报的本机 Python 候选：未确认前不写入 pythonPath，也不自动批准 -->
+      <div v-if="runtimeCandidate || candidateFeedback" class="candidate">
+        <template v-if="runtimeCandidate">
+          <div class="candidate-title">MaiBot 上报的本机 Python 候选</div>
+          <div class="candidate-row">来源：{{ runtimeCandidate.sourceUrl }}</div>
+          <div class="candidate-row">路径：{{ runtimeCandidate.pythonPath }}</div>
+          <p class="hint">该解释器尚未用于启动，需在本机确认后才会启用</p>
+          <div class="candidate-actions">
+            <button class="btn btn-sm" :disabled="candidatePending" @click="approveCandidate">
+              {{ candidatePending ? '等待本机确认…' : '审核并使用此解释器' }}
+            </button>
+          </div>
+        </template>
+        <div
+          v-if="candidateFeedback"
+          class="candidate-feedback"
+          :class="{ 'candidate-feedback-error': candidateFeedbackError }"
+        >{{ candidateFeedback }}</div>
+      </div>
       <label>GPT-SoVITS 整合包目录（留空自动探测）</label>
       <input :value="config?.gsvDir ?? ''" @change="setGsvDir($event)" placeholder="D:\GPT-SoVITS-v2pro-xxxx" />
       <label>GPT-SoVITS 参考音频（角色声线 .wav）</label>
@@ -113,6 +142,14 @@ const logsMap = reactive<Partial<Record<ServiceId, string[]>>>({})
 const openLogs = reactive(new Set<ServiceId>())
 const logRefs = new Map<ServiceId, HTMLElement>()
 
+/** MaiBot 上报的本机 Python 候选（未确认前绝不写入 pythonPath） */
+const runtimeCandidate = ref<{ id: string; pythonPath: string; sourceUrl: string } | null>(null)
+const candidatePending = ref(false)
+const candidateFeedback = ref('')
+const candidateFeedbackError = ref(false)
+/** 候选查询序号：只接受最新一次查询结果，避免晚到结果覆盖新状态 */
+let candidateSeq = 0
+
 let unsubUpdate: (() => void) | null = null
 let unsubLog: (() => void) | null = null
 
@@ -150,6 +187,53 @@ function statusText(svc: ServiceState): string {
 async function refresh() {
   services.value = (await window.electronAPI?.listServices()) ?? []
   config.value = (await window.electronAPI?.getServicesConfig()) ?? null
+  void refreshCandidate()
+}
+
+async function refreshCandidate() {
+  const seq = ++candidateSeq
+  try {
+    const next = (await window.electronAPI?.getRuntimeCandidate()) ?? null
+    if (seq !== candidateSeq) return
+    const previousId = runtimeCandidate.value?.id ?? null
+    runtimeCandidate.value = next
+    // 换成另一个候选时才清掉上一条候选留下的反馈
+    if (next && next.id !== previousId) {
+      candidateFeedback.value = ''
+      candidateFeedbackError.value = false
+    }
+  } catch {
+    // 查询失败时保留上一次已知候选，不清空也不写入配置
+  }
+}
+
+async function approveCandidate() {
+  const candidate = runtimeCandidate.value
+  if (!candidate || candidatePending.value) return
+  if (!window.electronAPI?.approveDetectedPython) {
+    candidateFeedbackError.value = true
+    candidateFeedback.value = '确认失败：当前版本不支持本机确认'
+    return
+  }
+  candidatePending.value = true
+  candidateFeedback.value = ''
+  candidateFeedbackError.value = false
+  try {
+    // 本机确认对话框由主进程弹出（默认取消），前端不自动批准
+    const approved = await window.electronAPI.approveDetectedPython(candidate.id)
+    if (approved) {
+      candidateFeedback.value = '已确认，后续启动将使用该解释器'
+    } else {
+      candidateFeedbackError.value = true
+      candidateFeedback.value = '未确认，该解释器不会被使用'
+    }
+  } catch (e) {
+    candidateFeedbackError.value = true
+    candidateFeedback.value = `确认失败：${e instanceof Error ? e.message : String(e)}`
+  } finally {
+    candidatePending.value = false
+    void refreshCandidate()
+  }
 }
 
 function startService(id: ServiceId) { void window.electronAPI?.startService(id) }
@@ -208,6 +292,8 @@ onMounted(() => {
   void refresh()
   unsubUpdate = window.electronAPI?.onServicesUpdate((states) => {
     services.value = states
+    // 候选更新也会触发该事件，顺带刷新候选
+    void refreshCandidate()
   }) ?? null
   unsubLog = window.electronAPI?.onServiceLog(({ id, lines }) => {
     const buf = logsMap[id] ?? (logsMap[id] = [])
@@ -218,6 +304,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  // 失效在途的候选查询，避免晚到结果回写已卸载组件
+  candidateSeq++
   unsubUpdate?.()
   unsubLog?.()
 })
@@ -264,6 +352,8 @@ onUnmounted(() => {
 
 .svc-opts { display: flex; gap: 14px; padding-left: 16px; }
 .opt { display: flex; align-items: center; gap: 4px; color: #999; font-size: 11px; cursor: pointer; }
+.opt-disabled { opacity: 0.5; cursor: not-allowed; }
+.opt-disabled input { cursor: not-allowed; }
 .opt input { accent-color: #6d9bd1; cursor: pointer; }
 
 .svc-log {
@@ -286,4 +376,15 @@ onUnmounted(() => {
 }
 .svc-config input:focus { border-color: rgba(120, 160, 220, 0.6); }
 .hint { color: #666; font-size: 11px; margin: 4px 0 0; }
+
+.candidate {
+  display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding: 8px 10px;
+  border: 1px solid rgba(120, 160, 220, 0.25); border-radius: 6px;
+  background: rgba(120, 160, 220, 0.06);
+}
+.candidate-title { color: #bbb; font-size: 12px; }
+.candidate-row { color: #999; font-size: 11px; word-break: break-all; }
+.candidate-actions { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.candidate-feedback { color: #9fb0a5; font-size: 11px; }
+.candidate-feedback-error { color: #e08e8e; }
 </style>

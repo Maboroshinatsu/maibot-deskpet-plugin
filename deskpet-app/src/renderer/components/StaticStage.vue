@@ -24,6 +24,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 import { loadImageSet, type ImageSetManifest } from '@/services/imageset/loader'
+import { createProbeGuard } from '@/services/imageset/probe-guard'
 
 defineProps<{ hovered: boolean }>()
 
@@ -39,8 +40,8 @@ const slotA = ref('')
 const slotB = ref('')
 const showA = ref(true)
 let activeSlot: 'A' | 'B' = 'A'
-/** 换图探针的当前目标：onload 时若不是最新就丢弃，避免慢图顶掉新图 */
-let probeToken = 0
+/** 换图探针守卫：任何目标变化都作废在途探针，避免慢图顶掉新图（DP-013） */
+const probeGuard = createProbeGuard()
 
 /** 换表情时的 VN 风小跳：压扁蓄力 → 弹起 → 落回（squash & stretch） */
 const figureRef = ref<HTMLElement>()
@@ -71,14 +72,16 @@ const targetSrc = computed(() => {
 
 function crossfadeTo(src: string): void {
   if (!src) return
+  // 任何目标变化都先作废在途探针：否则 A → 慢 B → A 时，
+  // B 的 onload 仍会通过校验并切到 B（DP-013）
+  const myToken = probeGuard.next()
   const current = activeSlot === 'A' ? slotA.value : slotB.value
   if (current === src) return
-  const myToken = ++probeToken
   const next = activeSlot === 'A' ? 'B' : 'A'
   const probe = new Image()
   probe.onload = () => {
     // 目标又变了，这张慢图已经过时，丢弃避免顶掉新图
-    if (myToken !== probeToken) return
+    if (!probeGuard.isCurrent(myToken)) return
     if (next === 'B') {
       slotB.value = src
       showA.value = false
@@ -149,6 +152,9 @@ watch(
 )
 
 onUnmounted(() => {
+  // 卸载后所有在途请求/探针一律作废，回调不得再写状态
+  mountSeq++
+  probeGuard.invalidate()
   clearIdleTimers()
   if (revertTimer) { clearTimeout(revertTimer); revertTimer = null }
 })
@@ -156,7 +162,7 @@ onUnmounted(() => {
 async function mount(url: string): Promise<void> {
   const mySeq = ++mountSeq
   error.value = ''
-  manifest.value = null
+  // 不在这里清空 manifest：加载失败时保留当前立绘，避免角色凭空消失
   try {
     const m = await loadImageSet(url)
     // 挂载期间又切了别的包，这份清单已过时，丢弃（避免旧包覆盖新包）
@@ -175,7 +181,7 @@ async function mount(url: string): Promise<void> {
     slotB.value = ''
     showA.value = true
     activeSlot = 'A'
-    probeToken++ // 丢弃任何在途的换图探针
+    probeGuard.invalidate() // 丢弃任何在途的换图探针
     console.info(
       `[StaticStage] 立绘包已加载：${m.name || url}` +
         `（${Object.keys(m.images).length} 张，default=${m.default}）`,

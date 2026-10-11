@@ -40,7 +40,9 @@ function resolveDefault(rawDefault: unknown, images: Record<string, string>): st
 }
 
 export async function loadImageSet(manifestUrl: string): Promise<ImageSetManifest> {
-  const resp = await fetch(manifestUrl, { cache: 'no-cache' })
+  // 扫描返回的清单可能是相对路径；URL 的 base 必须先解析成绝对地址。
+  const absoluteManifestUrl = new URL(manifestUrl, window.location.href).href
+  const resp = await fetch(absoluteManifestUrl, { cache: 'no-cache' })
   if (!resp.ok) throw new Error(`清单加载失败 HTTP ${resp.status}`)
 
   // dev server 对不存在路径会回 index.html，直接 json() 会抛看不懂的错
@@ -55,10 +57,11 @@ export async function loadImageSet(manifestUrl: string): Promise<ImageSetManifes
     throw new Error('deskpet-images.json 缺少 images 字段')
   }
 
+  const resourceBase = resp.url || absoluteManifestUrl
   const images: Record<string, string> = {}
   for (const [emotion, file] of Object.entries(src)) {
     if (typeof emotion === 'string' && emotion && typeof file === 'string' && file) {
-      images[emotion] = new URL(file, manifestUrl).toString()
+      images[emotion] = new URL(file, resourceBase).toString()
     }
   }
   const keys = Object.keys(images)
@@ -91,7 +94,7 @@ export async function loadImageSet(manifestUrl: string): Promise<ImageSetManifes
     images,
     talk:
       typeof raw.talk === 'string' && raw.talk
-        ? new URL(raw.talk, manifestUrl).toString()
+        ? new URL(raw.talk, resourceBase).toString()
         : undefined,
     idleEmotions,
     idleInterval,

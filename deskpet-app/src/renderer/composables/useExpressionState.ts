@@ -47,7 +47,11 @@ export function useExpressionState(store: ReturnType<typeof useDeskpetStore>) {
       clearRevertTimer()
       applyEmotionState(emotion)
 
-      // 回退目标：静态立绘包标定的 default；Live2D 的 neutral/idle 视为常态不回退
+      // 回退归属：本控制器只负责 Live2D 模型。立绘包的回退由 StaticStage 负责，
+      // 否则同一情绪会有两个定时器重复回退（DP-014）
+      if (!store.live2dModel) return
+
+      // 回退目标：Live2D 的 neutral/idle 视为常态不回退
       if (emotion !== store.defaultEmotion && emotion !== 'neutral' && emotion !== 'idle') {
         revertTimer = setTimeout(() => {
           revertTimer = null

@@ -24,6 +24,12 @@ deskpet-app/piper/
 *.wav
 *.mp3
 plan.md
+docs/HANDOFF-*.md
+docs/IMPLEMENTATION-*.md
+docs/ISSUES-*.md
+docs/PLUGIN-UPGRADE-PLAN.md
+docs/RUNTIME-VALIDATION.md
+docs/UPGRADE-ROADMAP.md
 .vscode/
 *.tsbuildinfo
 deskpet-app/release/

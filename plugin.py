@@ -191,13 +191,12 @@ class DeskpetWSServer:
         self._clients.add(ws)
         addr = ws.remote_address
         self.logger.info(f"[Deskpet] Client connected: {addr}")
-        # 上报插件所在 Python 解释器：桌宠的 STT/TTS 桥复用 MaiBot 的 Python 环境
-        # （依赖已按 manifest 装进同一环境），用户无需单独安装 Python
+        # 登记进 _clients 之后的所有路径（含 sys:env 发送）都走同一个 try/finally，
+        # 任何断开/发送异常都必须把客户端移除，否则半开连接会永久留在集合里
         try:
+            # 上报插件所在 Python 解释器：桌宠的 STT/TTS 桥复用 MaiBot 的 Python 环境
+            # （依赖已按 manifest 装进同一环境），用户无需单独安装 Python
             await ws.send(DeskpetMessage(type="sys:env", data={"python": sys.executable}).to_json())
-        except websockets.ConnectionClosed:
-            return
-        try:
             async for raw in ws:
                 try:
                     msg = DeskpetMessage.from_json(raw)
@@ -206,6 +205,9 @@ class DeskpetWSServer:
                     self.logger.warning(f"[Deskpet] Bad message: {e}")
         except websockets.ConnectionClosed:
             pass
+        except Exception as e:
+            # 非 ConnectionClosed 的发送/接收异常（半开连接等）同样要收尾
+            self.logger.warning(f"[Deskpet] Client loop error from {addr}: {e}")
         finally:
             self._clients.discard(ws)
             self.logger.info(f"[Deskpet] Client disconnected: {addr}")
@@ -221,6 +223,10 @@ class DeskpetPlugin(MaiBotPlugin):
     GATEWAY_NAME = "deskpet_gateway"
     DESKPET_USER_ID = "deskpet-user"
 
+    # 卸载是有界操作：网关/后台任务不响应时不能永久卡住收尾，否则 WS 服务器永不停止。
+    # 测试可通过覆盖该属性缩短等待。
+    UNLOAD_TIMEOUT_SECONDS = 5.0
+
     async def on_load(self) -> None:
         self._last_tool_emotion_at = 0.0
         self._ws_server: Optional[DeskpetWSServer] = None
@@ -228,6 +234,8 @@ class DeskpetPlugin(MaiBotPlugin):
         self._model_emotions: Set[str] = set()
         # 事件循环只持任务的弱引用，fire-and-forget 的 TTS 任务必须自己留强引用
         self._bg_tasks: Set[asyncio.Task] = set()
+        # 卸载开始后置位：拒绝新的出站/TTS 任务，并让分块发送提前收手
+        self._closing = False
         if not self.config.plugin.enabled:
             return
 
@@ -255,13 +263,68 @@ class DeskpetPlugin(MaiBotPlugin):
         self.ctx.logger.info("[Deskpet] Gateway ready, platform=deskpet")
 
     async def on_unload(self) -> None:
-        await self.ctx.gateway.update_state(
-            gateway_name=self.GATEWAY_NAME,
-            ready=False,
+        # 最先立 closing 标记：卸载开始后不再接受新的出站/TTS 任务
+        self._closing = True
+        try:
+            # 先取消并等待后台任务，再通知网关下线：这样即使 gateway 挂起/被取消，
+            # 也不会还有后台 TTS 请求在卸载过程中继续跑
+            try:
+                # 取消并等待后台任务（内部有界，见 _cancel_bg_tasks）
+                await self._cancel_bg_tasks()
+            finally:
+                await self._notify_gateway_unready()
+        finally:
+            # 无论上面哪一步报错（含 CancelledError），都必须停服务器并清空引用
+            server, self._ws_server = self._ws_server, None
+            if server:
+                try:
+                    await server.stop()
+                except Exception as e:
+                    self.ctx.logger.warning(f"[Deskpet] WS server stop failed: {e}")
+
+    async def _cancel_bg_tasks(self) -> None:
+        """取消后台任务并在有界时间内等待，确保卸载不无限挂起。
+
+        用 asyncio.wait 而不是 wait_for/gather：任务若吞掉 CancelledError，
+        wait_for 仍会一直等它结束，而 wait 到点即返回，收尾不会被拖住。
+        """
+        tasks = [t for t in self._bg_tasks if not t.done()]
+        self._bg_tasks.clear()
+        for task in tasks:
+            task.cancel()
+        if not tasks:
+            return
+        done, pending = await asyncio.wait(tasks, timeout=self.UNLOAD_TIMEOUT_SECONDS)
+        if pending:
+            self.ctx.logger.warning(
+                f"[Deskpet] 后台任务取消超时，放弃等待 {len(pending)} 个任务"
+            )
+        # 回收已完成任务的异常，避免 "Task exception was never retrieved"
+        for task in done:
+            self._reap_bg_task(task)
+
+    async def _notify_gateway_unready(self) -> None:
+        """有界地通知网关下线；超时/异常都只记录，不阻断收尾。"""
+        notify = asyncio.ensure_future(
+            self.ctx.gateway.update_state(gateway_name=self.GATEWAY_NAME, ready=False)
         )
-        if self._ws_server:
-            await self._ws_server.stop()
-            self._ws_server = None
+        done, pending = await asyncio.wait({notify}, timeout=self.UNLOAD_TIMEOUT_SECONDS)
+        if pending:
+            notify.cancel()
+            self.ctx.logger.warning("[Deskpet] Gateway unready notify timed out")
+            return
+        exc = notify.exception()
+        if exc is not None:
+            self.ctx.logger.warning(f"[Deskpet] Gateway unready notify failed: {exc}")
+
+    def _reap_bg_task(self, task: asyncio.Task) -> None:
+        """后台任务完成回调：移出集合并读取异常，避免 never retrieved 告警。"""
+        self._bg_tasks.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            self.ctx.logger.warning(f"[Deskpet] Background task failed: {exc}")
 
     async def on_config_update(self, scope: str, config_data: dict, version: str) -> None:
         self.ctx.logger.info(f"[Deskpet] Config updated: scope={scope}, version={version}")
@@ -299,7 +362,12 @@ class DeskpetPlugin(MaiBotPlugin):
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """出站：将 MaiBot 生成的回复发送到桌宠前端。"""
-        if not self._ws_server or not self._ws_server.has_clients:
+        # 卸载开始后拒绝新的出站请求；_ws_server 可能在分块发送中途被清空，
+        # 因此先取本地引用，后续只用它，不再二次读 self._ws_server
+        server = self._ws_server
+        if self._closing:
+            return {"success": False, "error": "Plugin unloading"}
+        if not server or not server.has_clients:
             return {"success": False, "error": "No deskpet client connected"}
 
         response_text = self._extract_text_from_message(message)
@@ -316,34 +384,43 @@ class DeskpetPlugin(MaiBotPlugin):
             emotion = self._infer_emotion_from_text(response_text)
             if emotion not in ("neutral", "idle"):
                 self.ctx.logger.debug(f"[Deskpet] Auto inferred emotion: {emotion}")
-                await self._ws_server.broadcast("state:emotion", {"emotion": emotion}, req_id)
+                await server.broadcast("state:emotion", {"emotion": emotion}, req_id)
 
         # 配置成 0/负数会让 range 步长非法，钳到至少 1
         buf = max(1, self.config.chat.stream_buffer_size)
         for i in range(0, len(response_text), buf):
+            if self._closing:
+                # 分块发送中途开始卸载：立即停止，不再向已关闭的服务器推送
+                return {"success": False, "error": "Plugin unloading"}
             chunk = response_text[i:i + buf]
-            await self._ws_server.broadcast("output:text:delta", {"delta": chunk, "request_id": req_id})
+            await server.broadcast("output:text:delta", {"delta": chunk, "request_id": req_id})
             await asyncio.sleep(0.03)
 
-        await self._ws_server.broadcast("output:text:done", {"request_id": req_id})
+        if self._closing:
+            return {"success": False, "error": "Plugin unloading"}
+        await server.broadcast("output:text:done", {"request_id": req_id})
 
-        # 异步取 TTS 音频
-        if self.config.tts.enabled:
+        # 异步取 TTS 音频；卸载开始后不再新建任务
+        if self.config.tts.enabled and not self._closing:
             task = asyncio.create_task(self._send_tts_audio(response_text, req_id))
             self._bg_tasks.add(task)
-            task.add_done_callback(self._bg_tasks.discard)
+            task.add_done_callback(self._reap_bg_task)
 
         return {"success": True}
 
     async def _send_tts_audio(self, text: str, req_id: str) -> None:
         """后台获取 TTS 音频并推送到前端。"""
+        # 已排队/直接调用的任务在卸载开始后不得再发起 TTS 请求
+        if self._closing:
+            return
         b64 = await self._fetch_tts_audio(text)
         if not b64:
             return
-        # 取 TTS 期间插件可能已被卸载，这里要重新确认服务器还在
-        if not self._ws_server:
+        # 取 TTS 期间插件可能已被卸载，这里要重新确认服务器还在且未开始卸载
+        server = self._ws_server
+        if not server or self._closing:
             return
-        await self._ws_server.broadcast("output:audio", {
+        await server.broadcast("output:audio", {
             "base64": b64,
             "request_id": req_id,
         })

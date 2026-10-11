@@ -83,14 +83,18 @@ import { useMotionPriority, MotionLayer } from '@/composables/useMotionPriority'
 import { useIdleScheduler, pickIdleGroups } from '@/composables/useIdleScheduler'
 import { useLipSync } from '@/composables/useLipSync'
 import { useVoiceInput } from '@/composables/useVoiceInput'
+import { createPttController } from '@/composables/usePttInput'
 import {
-  createPixiApp, loadLive2DModel, unloadLive2DModel, getMotionGroups, describeModel,
-  resizeModel, resizeModelFit, modelRefW, modelRefH, RESOLUTION,
+  createPixiApp, createLive2DModel, attachLive2DModel, discardLive2DModel, unloadLive2DModel,
+  getMotionGroups, describeModel, resizeModel, resizeModelFit, getModelMetrics, RESOLUTION,
+  type DeskpetModel,
 } from '@/services/live2d/loader'
+import { loadImageSet } from '@/services/imageset/loader'
 import { discoverModel, clearModelCache, setStoredModelPath, kindOfModelUrl } from '@/services/live2d/model-discovery'
 import {
   getAnimationTarget, getEmotionTarget, loadEmotionAdapter,
   DEFAULT_LIP_SYNC, DESKPET_EMOTIONS, isDeskpetEmotionValue,
+  type ModelEmotionAdapter,
 } from '@/services/live2d/emotion-adapter'
 import { validateAdapter, reportAdapterValidation } from '@/services/live2d/adapter-validator'
 
@@ -135,21 +139,28 @@ let unsubscribePtt: (() => void) | null = null
 
 /** 当前模型实际拥有的待机 motion 组，模型切换后重新计算 */
 let idleGroups: string[] = []
-/** 挂载代数：初始挂载还没完成时用户就切换模型会并发两个 mountModel，只让最后一次生效 */
+/**
+ * 统一的挂载代数：Live2D 与立绘、切换与卸载共用同一个计数器。
+ * 之前只有 mountModel 自增，切到立绘或组件卸载时在途加载不会被作废，
+ * 旧模型晚到会覆盖当前模式（DP-011）。
+ */
 let mountSeq = 0
 
-async function mountModel(url: string): Promise<void> {
-  const app = store.pixiApp
-  if (!app) throw new Error('PixiJS application not ready')
-  const seq = ++mountSeq
+/** 作废所有在途加载：切换、卸载、模式互切都必须先调用 */
+function invalidatePendingLoads(): number {
+  return ++mountSeq
+}
 
-  const model = await loadLive2DModel(url, app)
-  const adapter = await loadEmotionAdapter(url)
-  if (seq !== mountSeq) {
-    // 加载期间又发起了新的挂载：这只模型已过时，卸掉避免双模型同台 + 纹理泄漏
-    unloadLive2DModel(model, app)
-    return
-  }
+/** 只卸载当前 Live2D 模型，不动 store 里的其它字段 */
+function disposeCurrentLive2DModel(): void {
+  const previous = store.live2dModel
+  if (previous && store.pixiApp) unloadLive2DModel(previous, store.pixiApp)
+  store.live2dModel = null
+}
+
+/** 提交阶段：模型已经准备好且代数有效，才写入 store、校验适配并启动动画 */
+function commitLive2DModel(url: string, model: DeskpetModel, adapter: ModelEmotionAdapter): void {
+  attachLive2DModel(model, store.pixiApp!)
   store.emotionAdapter = adapter
   // adapter 声明的情绪键（含自定义）登记到 store，随连接上报给插件
   store.modelEmotions = Object.keys(adapter.emotions)
@@ -183,6 +194,19 @@ async function mountModel(url: string): Promise<void> {
   idleScheduler.start()
 }
 
+/** 初次挂载：只用于组件启动，与热切换共用同一套代数与提交逻辑 */
+async function mountModel(url: string): Promise<void> {
+  const seq = invalidatePendingLoads()
+  const model = await createLive2DModel(url)
+  const adapter = await loadEmotionAdapter(url)
+  if (seq !== mountSeq) {
+    // 加载期间又发起了新的挂载/切换：丢弃这只模型，避免双模型同台 + 纹理泄漏
+    discardLive2DModel(model)
+    return
+  }
+  commitLive2DModel(url, model, adapter)
+}
+
 /** Pixi 应用只在 Live2D 路径需要；立绘模式下首次切回 Live2D 时按需创建 */
 async function ensurePixiApp(): Promise<boolean> {
   if (store.pixiApp) return true
@@ -203,29 +227,40 @@ async function ensurePixiApp(): Promise<boolean> {
   }
 }
 
-/** 设置面板里换模型：卸掉旧模型再装新的，不用重启；Live2D 与立绘包可互切 */
+/**
+ * 设置面板里换模型：先准备新模型，成功后才卸旧模型。
+ * 新模型加载失败时保留当前角色（DP-010），不再出现"旧的已卸、新的没装上"。
+ */
 async function switchModel(url: string): Promise<void> {
   if (url === store.modelUrl) return
   const kind = kindOfModelUrl(url)
-
-  idleScheduler.stop()
-  stopAnim()
-  resetMotionPriority()
-
-  const previous = store.live2dModel
+  const seq = invalidatePendingLoads()
   const previousUrl = store.modelUrl
-  store.live2dModel = null
-  store.modelLoaded = false
-  store.emotionAdapter = null
-  store.modelCapabilities = null
-  store.modelEmotions = []
-  store.defaultEmotion = 'neutral'
-  if (previous && store.pixiApp) unloadLive2DModel(previous, store.pixiApp)
 
-  clearModelCache()
-
-  // 静态立绘包：StaticStage 监听 modelUrl 自行接管加载，modelLoaded 由它在加载成功后置位
   if (kind === 'image-set') {
+    // 先验证清单：失败就保留当前角色，不进入半吊子状态
+    try {
+      await loadImageSet(url)
+    } catch (err) {
+      if (seq === mountSeq) {
+        console.error('[Deskpet] Failed to switch to image-set:', err)
+        modelError.value = `立绘包加载失败: ${err}`
+      }
+      return
+    }
+    if (seq !== mountSeq) return
+
+    idleScheduler.stop()
+    stopAnim()
+    resetMotionPriority()
+    disposeCurrentLive2DModel()
+    store.emotionAdapter = null
+    store.modelCapabilities = null
+    store.modelEmotions = []
+    store.defaultEmotion = 'neutral'
+    store.modelLoaded = false
+    clearModelCache()
+    // StaticStage 监听 modelUrl 接管立绘包真正的加载与提交
     store.modelUrl = url
     setStoredModelPath(url)
     modelError.value = ''
@@ -234,16 +269,35 @@ async function switchModel(url: string): Promise<void> {
   }
 
   if (!(await ensurePixiApp())) return
+  if (seq !== mountSeq) return
+
+  let model: DeskpetModel
+  let adapter: ModelEmotionAdapter
   try {
-    await mountModel(url)
-    setStoredModelPath(url)
-    modelError.value = ''
-    console.log(`[Deskpet] Switched model: ${previousUrl || '(none)'} → ${url}`)
+    model = await createLive2DModel(url)
+    adapter = await loadEmotionAdapter(url)
   } catch (err) {
-    console.error('[Deskpet] Failed to switch model:', err)
-    modelError.value = `模型加载失败: ${err}`
-    store.modelUrl = ''
+    if (seq === mountSeq) {
+      console.error('[Deskpet] Failed to switch model:', err)
+      modelError.value = `模型加载失败: ${err}`
+    }
+    return
   }
+  if (seq !== mountSeq) {
+    discardLive2DModel(model)
+    return
+  }
+
+  // 提交阶段：此刻才停旧动画、卸旧模型
+  idleScheduler.stop()
+  stopAnim()
+  resetMotionPriority()
+  disposeCurrentLive2DModel()
+  clearModelCache()
+  commitLive2DModel(url, model, adapter)
+  setStoredModelPath(url)
+  modelError.value = ''
+  console.log(`[Deskpet] Switched model: ${previousUrl || '(none)'} → ${url}`)
 }
 
 store.registerModelSwitcher(switchModel)
@@ -360,7 +414,8 @@ onMounted(async () => {
   }) ?? null
   unsubscribePtt = window.electronAPI?.onPttEvent?.((state) => {
     if (state === 'down') void onPttDown()
-    else void onPttUp()
+    else if (state === 'up') void onPttUp()
+    else onPttCancel()
   }) ?? null
 
   startAnimationPoll()
@@ -402,7 +457,7 @@ const { playMotionWithPriority, reset: resetMotionPriority } = useMotionPriority
 const idleScheduler = useIdleScheduler(playMotionWithPriority, () => idleGroups)
 const { getMouthOpen } = useLipSync()
 const {
-  start: startRecord, stop: stopRecord,
+  start: startRecord, stop: stopRecord, createRecordingChannel,
   recordingActive, vadActive,
   enableVad, disableVad, cleanup: cleanupVoice,
 } = useVoiceInput()
@@ -458,68 +513,33 @@ function getPttMode(): 'ptt' | 'toggle' {
   }
 }
 
-let pttHeld = false
-
-/** 统一处理 stopRecord 可能抛异常：录音中途设备拔出等情况不能产生 unhandled rejection */
-async function stopRecordSafe(): Promise<string | null> {
-  try {
-    return await stopRecord()
-  } catch (err) {
-    console.warn('[Deskpet] Failed to stop recording:', err)
-    return null
-  }
-}
-
-async function onPttDown() {
-  // 与 VAD 互斥：VAD 开着时热键不抢它的录音通道（和右键手动录音同一规则）
-  if (vadActive.value) {
-    console.debug('[Deskpet] PTT ignored while VAD is active')
-    return
-  }
-  if (getPttMode() === 'toggle') {
-    if (recordingActive.value) {
-      const text = await stopRecordSafe()
-      if (text) sendVoiceText(text)
-    } else {
-      try {
-        await startRecord()
-      } catch (err) {
-        console.warn('[Deskpet] PTT toggle start failed:', err)
-      }
-    }
-    return
-  }
-  if (pttHeld) return // 桥侧已去重，这里双保险
-  pttHeld = true
-  try {
-    await startRecord()
-  } catch (err) {
-    pttHeld = false
-    console.warn('[Deskpet] PTT start failed:', err)
-  }
-}
-
-async function onPttUp() {
-  if (getPttMode() === 'toggle') return
-  if (!pttHeld) return
-  pttHeld = false
-  if (recordingActive.value) {
-    const text = await stopRecordSafe()
-    if (text) sendVoiceText(text)
-  }
-}
+const pttRecording = createRecordingChannel()
+const { onDown: onPttDown, onUp: onPttUp, cancel: onPttCancel } = createPttController({
+  start: pttRecording.start,
+  stop: pttRecording.stop,
+  cancel: pttRecording.cancel,
+  hasCapture: pttRecording.hasCapture,
+  isRecording: () => recordingActive.value,
+  isVadEnabled: () => vadActive.value,
+  getMode: getPttMode,
+  onText: sendVoiceText,
+  onError: (err) => console.warn('[Deskpet] PTT recording failed:', err),
+})
 
 function startAnimationPoll() {
   const tick = () => {
-    // 只在模型就绪时消费：热切换空窗期把指令吃掉会静默丢失动作
-    if (store.live2dModel && store.pendingAnimation) {
+    // 只在角色就绪时消费：热切换空窗期把指令吃掉会静默丢失动作
+    if (store.modelLoaded && store.pendingAnimation) {
       const pending = store.consumePendingAnimation()!
-      const target = getAnimationTarget(store.emotionAdapter, pending.name)
+      const target = store.live2dModel ? getAnimationTarget(store.emotionAdapter, pending.name) : null
       if (target?.motion) {
-        playMotionWithPriority(target.motion.group, MotionLayer.Reply, target.motion.index ?? 0)
+        playMotionWithPriority(
+          target.motion.group, MotionLayer.Reply, target.motion.index ?? 0, { loop: pending.loop },
+        )
         idleScheduler.notifyInteraction()
       } else {
-        console.debug(`[Deskpet] No animation adapter target: ${pending.name}`)
+        // 立绘包没有动作能力，或 adapter 未映射该动作：明确记录，不虚报成功
+        console.debug(`[Deskpet] Animation unsupported or unmapped: ${pending.name}`)
       }
     }
     if (store.live2dModel) {
@@ -545,8 +565,9 @@ function startAnimationPoll() {
         store.live2dModel.position.y += dragOffsets.y
         // clamp: keep at least 20% of model visible
         const m = store.live2dModel
-        const vw = modelRefW * m.scale.x
-        const vh = modelRefH * m.scale.y
+        const { refW, refH } = getModelMetrics(m)
+        const vw = refW * m.scale.x
+        const vh = refH * m.scale.y
         m.position.x = Math.max(-vw * 0.8, Math.min(cw + vw * 0.8, m.position.x))
         m.position.y = Math.max(-vh * 0.8, Math.min(ch + vh * 0.8, m.position.y))
         store.setModelOffset(m.position.x - cw / 2, m.position.y - ch / 2)
@@ -575,6 +596,7 @@ function onMouseMove(e: MouseEvent) {
 
 window.addEventListener('mousemove', onMouseMove)
 onUnmounted(() => {
+  invalidatePendingLoads()
   stopAnim()
   if (animFrameId) cancelAnimationFrame(animFrameId)
   unsubscribeGlobalCursor?.()
@@ -588,6 +610,7 @@ onUnmounted(() => {
   unsubscribePtt?.()
   unsubscribePtt = null
   cleanupExpression()
+  onPttCancel()
   cleanupVoice()
   idleScheduler.stop()
   window.removeEventListener('mousemove', onMouseMove)

@@ -1,9 +1,10 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalShortcut, desktopCapturer, protocol, net, shell } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, globalShortcut, desktopCapturer, protocol, net, shell, dialog } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import http from 'http'
 import { pathToFileURL } from 'url'
 import { ServiceManager, type ServiceId, type ServicesConfig } from './services'
+import { createRuntimeApproval } from './runtime-approval'
 
 app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.commandLine.appendSwitch('in-process-gpu')
@@ -401,7 +402,11 @@ function createWindow(): void {
   hoverFadeEnabled = state.hoverFadeEnabled
   autoScreenshotInterval = state.autoScreenshotInterval
   pendingAutoScreenshot = state.autoScreenshotEnabled
+  // 自动化测试（tests/l0-e2e.cjs 等）设置 DESKPET_HEADLESS=1 时隐藏窗口，
+  // 避免测试期间反复闪现打扰用户；渲染与 DOM 仍然正常。
+  const headlessForTests = process.env.DESKPET_HEADLESS === '1'
   mainWindow = new BrowserWindow({
+    show: !headlessForTests,
     width: bounds.width,
     height: bounds.height,
     x: bounds.x,
@@ -668,8 +673,40 @@ app.whenReady().then(() => {
   ipcMain.handle('service-logs', (_event, id: ServiceId) => serviceManager.logsOf(id))
   ipcMain.handle('services-get-config', () => serviceManager.getConfig())
   ipcMain.handle('services-set-config', (_event, patch: Partial<ServicesConfig>) => serviceManager.setConfig(patch))
-  // 插件通过 WS 上报的 MaiBot Python 解释器路径（桥进程复用同一环境）
-  ipcMain.handle('services-set-detected-python', (_event, pythonPath: string) => serviceManager.setDetectedPython(pythonPath))
+  // 仅主窗口顶层 frame 可提交候选；任何网络消息本身都不能批准本机执行。
+  const isRuntimeSender = (event: Electron.IpcMainInvokeEvent) =>
+    !!mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&
+    event.senderFrame === mainWindow.webContents.mainFrame
+  ipcMain.handle('services-set-detected-python', (event, pythonPath: unknown, sourceUrl: unknown) => {
+    if (isRuntimeSender(event)) serviceManager.setDetectedPython(pythonPath, sourceUrl)
+  })
+  ipcMain.handle('services-clear-detected-python', (event) => {
+    if (isRuntimeSender(event)) serviceManager.clearDetectedPython()
+  })
+  ipcMain.handle('services-runtime-candidate', (event) => isRuntimeSender(event) ? serviceManager.getRuntimeCandidate() : null)
+  const approveRuntime = createRuntimeApproval<Electron.IpcMainInvokeEvent>({
+    isTrustedSender: isRuntimeSender,
+    getCandidate: () => serviceManager.getRuntimeCandidate(),
+    approve: (id) => serviceManager.approveDetectedPython(id),
+    confirm: async (candidate) => {
+      const result = await dialog.showMessageBox(mainWindow!, {
+        type: 'warning', title: '确认本机 Python 解释器',
+        message: '允许本次连接使用这个本机解释器启动桌宠后台服务吗？',
+        detail: `来源：${candidate.sourceUrl}\n路径：${candidate.pythonPath}\n\n仅允许你认识的 MaiBot 本机环境。确认后可能重试已设自启且因缺解释器/依赖而失败的服务；不会启动其他服务。显式配置仍优先。断线后需重新确认。`,
+        buttons: ['取消', '确认使用'], defaultId: 0, cancelId: 0, noLink: true,
+      })
+      return result.response === 1
+    },
+  })
+  ipcMain.handle('services-approve-detected-python', approveRuntime)
+  mainWindow?.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
+    if (isMainFrame) {
+      serviceManager.clearDetectedPython()
+    }
+  })
+  mainWindow?.webContents.on('render-process-gone', () => {
+    serviceManager.clearDetectedPython()
+  })
 
   // 一键启动的核心：应用起来就把配置为自启的后台服务拉起来
   serviceManager.autoStartAll()

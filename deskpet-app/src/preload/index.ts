@@ -54,9 +54,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getServiceLogs: (id: string): Promise<string[]> => ipcRenderer.invoke('service-logs', id),
   getServicesConfig: () => ipcRenderer.invoke('services-get-config'),
   setServicesConfig: (patch: unknown) => ipcRenderer.invoke('services-set-config', patch),
-  setDetectedPython: (pythonPath: string) => ipcRenderer.invoke('services-set-detected-python', pythonPath),
-  onPttEvent: (callback: (state: 'down' | 'up') => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, state: 'down' | 'up') => callback(state)
+  setDetectedPython: (pythonPath: string, sourceUrl: string) => ipcRenderer.invoke('services-set-detected-python', pythonPath, sourceUrl),
+  clearDetectedPython: () => ipcRenderer.invoke('services-clear-detected-python'),
+  getRuntimeCandidate: () => ipcRenderer.invoke('services-runtime-candidate'),
+  approveDetectedPython: (id: string): Promise<boolean> => ipcRenderer.invoke('services-approve-detected-python', id),
+  onPttEvent: (callback: (state: 'down' | 'up' | 'cancel') => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: 'down' | 'up' | 'cancel') => callback(state)
     ipcRenderer.on('ptt-event', listener)
     return () => ipcRenderer.removeListener('ptt-event', listener)
   },

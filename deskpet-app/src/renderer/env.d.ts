@@ -24,7 +24,7 @@ interface ModelEntry {
   kind: 'live2d' | 'image-set'
 }
 
-type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits' | 'hotkey'
+type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits' | 'hotkey' | 'cloud-tts'
 type ServiceStatus = 'stopped' | 'starting' | 'running' | 'error'
 
 interface ServiceState {
@@ -74,8 +74,11 @@ interface ElectronAPI {
   getServiceLogs: (id: ServiceId) => Promise<string[]>
   getServicesConfig: () => Promise<ServicesConfig>
   setServicesConfig: (patch: Partial<ServicesConfig>) => Promise<ServicesConfig>
-  setDetectedPython: (pythonPath: string) => Promise<void>
-  onPttEvent: (callback: (state: 'down' | 'up') => void) => () => void
+  setDetectedPython: (pythonPath: string, sourceUrl: string) => Promise<void>
+  clearDetectedPython: () => Promise<void>
+  getRuntimeCandidate: () => Promise<{ id: string; pythonPath: string; sourceUrl: string } | null>
+  approveDetectedPython: (id: string) => Promise<boolean>
+  onPttEvent: (callback: (state: 'down' | 'up' | 'cancel') => void) => () => void
   onServicesUpdate: (callback: (states: ServiceState[]) => void) => () => void
   onServiceLog: (callback: (payload: { id: ServiceId; lines: string[] }) => void) => () => void
 }

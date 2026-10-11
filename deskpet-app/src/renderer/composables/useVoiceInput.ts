@@ -42,38 +42,41 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
 export function useVoiceInput() {
   const store = useDeskpetStore()
   const vad = useVad()
-
-  /** VAD 与录音共用同一路麦克风流，避免开两路 getUserMedia */
-  let micStream: MediaStream | null = null
-  let micPromise: Promise<MediaStream> | null = null
   const recordingActive = ref(false)
   const vadActive = ref(false)
+  const manualOwner = {}
+  const vadOwner = {}
+  let micStream: MediaStream | null = null
+  let micPromise: Promise<MediaStream> | null = null
   let onTranscribed: ((text: string) => void) | null = null
+  let pendingVadRequests = 0
+  let vadGeneration = 0
+  let disposed = false
 
-  /** 当前录音轮次；每轮自持 recorder/chunks/promise，慢转写不会与下一轮串扰 */
   interface RecordCycle {
-    recorder: MediaRecorder
-    stop: () => Promise<string | null>
-    cancel: () => void
+    owner: object
+    cancelled: boolean
+    recorder: MediaRecorder | null
+    done: Promise<string | null>
+    settle: (text: string | null) => void
   }
+  // currentCycle 包含正在申请/录制/停止的轮次；转写轮次仍留在 cycles 内以便按所有者取消。
   let currentCycle: RecordCycle | null = null
+  const cycles = new Set<RecordCycle>()
 
   async function acquireMic(): Promise<MediaStream> {
     if (micStream && micStream.getTracks().some((t) => t.readyState === 'live')) return micStream
-    // 并发 getUserMedia（左键 VAD + 右键手动同时按）会各开一路，先到的那路永远不被释放
     if (!micPromise) {
       micPromise = navigator.mediaDevices.getUserMedia({ audio: true })
-        .then((stream) => {
-          micStream = stream
-          return stream
-        })
+        .then((stream) => { micStream = stream; return stream })
         .finally(() => { micPromise = null })
     }
     return micPromise
   }
 
   function releaseMicIfIdle() {
-    if (vadActive.value || recordingActive.value) return
+    // 等待授权的 VAD 也是消费者，不能被已取消的 PTT 提前关闭共享流。
+    if (vadActive.value || pendingVadRequests > 0 || currentCycle) return
     micStream?.getTracks().forEach((t) => t.stop())
     micStream = null
   }
@@ -86,118 +89,154 @@ export function useVoiceInput() {
       const wav = encodeWav(audio.getChannelData(0), audio.sampleRate)
       return (await window.electronAPI?.sttTranscribe(wav, getSttUrl())) ?? null
     } finally {
-      ctx.close()
+      void ctx.close()
     }
   }
 
-  async function startRecording(): Promise<void> {
-    if (recordingActive.value) return
-    const stream = await acquireMic()
-    const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
-    const chunks: Blob[] = []
-    let cancelled = false
-    let settle: (text: string | null) => void
+  function detachCapture(cycle: RecordCycle): void {
+    if (currentCycle === cycle) {
+      currentCycle = null
+      recordingActive.value = false
+    }
+    releaseMicIfIdle()
+  }
+
+  async function startRecording(owner: object = manualOwner): Promise<boolean> {
+    if (disposed || currentCycle) return false
+    let settle!: (text: string | null) => void
     const done = new Promise<string | null>((resolve) => { settle = resolve })
-
-    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
-    recorder.onstop = async () => {
-      recordingActive.value = false
-      if (currentCycle?.recorder === recorder) currentCycle = null
-      let text: string | null = null
-      if (!cancelled && chunks.length > 0) {
-        try {
-          text = await transcribe(new Blob(chunks, { type: 'audio/webm' }))
-          if (text && onTranscribed) onTranscribed(text)
-        } catch (err) {
-          console.warn('[Deskpet] Transcription failed:', err)
-        }
-      }
-      settle(text)
-      releaseMicIfIdle()
-    }
-
-    currentCycle = {
-      recorder,
-      stop: () => {
-        if (recorder.state === 'recording') recorder.stop()
-        return done
-      },
-      cancel: () => {
-        cancelled = true
-        if (recorder.state === 'recording') recorder.stop()
-      },
-    }
-    recorder.start()
-    recordingActive.value = true
-  }
-
-  function stopRecording(): Promise<string | null> {
-    if (!currentCycle) {
-      recordingActive.value = false
-      releaseMicIfIdle()
-      return Promise.resolve(null)
-    }
-    return currentCycle.stop()
-  }
-
-  /** 丢弃当前录音（不转写）：TTS 插话时录音里已混入桌宠自己的声音 */
-  function cancelRecording(): void {
-    currentCycle?.cancel()
-  }
-
-  // 手动录音：按一次开始，再按一次结束，转写结果由 stop() 的 Promise 返回
-  async function start(): Promise<void> { await startRecording() }
-  function stop(): Promise<string | null> { return stopRecording() }
-
-  // VAD 自动断句
-  async function enableVad(callback: (text: string) => void) {
-    if (vadActive.value) return
-    onTranscribed = callback
-    vad.setThreshold(getVadThreshold())
-    vad.setSilenceTimeout(getVadSilence())
+    const cycle: RecordCycle = { owner, cancelled: false, recorder: null, done, settle }
+    currentCycle = cycle // await 前先声明该轮次的所有权。
+    cycles.add(cycle)
+    const deliver = owner === vadOwner ? onTranscribed : null
+    const vadToken = vadGeneration
     try {
       const stream = await acquireMic()
-      vadActive.value = true
-      await vad.start({
-        onSpeechStart: () => {
-          if (!recordingActive.value) {
-            startRecording().catch((err) => console.warn('[Deskpet] Failed to start recording:', err))
+      if (cycle.cancelled || disposed) {
+        cycles.delete(cycle)
+        detachCapture(cycle)
+        cycle.settle(null)
+        return false
+      }
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      cycle.recorder = recorder
+      const chunks: Blob[] = []
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
+      recorder.onstop = async () => {
+        detachCapture(cycle)
+        let text: string | null = null
+        try {
+          if (!cycle.cancelled && chunks.length > 0) {
+            text = await transcribe(new Blob(chunks, { type: 'audio/webm' }))
+            if (cycle.cancelled || disposed || (owner === vadOwner && vadToken !== vadGeneration)) text = null
+            if (text && deliver) deliver(text)
           }
-        },
-        onSpeechEnd: () => { void stopRecording() },
-        // 桌宠正在用 TTS 说话时不听，否则会把自己的声音当成用户输入
-        shouldListen: () => !store.isSpeaking,
-        // 抑制只停掉检测，已开录的 MediaRecorder 必须显式取消，否则 TTS 全被录进去
-        onSuppress: () => cancelRecording(),
-      }, stream)
+        } catch (err) {
+          console.warn('[Deskpet] Transcription failed:', err)
+        } finally {
+          cycles.delete(cycle)
+          cycle.settle(text)
+          releaseMicIfIdle()
+        }
+      }
+      recorder.start()
+      recordingActive.value = true
+      return true
     } catch (err) {
-      console.warn('[Deskpet] Failed to start VAD:', err)
-      vadActive.value = false
-      onTranscribed = null
-      releaseMicIfIdle()
+      cycles.delete(cycle)
+      detachCapture(cycle)
+      cycle.settle(null)
       throw err
     }
   }
 
-  function disableVad() {
-    vadActive.value = false
-    onTranscribed = null
-    vad.stop()
-    // 用户主动关 VAD，半截录音没有意义，取消而不是转写
-    cancelRecording()
+  function cancelCycle(cycle: RecordCycle): void {
+    cycle.cancelled = true
+    if (cycle.recorder?.state === 'recording') cycle.recorder.stop()
+  }
+
+  function cancelRecording(owner?: object): void {
+    for (const cycle of cycles) {
+      if (owner === undefined || cycle.owner === owner) cancelCycle(cycle)
+    }
     releaseMicIfIdle()
   }
 
-  /** 组件卸载时释放麦克风/AudioContext/定时器 */
+  function stopRecording(owner?: object): Promise<string | null> {
+    const cycle = currentCycle
+    if (!cycle || (owner !== undefined && cycle.owner !== owner)) return Promise.resolve(null)
+    if (!cycle.recorder) cancelCycle(cycle)
+    else if (cycle.recorder.state === 'recording') cycle.recorder.stop()
+    return cycle.done
+  }
+
+  /** 独立输入通道只能停止/取消自己创建的轮次，不会碰替换它的手动或 VAD 录音。 */
+  function createRecordingChannel() {
+    const owner = {}
+    return {
+      start: () => startRecording(owner),
+      stop: () => stopRecording(owner),
+      cancel: () => cancelRecording(owner),
+      hasCapture: () => currentCycle?.owner === owner && !currentCycle.cancelled,
+    }
+  }
+
+  async function enableVad(callback: (text: string) => void) {
+    if (disposed || vadActive.value || pendingVadRequests > 0) return
+    const generation = ++vadGeneration
+    pendingVadRequests++ // 在共享 getUserMedia await 前登记消费者租约。
+    onTranscribed = callback
+    try {
+      vad.setThreshold(getVadThreshold())
+      vad.setSilenceTimeout(getVadSilence())
+      const stream = await acquireMic()
+      if (disposed || generation !== vadGeneration) return
+      vadActive.value = true
+      await vad.start({
+        onSpeechStart: () => {
+          void startRecording(vadOwner).catch((err) => console.warn('[Deskpet] Failed to start recording:', err))
+        },
+        onSpeechEnd: () => { void stopRecording(vadOwner) },
+        shouldListen: () => !store.isSpeaking,
+        onSuppress: () => cancelRecording(vadOwner),
+      }, stream)
+      if (disposed || generation !== vadGeneration) {
+        vadActive.value = false
+        vad.stop()
+      }
+    } catch (err) {
+      vadActive.value = false
+      onTranscribed = null
+      vad.stop()
+      console.warn('[Deskpet] Failed to start VAD:', err)
+      throw err
+    } finally {
+      pendingVadRequests--
+      releaseMicIfIdle()
+    }
+  }
+
+  function disableVad() {
+    vadGeneration++
+    vadActive.value = false
+    onTranscribed = null
+    vad.stop()
+    cancelRecording(vadOwner)
+    releaseMicIfIdle()
+  }
+
   function cleanup() {
+    disposed = true
     disableVad()
     cancelRecording()
     releaseMicIfIdle()
   }
 
   return {
-    start,
-    stop,
+    start: () => startRecording(),
+    stop: () => stopRecording(),
+    cancel: () => cancelRecording(),
+    createRecordingChannel,
     recordingActive: readonly(recordingActive),
     vadActive: readonly(vadActive),
     enableVad,

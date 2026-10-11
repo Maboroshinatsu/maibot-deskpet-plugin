@@ -4,6 +4,8 @@ import { useChatStore } from '@/stores/chat'
 import { useLipSync } from './useLipSync'
 import { isDeskpetEmotionValue } from '@/services/live2d/emotion-adapter'
 import { DEFAULT_WS_URL, type ServerMessage } from '@/services/protocol'
+import { normalizeServerMessage } from '@/services/host/maibot-protocol'
+import { applyHostEvent, type DeskpetEventDeps } from '@/services/host/event-controller'
 
 /** TTS 停下后再静默一小段，避免尾音被 VAD 当成用户说话 */
 const SPEAKING_TAIL_MS = 400
@@ -146,7 +148,9 @@ export function useWebSocket() {
       return
     }
 
-    ws.value.onopen = () => {
+    const socket = ws.value
+    socket.onopen = () => {
+      if (ws.value !== socket) return
       console.log('[Deskpet] WebSocket connected')
       store.wsConnected = true
       if (token) send('auth', { token })
@@ -163,7 +167,8 @@ export function useWebSocket() {
       startHeartbeat()
     }
 
-    ws.value.onmessage = (event) => {
+    socket.onmessage = (event) => {
+      if (ws.value !== socket) return
       lastActivity = Date.now()
       try {
         handleMessage(JSON.parse(event.data) as ServerMessage)
@@ -172,7 +177,9 @@ export function useWebSocket() {
       }
     }
 
-    ws.value.onclose = () => {
+    socket.onclose = () => {
+      if (ws.value !== socket) return
+      void window.electronAPI?.clearDetectedPython().catch(() => {})
       console.log('[Deskpet] WebSocket disconnected')
       store.wsConnected = false
       store.isThinking = false
@@ -181,73 +188,46 @@ export function useWebSocket() {
       if (!closedByUs) scheduleReconnect()
     }
 
-    ws.value.onerror = () => {
-      ws.value?.close()
+    socket.onerror = () => {
+      if (ws.value === socket) socket.close()
     }
   }
 
+  /**
+   * DP-017：协议归一化与事件应用已移到 services/host/。
+   * 本函数只做“链路 → 归一化 → 控制器”的编排，不再内联宿主协议分支。
+   */
+  const eventDeps: DeskpetEventDeps = {
+    isKnownEmotion: (emotion) =>
+      isDeskpetEmotionValue(emotion) || store.modelEmotions.includes(emotion),
+    setEmotion: (emotion) => {
+      // 同值赋值不会触发 watch，pulse 保证相同情绪连发也能重放并刷新回退窗口
+      store.currentEmotion = emotion
+      store.emotionPulse++
+    },
+    playAnimation: (name, loop) => {
+      store.pendingAnimation = name
+      store.pendingAnimationLoop = loop
+    },
+    appendReplyDelta: (delta, requestId) => { chatStore.appendChatText(delta, requestId) },
+    finishReply: (requestId) => { chatStore.finishChatStream(requestId) },
+    showReplyText: (text) => { chatStore.showChatMessage(text) },
+    playAudio,
+    addEmoji: (base64, description) => { chatStore.addEmojiMessage(base64, description) },
+    setThinking: (active) => { store.isThinking = active },
+    offerRuntimeCandidate: (python) => {
+      // 来源取真实连接配置（闭包 url），不接受帧内伪造的来源
+      void window.electronAPI?.setDetectedPython(python, url).catch(() => {})
+    },
+    log: (message, ...args) => { console.log(message, ...args) },
+    warn: (message, ...args) => { console.warn(message, ...args) },
+    debug: (message, ...args) => { console.debug(message, ...args) },
+  }
+
   function handleMessage(msg: ServerMessage) {
-    const { type, data, request_id } = msg
-
-    switch (type) {
-      case 'output:text:delta':
-        store.isThinking = false
-        chatStore.appendChatText(data.delta, request_id || data.request_id || '')
-        break
-
-      case 'output:text:done':
-        store.isThinking = false
-        chatStore.finishChatStream(request_id || data.request_id || '')
-        if (data.error) console.warn('[Deskpet] Reply failed:', data.error)
-        break
-
-      case 'output:text':
-        store.isThinking = false
-        chatStore.showChatMessage(data.text)
-        break
-
-      case 'state:emotion':
-        // 接受内置词表 + 当前模型声明的自定义情绪
-        if (isDeskpetEmotionValue(data.emotion) || store.modelEmotions.includes(data.emotion)) {
-          // 同值赋值不会触发 watch，pulse 保证相同情绪连发也能重放并刷新回退窗口
-          store.currentEmotion = data.emotion
-          store.emotionPulse++
-        } else {
-          console.debug('[Deskpet] Ignore unknown emotion:', data.emotion)
-        }
-        break
-
-      case 'state:animation':
-        store.pendingAnimation = data.name
-        store.pendingAnimationLoop = !!data.loop
-        break
-
-      case 'output:audio':
-        if (data.base64) playAudio(data.base64)
-        break
-
-      case 'state:thinking':
-        store.isThinking = true
-        break
-
-      case 'output:emoji':
-        store.isThinking = false
-        if (data.base64) chatStore.addEmojiMessage(data.base64, data.description || '')
-        break
-
-      case 'sys:env':
-        // 插件上报 MaiBot 的 Python 解释器路径：桥进程复用同一环境，无需单独装 Python
-        if (typeof data.python === 'string' && data.python) {
-          void window.electronAPI?.setDetectedPython(data.python)
-        }
-        break
-
-      case 'heartbeat':
-        break
-
-      default:
-        console.log('[Deskpet] Unknown message type:', type, data)
-    }
+    const event = normalizeServerMessage(msg)
+    if (!event) return
+    applyHostEvent(event, eventDeps)
   }
 
   function send(type: string, data: Record<string, any> = {}) {
@@ -293,6 +273,7 @@ export function useWebSocket() {
   }
 
   function disconnect() {
+    void window.electronAPI?.clearDetectedPython().catch(() => {})
     closedByUs = true
     clearStableTimer()
     stopHeartbeat()
