@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440" width="100%" height="100%">
+  <defs>
+    <filter id="cardShadowDark" x="-4%" y="-6%" width="108%" height="116%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <style>
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+      .mono { font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace; }
+    </style>
+  </defs>
+
+  <!-- Card 1 (Top Left): Companion Stage -->
+  <g transform="translate(12, 12)" filter="url(#cardShadowDark)">
+    <rect width="576" height="198" rx="16" fill="#1A1614" stroke="#2E2621" stroke-width="1.2"/>
+    <text x="28" y="38" class="mono" font-size="11" font-weight="700" fill="#E08B52" letter-spacing="1.2">01 / COMPANION STAGE</text>
+    <text x="28" y="66" class="sans" font-size="18" font-weight="800" fill="#F5EFEA">零遮挡伴随式设置舞台</text>
+    <text x="28" y="94" class="sans" font-size="13" fill="#A6998E">打开设置时桌宠自动平滑缩入左下角舞台卡片，调参、换装、捏表情</text>
+    <text x="28" y="114" class="sans" font-size="13" fill="#A6998E">与动作编排全程实时可见，告别弹窗遮挡模型的割裂体验。</text>
+    <g transform="translate(28, 136)">
+      <rect width="98" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="49" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">8色主题切换</text>
+      <rect x="108" width="110" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="163" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">Alpha像素穿透</text>
+      <rect x="228" width="96" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="276" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">贴边自动躲避</text>
+    </g>
+    <!-- Mini Visual Diagram -->
+    <g transform="translate(384, 28)">
+      <rect width="164" height="142" rx="12" fill="#13100E" stroke="#2B241F" stroke-width="1"/>
+      <!-- Mini Stage Left -->
+      <rect x="10" y="54" width="56" height="78" rx="8" fill="#1F1916" stroke="#C87137" stroke-width="1.5"/>
+      <circle cx="38" cy="84" r="14" fill="#2B211B" stroke="#E08B52" stroke-width="1.2"/>
+      <path d="M 26 116 C 28 102, 48 102, 50 116" fill="#C87137" opacity="0.4"/>
+      <text x="38" y="126" text-anchor="middle" class="mono" font-size="8" font-weight="700" fill="#E08B52">STAGE</text>
+      <!-- Mini Panel Right -->
+      <rect x="74" y="12" width="80" height="120" rx="8" fill="#1F1916" stroke="#332B25" stroke-width="1"/>
+      <rect x="82" y="22" width="38" height="6" rx="3" fill="#C87137"/>
+      <rect x="82" y="36" width="64" height="12" rx="4" fill="#28211D"/>
+      <rect x="82" y="54" width="64" height="12" rx="4" fill="#28211D"/>
+      <rect x="82" y="72" width="64" height="24" rx="4" fill="#171311" stroke="#332B25" stroke-width="0.8"/>
+      <circle cx="136" cy="116" r="8" fill="#C87137"/>
+    </g>
+  </g>
+
+  <!-- Card 2 (Top Right): Preset Workshop & Emotion Groups -->
+  <g transform="translate(612, 12)" filter="url(#cardShadowDark)">
+    <rect width="576" height="198" rx="16" fill="#1A1614" stroke="#2E2621" stroke-width="1.2"/>
+    <text x="28" y="38" class="mono" font-size="11" font-weight="700" fill="#E08B52" letter-spacing="1.2">02 / PRESET WORKSHOP &amp; EMOTION POOL</text>
+    <text x="28" y="66" class="sans" font-size="18" font-weight="800" fill="#F5EFEA">预设工坊与多变体情绪池</text>
+    <text x="28" y="94" class="sans" font-size="13" fill="#A6998E">支持表情叠加、串行动作序列、物理部件开关与循环兜底动作；同一</text>
+    <text x="28" y="114" class="sans" font-size="13" fill="#A6998E">情绪可绑定多个变体并配置权重随机抽签，彻底消除固定单动作机械感。</text>
+    <g transform="translate(28, 136)">
+      <rect width="108" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="54" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">加权随机变体池</text>
+      <rect x="118" width="104" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="170" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">动作串行队列</text>
+      <rect x="232" width="104" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="284" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">跨状态干净清场</text>
+    </g>
+    <!-- Mini Visual Diagram -->
+    <g transform="translate(384, 28)">
+      <rect width="164" height="142" rx="12" fill="#13100E" stroke="#2B241F" stroke-width="1"/>
+      <rect x="12" y="14" width="140" height="32" rx="7" fill="#1F1916" stroke="#C87137" stroke-width="1.2"/>
+      <text x="22" y="34" class="sans" font-size="11" font-weight="700" fill="#F5EFEA">开心 · 3 变体</text>
+      <rect x="108" y="21" width="36" height="18" rx="5" fill="#2C2018"/>
+      <text x="126" y="33" text-anchor="middle" class="mono" font-size="9" font-weight="700" fill="#E08B52">W:3</text>
+      <!-- Sequence Flow -->
+      <rect x="12" y="56" width="64" height="30" rx="6" fill="#1F1916" stroke="#332B25" stroke-width="1"/>
+      <text x="44" y="75" text-anchor="middle" class="mono" font-size="9" font-weight="600" fill="#D5C8BD">TapBody:0</text>
+      <path d="M 78 71 L 86 71" stroke="#E08B52" stroke-width="1.5"/>
+      <rect x="88" y="56" width="64" height="30" rx="6" fill="#1F1916" stroke="#332B25" stroke-width="1"/>
+      <text x="120" y="75" text-anchor="middle" class="mono" font-size="9" font-weight="600" fill="#D5C8BD">Idle:Loop</text>
+      <!-- Reset Pill -->
+      <rect x="12" y="98" width="140" height="30" rx="6" fill="#14291D" stroke="#234D34" stroke-width="1"/>
+      <text x="82" y="117" text-anchor="middle" class="mono" font-size="9.5" font-weight="700" fill="#4ADE80">✓ Reset Default Snapshot</text>
+    </g>
+  </g>
+
+  <!-- Card 3 (Bottom Left): Inverse Gaze & LipSync -->
+  <g transform="translate(12, 228)" filter="url(#cardShadowDark)">
+    <rect width="576" height="198" rx="16" fill="#1A1614" stroke="#2E2621" stroke-width="1.2"/>
+    <text x="28" y="38" class="mono" font-size="11" font-weight="700" fill="#E08B52" letter-spacing="1.2">03 / INVERSE GAZE &amp; BLOCK LIPSYNC</text>
+    <text x="28" y="66" class="sans" font-size="18" font-weight="800" fill="#F5EFEA">逆变换视线追踪与块级口型同步</text>
+    <text x="28" y="94" class="sans" font-size="13" fill="#A6998E">支持任意角度旋转、水平镜像与缩放的二维刚体逆变换视线解算；</text>
+    <text x="28" y="114" class="sans" font-size="13" fill="#A6998E">MaiBot 回复自动按句/段切块并行合成 TTS，WebAudio RMS 实时驱动口型。</text>
+    <g transform="translate(28, 136)">
+      <rect width="108" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="54" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">360°旋转视线校准</text>
+      <rect x="118" width="104" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="170" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">WebAudio包络</text>
+      <rect x="232" width="104" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="284" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">按句流式播报</text>
+    </g>
+    <!-- Mini Visual Diagram -->
+    <g transform="translate(384, 28)">
+      <rect width="164" height="142" rx="12" fill="#13100E" stroke="#2B241F" stroke-width="1"/>
+      <!-- Coordinate Axis -->
+      <line x1="24" y1="48" x2="140" y2="48" stroke="#332B25" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="82" y1="14" x2="82" y2="82" stroke="#332B25" stroke-width="1" stroke-dasharray="3 3"/>
+      <circle cx="82" cy="48" r="22" fill="#1F1916" stroke="#C87137" stroke-width="1.5"/>
+      <line x1="82" y1="48" x2="122" y2="26" stroke="#E08B52" stroke-width="1.8"/>
+      <circle cx="122" cy="26" r="4" fill="#E08B52"/>
+      <!-- Audio Waveform Bars -->
+      <g transform="translate(22, 96)">
+        <rect x="0" y="14" width="6" height="12" rx="3" fill="#5E4534"/>
+        <rect x="12" y="6" width="6" height="28" rx="3" fill="#E08B52"/>
+        <rect x="24" y="0" width="6" height="36" rx="3" fill="#E08B52"/>
+        <rect x="36" y="8" width="6" height="24" rx="3" fill="#E08B52"/>
+        <rect x="48" y="14" width="6" height="12" rx="3" fill="#5E4534"/>
+        <rect x="60" y="4" width="6" height="30" rx="3" fill="#E08B52"/>
+        <rect x="72" y="2" width="6" height="34" rx="3" fill="#E08B52"/>
+        <rect x="84" y="10" width="6" height="20" rx="3" fill="#E08B52"/>
+        <rect x="96" y="16" width="6" height="10" rx="3" fill="#5E4534"/>
+        <rect x="108" y="8" width="6" height="24" rx="3" fill="#E08B52"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- Card 4 (Bottom Right): Lightweight Hybrid Speech Pipeline -->
+  <g transform="translate(612, 228)" filter="url(#cardShadowDark)">
+    <rect width="576" height="198" rx="16" fill="#1A1614" stroke="#2E2621" stroke-width="1.2"/>
+    <text x="28" y="38" class="mono" font-size="11" font-weight="700" fill="#E08B52" letter-spacing="1.2">04 / HYBRID VOICE PIPELINE</text>
+    <text x="28" y="66" class="sans" font-size="18" font-weight="800" fill="#F5EFEA">112 MB 轻量分发与全栈双模语音</text>
+    <text x="28" y="94" class="sans" font-size="13" fill="#A6998E">安装包体积缩减 87%：默认云端免费 SenseVoice 秒级极速转写，离线模</text>
+    <text x="28" y="114" class="sans" font-size="13" fill="#A6998E">式按需自动拉取 INT8 量化模型；内置 6 大云端与本地 TTS 语音引擎。</text>
+    <g transform="translate(28, 136)">
+      <rect width="108" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="54" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">4大云端+离线STT</text>
+      <rect x="118" width="108" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="172" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">6大TTS后端引擎</text>
+      <rect x="236" width="100" height="24" rx="6" fill="#261F1B" stroke="#382D26" stroke-width="1"/>
+      <text x="286" y="16" text-anchor="middle" class="mono" font-size="11" font-weight="600" fill="#E08B52">服务按需显示</text>
+    </g>
+    <!-- Mini Visual Diagram -->
+    <g transform="translate(384, 28)">
+      <rect width="164" height="142" rx="12" fill="#13100E" stroke="#2B241F" stroke-width="1"/>
+      <rect x="12" y="14" width="140" height="36" rx="7" fill="#1F1916" stroke="#332B25" stroke-width="1"/>
+      <text x="22" y="30" class="mono" font-size="9" font-weight="700" fill="#E08B52">CLOUD STT (0 MB)</text>
+      <text x="22" y="43" class="sans" font-size="9.5" fill="#A6998E">SiliconFlow / 百炼 / Groq</text>
+
+      <rect x="12" y="56" width="140" height="36" rx="7" fill="#1F1916" stroke="#332B25" stroke-width="1"/>
+      <text x="22" y="72" class="mono" font-size="9" font-weight="700" fill="#4ADE80">LOCAL INT8 (226 MB)</text>
+      <text x="22" y="85" class="sans" font-size="9.5" fill="#A6998E">首次开启自动镜像拉取</text>
+
+      <rect x="12" y="98" width="140" height="32" rx="7" fill="#C87137"/>
+      <text x="82" y="118" text-anchor="middle" class="mono" font-size="10" font-weight="700" fill="#FFFFFF">6× TTS Engines Ready</text>
+    </g>
+  </g>
+</svg>

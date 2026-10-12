@@ -1,0 +1,198 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#131516"/>
+      <stop offset="55%" stop-color="#171A1C"/>
+      <stop offset="100%" stop-color="#1E2124"/>
+    </linearGradient>
+    <linearGradient id="accentGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C87137"/>
+      <stop offset="100%" stop-color="#E28B50"/>
+    </linearGradient>
+    <pattern id="dotGridDark" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#FFFFFF" fill-opacity="0.06"/>
+    </pattern>
+    <filter id="cardShadowDark" x="-8%" y="-8%" width="116%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="softShadowDark" x="-8%" y="-8%" width="116%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+
+  <!-- Main Background -->
+  <rect width="1200" height="430" rx="26" fill="url(#bgGradDark)" stroke="#FFFFFF" stroke-opacity="0.09" stroke-width="1.5"/>
+  <rect width="1200" height="430" rx="26" fill="url(#dotGridDark)"/>
+
+  <!-- Decorative Organic Glow -->
+  <circle cx="1060" cy="-30" r="210" fill="#C87137" fill-opacity="0.11"/>
+  <circle cx="680" cy="410" r="170" fill="#34D399" fill-opacity="0.05"/>
+
+  <!-- ================= LEFT EDITORIAL COLUMN ================= -->
+  <g transform="translate(64, 58)">
+    <!-- Version Pill -->
+    <rect x="0" y="0" width="218" height="30" rx="15" fill="#C87137" fill-opacity="0.20" stroke="#C87137" stroke-opacity="0.48"/>
+    <circle cx="16" cy="15" r="5" fill="#E69259"/>
+    <text x="30" y="19.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="11.5" font-weight="700" letter-spacing="1.2" fill="#F0A572">RELEASE v1.0.0 · STABLE</text>
+
+    <!-- Main Title -->
+    <text x="0" y="92" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="52" font-weight="800" letter-spacing="-1" fill="#F1F5F3">MaiBot Deskpet</text>
+    <text x="394" y="92" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="26" font-weight="600" fill="#E69259">1.0</text>
+
+    <!-- Subtitle -->
+    <text x="0" y="134" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="18.5" font-weight="600" fill="#D5DFDA">
+      零遮挡伴随式 Live2D 桌面角色与多步分镜情绪引擎
+    </text>
+    <text x="0" y="164" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="14" font-weight="400" fill="#9CA8A2">
+      基于 Electron + Vue 3 + PixiJS (Cubism 4)，专为 MaiBot 打造的轻量级桌面伴侣。
+    </text>
+    <text x="0" y="186" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="14" font-weight="400" fill="#9CA8A2">
+      支持自动去水印、预设工坊关键帧编排、情绪分组随机抽取与云端/本地双模语音管线。
+    </text>
+
+    <!-- Feature Chips Row 1 -->
+    <g transform="translate(0, 218)">
+      <rect x="0" y="0" width="144" height="34" rx="10" fill="#202325" stroke="#FFFFFF" stroke-opacity="0.09" filter="url(#softShadowDark)"/>
+      <circle cx="17" cy="17" r="4.5" fill="#E69259"/>
+      <text x="29" y="21.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12.5" font-weight="700" fill="#F1F5F3">预设工坊分镜</text>
+
+      <rect x="154" y="0" width="156" height="34" rx="10" fill="#202325" stroke="#FFFFFF" stroke-opacity="0.09" filter="url(#softShadowDark)"/>
+      <circle cx="171" cy="17" r="4.5" fill="#34D399"/>
+      <text x="183" y="21.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12.5" font-weight="700" fill="#F1F5F3">情绪分组随机抽取</text>
+
+      <rect x="320" y="0" width="156" height="34" rx="10" fill="#202325" stroke="#FFFFFF" stroke-opacity="0.09" filter="url(#softShadowDark)"/>
+      <circle cx="337" cy="17" r="4.5" fill="#E69259"/>
+      <text x="349" y="21.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12.5" font-weight="700" fill="#F1F5F3">逆变换精准视线</text>
+    </g>
+
+    <!-- Feature Chips Row 2 -->
+    <g transform="translate(0, 262)">
+      <rect x="0" y="0" width="166" height="34" rx="10" fill="#202325" stroke="#FFFFFF" stroke-opacity="0.09" filter="url(#softShadowDark)"/>
+      <circle cx="17" cy="17" r="4.5" fill="#34D399"/>
+      <text x="29" y="21.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12.5" font-weight="700" fill="#F1F5F3">云端 / INT8 按需语音</text>
+
+      <rect x="176" y="0" width="144" height="34" rx="10" fill="#202325" stroke="#FFFFFF" stroke-opacity="0.09" filter="url(#softShadowDark)"/>
+      <circle cx="193" cy="17" r="4.5" fill="#E69259"/>
+      <text x="205" y="21.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12.5" font-weight="700" fill="#F1F5F3">零遮挡伴随浮窗</text>
+
+      <rect x="330" y="0" width="146" height="34" rx="10" fill="#202325" stroke="#FFFFFF" stroke-opacity="0.09" filter="url(#softShadowDark)"/>
+      <circle cx="347" cy="17" r="4.5" fill="#34D399"/>
+      <text x="359" y="21.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12.5" font-weight="700" fill="#F1F5F3">Win32 原生热键</text>
+    </g>
+  </g>
+
+  <!-- ================= RIGHT UI MOCKUP PREVIEW (DARK MODE) ================= -->
+  <g transform="translate(615, 34)" filter="url(#cardShadowDark)">
+    <rect x="0" y="0" width="320" height="362" rx="22" fill="#161819" stroke="#FFFFFF" stroke-opacity="0.10"/>
+
+    <!-- Top Header: Quick Orb + Title + Close -->
+    <circle cx="28" cy="28" r="11" fill="url(#accentGradDark)"/>
+    <text x="48" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12.5" font-weight="800" fill="#F1F5F3">hiyori_pro_zh</text>
+    <text x="48" y="38" font-family="ui-monospace, Consolas, monospace" font-size="9.5" font-weight="600" fill="#6F7C76">LIVE2D · 15 PRESETS</text>
+    <rect x="280" y="16" width="24" height="24" rx="8" fill="#202325"/>
+    <path d="M288 24 L296 32 M296 24 L288 32" stroke="#9CA8A2" stroke-width="1.6" stroke-linecap="round"/>
+
+    <!-- Segmented Tabs -->
+    <rect x="16" y="52" width="288" height="32" rx="11" fill="#202325"/>
+    <rect x="19" y="55" width="92" height="26" rx="8" fill="#2B2F33"/>
+    <text x="65" y="72" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#F1F5F3">模型控件</text>
+    <text x="160" y="72" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="11" font-weight="600" fill="#9CA8A2">预设工坊</text>
+    <text x="254" y="72" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="11" font-weight="600" fill="#9CA8A2">打开设置</text>
+
+    <!-- Hero Active Preset Card -->
+    <g transform="translate(16, 96)">
+      <rect x="0" y="0" width="288" height="74" rx="16" fill="#202325"/>
+      <circle cx="250" cy="37" r="22" fill="#C87137" fill-opacity="0.22"/>
+      <text x="14" y="20" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="9.5" font-weight="700" fill="#9CA8A2">当前激活预设 · 开心 (2 变体)</text>
+      <text x="14" y="42" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="16" font-weight="800" fill="#F1F5F3">开心·欢呼</text>
+      <rect x="14" y="50" width="64" height="16" rx="6" fill="#C87137" fill-opacity="0.26"/>
+      <text x="46" y="61" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="9.5" font-weight="700" fill="#F0A572">播完恢复</text>
+      <rect x="84" y="50" width="54" height="16" rx="6" fill="#2B2F33"/>
+      <text x="111" y="61" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="9.5" font-weight="700" fill="#9CA8A2">3 步分镜</text>
+    </g>
+
+    <!-- Section Header -->
+    <text x="18" y="190" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="10" font-weight="700" fill="#6F7C76">状态预设分组（点击切换 · 箭头展开变体）</text>
+
+    <!-- 2-Column Group Capsules -->
+    <g transform="translate(16, 198)">
+      <rect x="0" y="0" width="140" height="36" rx="11" fill="#202325"/>
+      <rect x="6" y="7" width="22" height="22" rx="6" fill="#2B2F33"/>
+      <path d="M15 14 L19 18 L15 22" fill="none" stroke="#9CA8A2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="34" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12" font-weight="700" fill="#F1F5F3">日常待机</text>
+      <circle cx="124" cy="18" r="4" fill="#34D399"/>
+
+      <rect x="148" y="0" width="140" height="36" rx="11" fill="#C87137"/>
+      <rect x="154" y="7" width="22" height="22" rx="6" fill="#FFFFFF" fill-opacity="0.22"/>
+      <path d="M161 16 L165 20 L169 16" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="182" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12" font-weight="700" fill="#FFFFFF">开心</text>
+      <rect x="260" y="10" width="20" height="16" rx="5" fill="#FFFFFF" fill-opacity="0.24"/>
+      <text x="270" y="21" text-anchor="middle" font-family="ui-monospace, Consolas, monospace" font-size="10" font-weight="700" fill="#FFFFFF">2</text>
+    </g>
+
+    <!-- Expanded Variant Accordion Drawer -->
+    <g transform="translate(16, 240)">
+      <rect x="0" y="0" width="288" height="62" rx="12" fill="#202325" stroke="#C87137" stroke-opacity="0.45"/>
+      <text x="12" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="9.5" font-weight="700" fill="#9CA8A2">开心 · 组内变体（后端调用时随机抽取）</text>
+      <text x="220" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="9.5" font-weight="700" fill="#F0A572">随机抽取</text>
+      <text x="264" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="9.5" font-weight="700" fill="#6F7C76">收起</text>
+
+      <rect x="10" y="26" width="130" height="28" rx="8" fill="#C87137"/>
+      <text x="22" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#FFFFFF">欢呼</text>
+      <text x="128" y="44" text-anchor="end" font-family="ui-monospace, Consolas, monospace" font-size="9.5" font-weight="700" fill="#FFFFFF">3步</text>
+
+      <rect x="148" y="26" width="130" height="28" rx="8" fill="#2B2F33"/>
+      <text x="160" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#F1F5F3">歪头笑</text>
+      <text x="266" y="44" text-anchor="end" font-family="ui-monospace, Consolas, monospace" font-size="9.5" font-weight="600" fill="#9CA8A2">2步</text>
+    </g>
+
+    <!-- Row 2 Group Capsules -->
+    <g transform="translate(16, 310)">
+      <rect x="0" y="0" width="140" height="36" rx="11" fill="#202325"/>
+      <rect x="6" y="7" width="22" height="22" rx="6" fill="#2B2F33"/>
+      <path d="M15 14 L19 18 L15 22" fill="none" stroke="#9CA8A2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="34" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12" font-weight="700" fill="#F1F5F3">害羞</text>
+      <rect x="112" y="10" width="20" height="16" rx="5" fill="#2B2F33"/>
+      <text x="122" y="21" text-anchor="middle" font-family="ui-monospace, Consolas, monospace" font-size="10" font-weight="700" fill="#9CA8A2">2</text>
+
+      <rect x="148" y="0" width="140" height="36" rx="11" fill="#202325"/>
+      <rect x="154" y="7" width="22" height="22" rx="6" fill="#2B2F33"/>
+      <path d="M163 14 L167 18 L163 22" fill="none" stroke="#9CA8A2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="182" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="12" font-weight="700" fill="#F1F5F3">委屈难过</text>
+      <rect x="260" y="10" width="20" height="16" rx="5" fill="#2B2F33"/>
+      <text x="270" y="21" text-anchor="middle" font-family="ui-monospace, Consolas, monospace" font-size="10" font-weight="700" fill="#9CA8A2">2</text>
+    </g>
+  </g>
+
+  <!-- Companion Stage & Speech Bubble Card (Dark Mode) -->
+  <g transform="translate(952, 54)" filter="url(#cardShadowDark)">
+    <rect x="0" y="0" width="194" height="322" rx="22" fill="#161819" stroke="#FFFFFF" stroke-opacity="0.10"/>
+
+    <rect x="14" y="14" width="96" height="22" rx="7" fill="#202325"/>
+    <circle cx="25" cy="25" r="3.5" fill="#34D399"/>
+    <text x="34" y="28.5" font-family="ui-monospace, Consolas, monospace" font-size="9.5" font-weight="700" fill="#9CA8A2">STAGE · 60FPS</text>
+
+    <g transform="translate(97, 148)">
+      <circle cx="0" cy="0" r="64" fill="#202325"/>
+      <circle cx="0" cy="-6" r="28" fill="#FADCC8"/>
+      <path d="M-30 -12 C-28 -38, 28 -38, 30 -12 C22 -24, 8 -20, 0 -14 C-10 -22, -22 -22, -30 -12 Z" fill="#5C4033"/>
+      <path d="M-14 -6 Q-9 -12 -4 -6" fill="none" stroke="#3B2820" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M4 -6 Q9 -12 14 -6" fill="none" stroke="#3B2820" stroke-width="2.2" stroke-linecap="round"/>
+      <ellipse cx="-16" cy="1" rx="4.5" ry="2.2" fill="#E88276" fill-opacity="0.55"/>
+      <ellipse cx="16" cy="1" rx="4.5" ry="2.2" fill="#E88276" fill-opacity="0.55"/>
+      <path d="M-5 4 Q0 9 5 4" fill="none" stroke="#C85A48" stroke-width="2" stroke-linecap="round"/>
+      <path d="M-36 52 C-32 26, 32 26, 36 52 Z" fill="#C87137"/>
+      <path d="M-12 27 L0 42 L12 27" fill="#F1F5F3"/>
+    </g>
+
+    <g transform="translate(12, 212)" filter="url(#softShadowDark)">
+      <rect x="0" y="0" width="170" height="62" rx="13" fill="#202325" stroke="#C87137" stroke-opacity="0.48"/>
+      <text x="12" y="21" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="10.5" font-weight="700" fill="#F0A572">MaiBot · 语音与表情同步</text>
+      <text x="12" y="39" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="11" font-weight="600" fill="#F1F5F3">“今天想聊点什么？我已经</text>
+      <text x="12" y="53" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="11" font-weight="600" fill="#F1F5F3">准备好新的分镜动作啦！”</text>
+    </g>
+
+    <rect x="12" y="284" width="170" height="26" rx="8" fill="#202325"/>
+    <text x="22" y="300.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="10" font-weight="600" fill="#6F7C76">双击角色唤起对话输入框…</text>
+  </g>
+</svg>

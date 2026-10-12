@@ -1,145 +1,280 @@
-# MaiBot Deskpet — 桌面宠物 Live2D 插件
+<div align="center">
 
-基于 Electron + Vue 3 + PixiJS + Live2D Cubism 4 的 MaiBot 桌面宠物插件，为 MaiBot 提供高表现力、低资源占用的桌面伴随角色。支持 **Live2D 模型部件与去水印零配置解析**、**多步分镜「预设工坊」**、**情绪分组随机变体抽取**、**常驻基底 / 短暂反应双模状态机**、**精准目光跟随与灵动待机漫游**、**云端直连 / 本地 INT8 按需语音识别（STT）**、**多平台与第三方兼容语音合成（TTS）** 以及 **实时块级 RMS 唇形同步**。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg" />
+  <img alt="MaiBot Deskpet v1.0.0 Hero Banner" src="docs/assets/hero-light.svg" width="100%" />
+</picture>
 
----
+<br />
 
-## 快速开始（轻量安装版，推荐）
+[![Release](https://img.shields.io/badge/Release-v1.0.0-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.0)
+[![Installer](https://img.shields.io/badge/Setup.exe-112.4_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.0/MaiBot-Deskpet-Setup-1.0.0.exe)
+[![Electron](https://img.shields.io/badge/Electron_33-Vue_3_+_TS-5c7cfa?style=flat-square&labelColor=231d19)](https://www.electronjs.org/)
+[![Live2D](https://img.shields.io/badge/Live2D-Cubism_2_/_4-d66853?style=flat-square&labelColor=231d19)](https://www.live2d.com/)
+[![MaiBot](https://img.shields.io/badge/MaiBot-v0.10.0+-8b6fd4?style=flat-square&labelColor=231d19)](https://github.com/MaiM-with-u/MaiBot)
+[![Platform](https://img.shields.io/badge/Platform-Windows_10_/_11-3a8296?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases)
 
-1. 从 [Releases](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases) 下载 `MaiBot-Deskpet-Setup-x.x.x.exe` 并安装（安装包已剥离臃肿离线权重，体积仅 **~85 MB**，内置默认 Live2D 模型与静态立绘示例包）。
-2. 将本仓库放入 MaiBot 的 `plugins/` 目录（Python 依赖由 `_manifest.json` 声明，随 MaiBot 自动安装），并按 [完整安装与配置 (docs/SETUP.md)](docs/SETUP.md) 完成配置。
-3. 启动 MaiBot，双击桌面「MaiBot 桌宠」：
-   - **语音识别（STT）**：可在设置面板「打开设置 → 后台服务」中一键开启 **云端 · 硅基流动 SenseVoice（免费推荐，0 内存占用、无需启动本地桥）**，或切换为 **本地 · SenseVoice INT8（226MB 按需自动安装）**。
-   - **语音合成（TTS）**：支持按需切换 **硅基流动 CosyVoice2 / IndexTTS**、**阿里云百炼 CosyVoice**、**小米 MiMo**、**Fish Audio**、**GSV2P**、**自定义第三方兼容（`/v1/audio/speech`）** 或 **本地 GPT-SoVITS 整合包**。
-   - **全局 PTT 热键**：由客户端通过 Windows 原生 `user32.dll!GetAsyncKeyState` 非阻塞接管，无需 Python 环境、绝不吞键。
+**[下载 v1.0.0 安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.0)** &nbsp;·&nbsp; **[核心特性](#-核心特性矩阵)** &nbsp;·&nbsp; **[系统架构](#-系统架构与数据流)** &nbsp;·&nbsp; **[快速开始](#-快速开始)** &nbsp;·&nbsp; **[语音管线对比](#-轻量化双模语音管线)** &nbsp;·&nbsp; **[v1.0 升级全记录](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)** &nbsp;·&nbsp; **[模型适配规范](docs/Live2D模型适配规范.md)**
 
-> **安全机制说明**：MaiBot 上报的本机 Python 解释器路径仅作为待审核候选展示在「后台服务 → Python 解释器环境（高级）」中，必须经过本机原生系统确认框批准后才会用于启动本地桥进程；断线或刷新后自动撤销授权。
-
----
-
-## 核心特性
-
-### 1. 自然有机伴随界面（Biophilic Companion UI）
-- **零遮挡伴随舞台**：展开设置面板或聊天抽屉时，自动根据桌宠所处屏幕左/右半区决定弹出方向，同时角色层向反方向平滑横移避让，调参换装全程不挡模型。
-- **琥珀暖棕默认主题与日/夜双模式**：
-  - 内置温暖日间模式与深邃纯净夜间模式（HSL 低饱和同色相微调，彻底杜绝暗色混色发脏）。
-  - 支持预设色板与自由取色器，根据主题色相对亮度自动计算胶囊前景对比色。
-- **左上角可配置快捷圆点（Quick Orb）**：可在设置中将其绑定为「快捷切换模型抽屉」「快捷切换 Live2D / 静态立绘」「自定义主题取色器」或「切换日/夜模式」。
-- **像素级清晰文字渲染**：全面移除透明窗口下会导致 ClearType 亚像素抗锯齿失效的 `backdrop-filter: blur` 与文字层 `scale` 合成，所有抽屉采用纯 `grid-template-rows: 0fr <-> 1fr` 物理曲线展开。
-- **锁定穿透静默模式（`Ctrl+Alt+L`）**：开启鼠标穿透锁定时，自动收起浮窗并完全隐藏悬停内阴影边框、底部导航条与侧边按钮栏，仅保留系统托盘恢复入口。
+</div>
 
 ---
 
-### 2. 预设工坊：多步分镜、常驻/反应双模与情绪分组随机变体
-- **零配置自动解析与去水印**：
-  - 自动扫描模型目录下的 `.model3.json`、`.exp3.json`、`.cdi3.json`、`.vtube.json`。
-  - 自动识别并剥离常见模型作者水印图层/参数（含顶点偏移型与透明度型水印），将有效部件归类为可视化开关胶囊。
-- **多步关键帧分镜（Keyframe Steps）**：
-  - 每个预设可包含 1～N 个连续分镜步骤，每步可独立设置 **过渡时长**、**保持时长**、**部件开关组合** 以及 **12 项 VTB 面捕姿态滑条**（头部偏航/俯仰/侧倾、身体旋转、双眼开合、笑眼、眼球水平/垂直视线、眉毛高低、嘴巴开合与微笑弧度）。
-  - 支持配置如「尴尬：先左顾右盼 → 再垂眸移开视线」的连续神态演出。
-- **常驻基底 vs 短暂反应双模协同**：
-  - **持续保持（`hold` / 常驻状态）**：触发后长期保持，并自动钉为当前的「常驻基底预设」（如日常待机、换装、抱猫姿态）。
-  - **播完恢复（`revert` / 短暂反应）**：按序演完分镜与保持时间后，**自动通过平滑插值回归到当前钉选的常驻基底预设**；当用户在「预设工坊」展开编辑某个预设时，自动暂停回退计时，防止调参中途跳回。
-  - **循环播放（`loop`）**：在多个关键帧步之间往复循环演出。
-- **情绪分组与防连重随机变体**：
-  - 预设列表采用双列紧凑胶囊排布：**点击胶囊主体**直接切换至该分组的默认（首个）预设；**点击分组名左侧小箭头**平滑展开行级变体抽屉（支持「随机抽取」「+ 变体」与「收起」）。
-  - 当 MaiBot 后端按情绪分组（如 `开心`、`害羞`、`生气`、`难过`、`惊讶`、`窘迫`）调用桌宠时，自动在组内多个预设变体间**随机抽取（自动避开上一次刚用过的变体，防止连续重复）**，大幅丰富角色反应多样性。
-- **预设随模型文件夹持久化（`deskpet-presets.json`）**：
-  - 所有自定义预设与分组直接保存在当前模型目录下的 `deskpet-presets.json`，迁移、备份或分享模型文件夹时预设自动随行。
+## ✦ 核心特性矩阵
 
----
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/bento-dark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/bento-light.svg" />
+  <img alt="MaiBot Deskpet Core Features Bento Grid" src="docs/assets/bento-light.svg" width="100%" />
+</picture>
 
-### 3. 精准目光跟随与灵动待机漫游
-- **局部头部锚点逆变换目光跟随**：使用 `model.toLocal()` 将全局屏幕光标逆变换至模型内部坐标系，以角色头部/双眼高度为原点归一化，彻底解决传统全局坐标映射导致的「看胸口不看屏幕」问题。
-- **双频非谐波待机视线漫游（Idle Gaze Drift）**：
-  - 当光标进入窗口或靠近角色时，漫游权重平滑归零，角色精准注视光标；
-  - 当光标离开窗口静置时，在柔和跟随远端光标的基础上叠加双频非谐波正弦视线漫游与原生 Idle 呼吸摆动，兼顾精准交互与待机灵动感。
-- **分镜视线自动让位**：当预设分镜显式控制了眼球或头部滑块时，自动暂挂鼠标视线追踪，保证分镜眼神完整演出。
-
----
-
-### 4. 按模式收敛的语音管线（云端直连 + 本地按需 + 块级唇形同步）
-- **后台服务面板按模式动态显隐**：
-  - 切换语音识别（STT）或语音合成（TTS）模式时，自动隐藏并停止与当前所选模式无关的后台桥进程，界面清爽不冗余。
-- **双模语音识别（STT）**：
-  - **云端 STT 直连（默认推荐）**：支持 **硅基流动 `FunAudioLLM/SenseVoiceSmall`（免费）**、**阿里云百炼 `qwen-audio-asr`**、**Groq `whisper-large-v3-turbo`** 及 **自定义 OpenAI 兼容端点（`/v1/audio/transcriptions`）**，由 Electron 主进程直接请求，0 本地内存占用，自动清洗 `<|...|>` 标签。
-  - **本地离线 SenseVoice INT8（226MB 按需安装）**：优先加载体积缩减 75% 的 `model.int8.onnx`；若本地未缓存，首次识别时自动从国内镜像（`hf-mirror.com`）下载至 `%APPDATA%/maibot-deskpet/sensevoice` 并实时输出百分比进度，升级桌宠永不重下。
-- **多平台与第三方兼容语音合成（TTS）**：
-  - 支持 **硅基流动 CosyVoice2 / IndexTTS**、**阿里云百炼 CosyVoice**、**小米 MiMo TTS**、**Fish Audio**、**GSV2P（在线 GPT-SoVITS）**、**自定义第三方兼容（`/v1/audio/speech`）** 以及 **本地 GPT-SoVITS 整合包**。
-  - 所有云端 API Key 均经由 Electron `safeStorage` 加密存储于本机。
-- **流式 PCM 块级 RMS 唇形同步**：
-  - 后端在发送每个流式 PCM16 音频分块时实时计算 RMS 能量包络，前端按 `AudioContext` 真实播放时间窗对齐并挂载至 Live2D `beforeModelUpdate` 管线，说话结束立即闭合归零。
-
----
-
-## 文档导航
-
-| 文档 | 说明 |
+| 工程维度 | 核心设计亮点 |
 | :--- | :--- |
-| [完整安装与配置 (docs/SETUP.md)](docs/SETUP.md) | MaiBot 配置、插件安装、Python 解释器审批、语音服务配置与排错指南 |
-| [升级与修复全量记录 (docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md) | 状态预设机制、多步分镜、情绪分组随机抽取、视线合成、口型同步与防模糊规范详解 |
-| [静态立绘模式 (docs/IMAGE-SET.md)](docs/IMAGE-SET.md) | 使用 PNG/SVG 差分图片包作为桌宠角色的配置指南 |
-| [Live2D 模型适配规范 (docs/MODEL-ADAPTER-SPEC.md)](docs/MODEL-ADAPTER-SPEC.md) | 自定义 `deskpet-adapter.json` 高级适配规范说明 |
+| **伴随式交互舞台** | 打开设置时桌宠窗口自动平滑缩入左下角卡片舞台，右侧停靠半透明毛玻璃面板；捏表情、编排动作、切换部件与调整旋转角度均可实时预览，彻底告别弹窗遮挡模型。 |
+| **预设工坊与情绪变体池** | 支持将**多层表情叠加 + 串行动作队列 + 部件显隐开关 + 循环兜底动作**打包为状态预设；同一情绪可绑定多个变体并配置权重随机抽签，每次进入新状态前自动恢复默认快照清场。 |
+| **逆变换视线与块级口型** | 基于二维刚体逆变换矩阵解算鼠标坐标，模型任意旋转（`-180° ~ 180°`）、镜像或缩放后视线依然精准跟随；长回复按句切块并行合成 TTS，WebAudio RMS 包络实时驱动 `ParamMouthOpenY`。 |
+| **双模语音与按需加载** | 安装包从 `~900 MB` 瘦身至 **`112.4 MB`**；默认支持硅基流动免费 SenseVoice 云端秒级转写，也可切换本地离线模式（首次自动从镜像拉取 `226 MB` INT8 量化模型至 `%APPDATA%`）。 |
 
 ---
 
-## 项目结构
+## ✦ 轻量化双模语音管线
+
+v1.0.0 对语音输入（STT）与语音合成（TTS）进行了全栈重构，后台服务面板会根据当前所选模式**按需动态呈现**相关的进程与配置项：
+
+<table>
+  <thead>
+    <tr>
+      <th width="18%">模块</th>
+      <th width="24%">支持模式 / 平台</th>
+      <th width="16%">本地体积占用</th>
+      <th width="42%">特性与适用场景</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="5"><b>语音识别 (STT)</b><br/><sub>支持 VAD 自动语音唤醒<br/>与 Alt+V 按住说话</sub></td>
+      <td><b>SiliconFlow 硅基流动</b> <code>默认</code></td>
+      <td><code>0 MB</code></td>
+      <td>调用 <code>FunAudioLLM/SenseVoiceSmall</code>，新号赠送额度且该模型免费，免装即用、响应极快。</td>
+    </tr>
+    <tr>
+      <td><b>阿里云百炼 (DashScope)</b></td>
+      <td><code>0 MB</code></td>
+      <td>支持 <code>paraformer-realtime-v2</code> 等模型；若 TTS 已填百炼 Key，留空即可自动复用。</td>
+    </tr>
+    <tr>
+      <td><b>Groq Whisper</b></td>
+      <td><code>0 MB</code></td>
+      <td>调用 <code>whisper-large-v3-turbo</code>，具备极低延迟的多语种识别能力。</td>
+    </tr>
+    <tr>
+      <td><b>自定义 OpenAI 兼容</b></td>
+      <td><code>0 MB</code></td>
+      <td>兼容任意提供 <code>/v1/audio/transcriptions</code> 接口的第三方中转、OneAPI 或局域网服务。</td>
+    </tr>
+    <tr>
+      <td><b>本地 SenseVoice INT8</b></td>
+      <td><code>226 MB</code> <sub>按需安装</sub></td>
+      <td>完全离线可用；首次启用时自动从国内镜像 <code>hf-mirror.com</code> 下载至 <code>%APPDATA%</code>，卸载重装不丢失。</td>
+    </tr>
+    <tr>
+      <td rowspan="6"><b>语音合成 (TTS)</b><br/><sub>按句并行预合成<br/>WebAudio 实时口型</sub></td>
+      <td><b>阿里云百炼 CosyVoice</b></td>
+      <td><code>0 MB</code></td>
+      <td>支持音色克隆与指令控制（<code>cosyvoice-v3-flash</code> 等），情感细腻自然。</td>
+    </tr>
+    <tr>
+      <td><b>硅基流动 CosyVoice2</b></td>
+      <td><code>0 MB</code></td>
+      <td>支持 <code>FunAudioLLM/CosyVoice2-0.5B</code> 预置音色与参考音频克隆，可与云端 STT 共用同一个 Key。</td>
+    </tr>
+    <tr>
+      <td><b>Fish Audio</b></td>
+      <td><code>0 MB</code></td>
+      <td>接入高表现力二次元社区音色库，填入 <code>reference_id</code>（模型 ID）即可驱动。</td>
+    </tr>
+    <tr>
+      <td><b>小米 MiMo-TTS</b></td>
+      <td><code>0 MB</code></td>
+      <td>支持对话情感风格（如开心、悄悄话、温柔）标签控制。</td>
+    </tr>
+    <tr>
+      <td><b>自定义 OpenAI 兼容</b></td>
+      <td><code>0 MB</code></td>
+      <td>支持任意标准 <code>POST /v1/audio/speech</code> 端点（如 OpenAI TTS、自建 Edge-TTS 网关等）。</td>
+    </tr>
+    <tr>
+      <td><b>本地 GPT-SoVITS</b></td>
+      <td><code>自备服务端</code></td>
+      <td>直连本地 <code>127.0.0.1:9880</code> 推理服务，支持按情绪动态切换参考音频。</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+## ✦ 系统架构与数据流
+
+```mermaid
+flowchart LR
+    subgraph Input["输入感知层"]
+        Mic["麦克风 VAD / Alt+V"]
+        Vision["桌面截图 / 摄像头"]
+        Text["快捷气泡文本输入"]
+    end
+
+    subgraph SpeechIn["双模 STT 引擎"]
+        CloudSTT["云端直连 API\n(SiliconFlow / 百炼 / Groq / OpenAI)"]
+        LocalSTT["本地 SenseVoice INT8\n(WS :8765 · 226MB 按需拉取)"]
+    end
+
+    subgraph Core["Electron 主进程 & MaiBot 插件"]
+        Main["Electron Main Process\n窗口穿透 / 伴随舞台 / 服务编排"]
+        Bridge["MaiBot WS Bridge (:18002)\n插件 plugin.py + 情绪清洗路由"]
+        MaiBot["MaiBot Core (:8000)\nLLM 思考 + 表情/动作决策"]
+    end
+
+    subgraph SpeechOut["全栈 TTS 引擎 (:9880)"]
+        CloudTTS["云端 TTS 桥接\n(百炼 / 硅基 / Fish / MiMo / OpenAI)"]
+        LocalTTS["本地 GPT-SoVITS\n多情绪参考音频推理"]
+    end
+
+    subgraph Stage["Renderer · Live2D 舞台"]
+        Queue["块级串行播放队列\n(气泡打字机 + RMS 口型包络)"]
+        Preset["预设状态机 & 情绪变体池\n(快照清场 → 部件 → 表情 → 动作链)"]
+    end
+
+    Mic --> CloudSTT & LocalSTT
+    CloudSTT & LocalSTT --> Main
+    Vision & Text --> Main
+    Main <--> Bridge <--> MaiBot
+    Bridge -. "按句并行请求合成" .-> CloudTTS & LocalTTS
+    CloudTTS & LocalTTS -. "WAV 音频流" .-> Main
+    Main --> Queue & Preset
+```
+
+---
+
+## ✦ 快速开始
+
+### 1. 一键安装桌面端（推荐）
+
+前往 [**Releases 页面**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.0) 下载最新安装包 **`MaiBot-Deskpet-Setup-1.0.0.exe`**（`112.4 MB`）：
+- 内置嵌入式 Python 3.11 运行时与全部依赖，**无需在本机配置 Python 或 Node.js 环境**。
+- 安装完成后启动桌宠，右键点击桌宠或系统托盘图标 → **「打开设置」**，即可进入伴随式设置舞台。
+
+### 2. 部署 MaiBot 插件端
+
+将本仓库作为插件放入你的 MaiBot `plugins/` 目录下：
+
+```bash
+cd /path/to/MaiBot/plugins
+git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_deskpet_plugin
+```
+
+首次启动后，插件会在同目录自动生成 `config.toml`，按需确认端口与开关即可：
+
+```toml
+[plugin]
+enabled = true
+
+[deskpet]
+host = "127.0.0.1"
+port = 18002                # 桌宠 WebSocket 桥接端口
+
+[tts]
+enabled = true
+api_url = "http://127.0.0.1:9880"
+text_lang = "zh"
+```
+
+### 3. 配置语音服务（2 分钟开箱）
+
+1. 打开桌宠设置面板 → 切到 **「服务」** 标签页。
+2. **配音合成 (TTS)**：选择你偏好的引擎（如「硅基流动 CosyVoice2」、「阿里云百炼」或「自定义 OpenAI 兼容」），填入 API Key 后点击 **「应用并重启 TTS」**。
+3. **语音识别 (STT)**：
+   - **推荐（零体积云端）**：保持默认的 **「云端 · 硅基流动 SenseVoice（免费极速）」**，填入硅基流动 API Key（若上方 TTS 已选硅基流动或百炼，留空即可自动复用）。
+   - **完全离线（按需安装）**：切换为 **「本地 · SenseVoice INT8（按需 226MB）」**，后台会自动从国内镜像下载量化模型至 `%APPDATA%\maibot-deskpet\sensevoice` 并启动本地服务。
+
+---
+
+## ✦ 交互速查表
+
+| 交互操作 | 触发方式 | 行为说明 |
+| :--- | :--- | :--- |
+| **部位触碰互动** | 左键单击模型不同区域 | 自动识别头部 / 面部 / 身体 / 腿部等 HitArea，触发专属触碰反应并发送给 MaiBot |
+| **拖拽移动窗口** | 左键按住模型拖动 | 自由移动桌宠位置；拖拽至屏幕左右边缘自动进入半身探出躲避模式 |
+| **无级缩放模型** | 鼠标滚轮滚动 | 在 `0.25x ~ 2.5x` 范围内平滑缩放模型尺寸 |
+| **旋转模型角度** | `Alt` + 鼠标滚轮 | 在 `-180° ~ 180°` 范围内自由旋转模型（视线追踪与点击区域自动逆变换校准） |
+| **按住说话 (PTT)** | 按住 `Alt + V` | 录音并在松开后自动识别发送（可在设置面板开启 VAD 全自动免按键语音对话） |
+| **快捷操作栏** | 鼠标悬停桌宠底部 | 呼出文字输入框、语音开关、桌面截图发送、摄像头拍照与伴随设置入口 |
+
+---
+
+## ✦ 进阶指南与源码构建
+
+<details>
+<summary><b>📦 从源码启动开发环境 / 重新打包安装包</b></summary>
+
+#### 环境要求
+- **Node.js** `>= 18`
+- **Python** `3.10 ~ 3.12`
+
+#### 启动前端与 Electron 开发模式
+```bash
+cd deskpet-app
+npm install
+npm run dev
+```
+
+#### 构建 Windows 安装包 (`Setup.exe`)
+项目内置了自动化构建脚本 [`build-installer.ps1`](build-installer.ps1)，会自动准备内嵌 Python 环境并调用 `electron-builder` 产出轻量化安装包：
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-installer.ps1
+```
+打包产物位于 `deskpet-app/release/MaiBot-Deskpet-Setup-1.0.0.exe`。
+
+</details>
+
+<details>
+<summary><b>🎨 导入自定义 Live2D 模型</b></summary>
+
+1. 打开桌宠伴随设置面板 → **「模型」** 标签页 → 点击 **「导入模型文件夹」**，选择包含 `.model3.json` 或 `.model.json` 的目录。
+2. 切换至新模型后，进入 **「预设」** 标签页：
+   - 在 **「状态预设工坊」** 中可利用模型自带的 `.exp3.json` 表情、`.motion3.json` 动作与 `.cdi3.json` 部件自由捏合专属预设，支持一键「试播」与导出分享。
+   - 在 **「情绪映射」** 中可将多个预设归入同一情绪组并调节随机权重。
+3. 详细的命名规范与参数自动识别规则请参阅 [**《Live2D 模型适配规范》**](docs/Live2D模型适配规范.md)。
+
+</details>
+
+<details>
+<summary><b>📂 仓库目录结构一览</b></summary>
 
 ```text
 maibot-deskpet-plugin/
-├── README.md
-├── _manifest.json                # MaiBot 插件清单（版本与 Python 依赖声明）
-├── config.toml                   # 插件运行时配置
-├── plugin.py                     # MaiBot 插件主入口（MessageGateway + 预设分组随机抽取 + 流式口型包络）
-├── gpt-sovits-bridge.py          # 本地 GPT-SoVITS TTS 桥 (端口 9881)
-├── cloud-tts-bridge.py           # 多平台与 OpenAI 兼容云端 TTS 桥 (端口 9882)
-├── stt-bridge.py                 # 本地 SenseVoice INT8 按需下载 STT 桥 (端口 18530)
-├── watchdog.py                   # 桥进程父进程存活看门狗
-├── tests/                        # Python 插件生命周期与情绪分组单元测试
-├── docs/                         # 安装配置、架构记录与模型适配文档
-└── deskpet-app/                  # Electron + Vue 3 桌面端应用
-    ├── electron-builder.yml      # Windows NSIS 轻量化安装包配置（npm run dist）
-    ├── tests/                    # Node/前端无麦克风全量回归测试套件
-    └── src/
-        ├── main/                 # Electron 主进程（窗口/DPI 限位、云端 STT 直连、服务管理、Win32 热键）
-        ├── preload/              # 安全上下文桥接（contextBridge IPC）
-        └── renderer/             # Vue 3 + Pinia + PixiJS 渲染进程
-            ├── components/       # 舞台、伴随设置面板（含预设工坊与服务面板）、双击输入框、气泡组件
-            ├── composables/      # 表情/预设状态机、音频时间轴口型同步、语音输入与 WebSocket
-            ├── services/         # Live2D 加载/逆变换视线/待机漫游、情绪适配与宿主协议
-            └── stores/           # Pinia 状态仓库（模型预设分组、主题外观、连接状态）
+├── plugin.py                     # MaiBot 插件主入口（消息流拦截、情绪解析、按句并行 TTS 调度）
+├── cloud-tts-bridge.py           # 多平台云端 TTS 桥接服务（百炼 / 硅基流动 / Fish / MiMo / OpenAI 兼容）
+├── stt-bridge.py                 # 本地 SenseVoice INT8 语音识别服务（支持按需自动下载模型至 %APPDATA%）
+├── build-installer.ps1           # Windows 一键式安装包构建脚本
+├── docs/
+│   ├── assets/                   # 仓库自适应深浅色 SVG 视觉资产
+│   ├── Live2D模型适配规范.md       # Live2D Cubism 2/4 模型接入与标准参数规范
+│   └── UPGRADE-AND-FIX-LOG-2026-10-12.md  # v1.0.0 升级与架构演进全记录
+└── deskpet-app/                  # Electron 33 + Vue 3 + PixiJS 桌面端源码
+    ├── src/main/                 # 主进程：透明穿透窗口、伴随舞台缩放、双模语音进程管理
+    ├── src/preload/              # 预加载安全 IPC 桥接层
+    └── src/renderer/             # 渲染进程：Live2D 控制器、逆变换视线、预设工坊、8 色主题面板
 ```
+
+</details>
 
 ---
 
-## 开发与测试
+## ✦ 致谢与开源协议
 
-```powershell
-# 进入桌面端目录
-cd deskpet-app
+- 感谢 [**MaiBot**](https://github.com/MaiM-with-u/MaiBot) 提供的智能体核心与插件生态
+- 感谢 [**pixi-live2d-display**](https://github.com/guansss/pixi-live2d-display) 与 **Live2D Cubism SDK** 提供的高性能渲染支持
+- 感谢 [**Sherpa-ONNX**](https://github.com/k2-fsa/sherpa-onnx) 与 [**FunAudioLLM / SenseVoice**](https://github.com/FunAudioLLM/SenseVoice) 提供的端云语音识别能力
 
-# 1. 运行 TypeScript 全量类型检查（Node + Vue）
-npm run typecheck
-
-# 2. 运行无麦克风全量回归测试（宿主协议 + 模型生命周期 + 运行时信任策略 + 静态立绘）
-npm run test:no-mic
-
-# 3. 运行 Python 插件生命周期与情绪分组单元测试
-python -m unittest discover -s ../tests -p "test_*.py"
-
-# 4. 构建生产包并生成 Windows NSIS 安装程序
-npm run dist
-```
-
----
-
-## 致谢
-
-- **[MaiBot](https://github.com/MaiM-with-u/MaiBot)** — 插件运行的宿主平台
-- **[Airi](https://github.com/moeru-ai/airi)** — PixiJS Live2D 渲染方案参考
-- **[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)** — 本地语音合成引擎
-- **[Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx)** — SenseVoice 语音识别运行时
-
-## 许可
-
-[GPL-3.0](LICENSE) — 本项目遵循与 MaiBot 相同的 GPL-3.0 许可证。
+本项目基于 [MIT License](LICENSE) 开源。
