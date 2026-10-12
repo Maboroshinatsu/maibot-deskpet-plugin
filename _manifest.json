@@ -3,23 +3,24 @@
   "id": "maibot.deskpet-plugin",
   "version": "1.0.0",
   "name": "MaiBot Deskpet",
-  "description": "为 MaiBot 接入 Live2D 桌面宠物，支持双向对话（消息管线集成）、表情/动作控制、视线追踪、滚轮缩放和拖拽平移。需配合 deskpet-app Electron 前端使用。",
+  "description": "为 MaiBot 接入 Live2D 桌面宠物，支持双向对话（消息管线集成）、状态与情绪预设编排、视线追踪、滚轮缩放和端云双模语音合成/识别。",
   "author": {
-    "name": "MaboroshiNatsu / DeepSeek-V4PRO",
+    "name": "MaboroshiNatsu",
     "url": "https://github.com/Maboroshinatsu"
   },
   "license": "MIT",
   "urls": {
     "repository": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
-    "homepage": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin"
+    "homepage": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
+    "issues": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin/issues"
   },
   "host_application": {
     "min_version": "1.0.0",
-    "max_version": "1.99.99"
+    "max_version": "999.999.999"
   },
   "sdk": {
-    "min_version": "2.0.0",
-    "max_version": "2.99.99"
+    "min_version": "1.0.0",
+    "max_version": "999.999.999"
   },
   "dependencies": [
     {
@@ -31,24 +32,11 @@
       "type": "python_package",
       "name": "aiohttp",
       "version_spec": ">=3.8"
-    },
-    {
-      "type": "python_package",
-      "name": "numpy",
-      "version_spec": ">=1.24"
-    },
-    {
-      "type": "python_package",
-      "name": "sherpa-onnx",
-      "version_spec": ">=1.10"
-    },
-    {
-      "type": "python_package",
-      "name": "pynput",
-      "version_spec": ">=1.7"
     }
   ],
   "capabilities": [
+    "emoji.get_by_description",
+    "emoji.get_random",
     "llm.generate"
   ],
   "i18n": {

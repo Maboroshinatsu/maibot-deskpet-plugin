@@ -221,6 +221,9 @@ class DeskpetPlugin(MaiBotPlugin):
     config_model = DeskpetPluginConfig
 
     GATEWAY_NAME = "deskpet_gateway"
+    DESKPET_PLATFORM = "deskpet"
+    DESKPET_ACCOUNT_ID = "deskpet-bot"
+    DESKPET_SCOPE = "default"
     DESKPET_USER_ID = "deskpet-user"
 
     # 卸载是有界操作：网关/后台任务不响应时不能永久卡住收尾，否则 WS 服务器永不停止。
@@ -261,8 +264,9 @@ class DeskpetPlugin(MaiBotPlugin):
         await self.ctx.gateway.update_state(
             gateway_name=self.GATEWAY_NAME,
             ready=True,
-            platform="deskpet",
-            scope="default",
+            platform=self.DESKPET_PLATFORM,
+            account_id=self.DESKPET_ACCOUNT_ID,
+            scope=self.DESKPET_SCOPE,
         )
         self.ctx.logger.info("[Deskpet] Gateway ready, platform=deskpet")
 
@@ -355,7 +359,9 @@ class DeskpetPlugin(MaiBotPlugin):
     @MessageGateway(
         route_type="duplex",
         name=GATEWAY_NAME,
-        platform="deskpet",
+        platform=DESKPET_PLATFORM,
+        account_id=DESKPET_ACCOUNT_ID,
+        scope=DESKPET_SCOPE,
         description="桌面宠物双向消息网关",
     )
     async def send_to_deskpet(
@@ -443,8 +449,8 @@ class DeskpetPlugin(MaiBotPlugin):
         """从 MaiBot 出站消息字典中提取纯文本。"""
         plain = message.get("processed_plain_text") or ""
         if plain:
-            # Strip MaiBot platform reply prefix (e.g. [回复消息], [回复])
-            cleaned = re.sub(r'^\[回复[^\]]*\]\s*', '', str(plain))
+            # Strip MaiBot platform reply prefix (e.g. [回复消息], [回复...], @桌宠用户)
+            cleaned = re.sub(r'^(?:\[回复[^\]]*\]\s*|@桌宠用户\s*)+', '', str(plain))
             return cleaned
 
         raw = message.get("raw_message") or []
@@ -586,7 +592,9 @@ class DeskpetPlugin(MaiBotPlugin):
             gateway_name=self.GATEWAY_NAME,
             message={
                 "message_id": message_id,
-                "platform": "deskpet",
+                "platform": self.DESKPET_PLATFORM,
+                "account_id": self.DESKPET_ACCOUNT_ID,
+                "scope": self.DESKPET_SCOPE,
                 "timestamp": str(time.time()),
                 "message_info": {
                     "user_info": {
@@ -599,6 +607,8 @@ class DeskpetPlugin(MaiBotPlugin):
                     {"type": "text", "data": text},
                 ],
             },
+            external_message_id=message_id,
+            dedupe_key=message_id,
         )
 
         if not accepted:
@@ -628,7 +638,9 @@ class DeskpetPlugin(MaiBotPlugin):
             gateway_name=self.GATEWAY_NAME,
             message={
                 "message_id": message_id,
-                "platform": "deskpet",
+                "platform": self.DESKPET_PLATFORM,
+                "account_id": self.DESKPET_ACCOUNT_ID,
+                "scope": self.DESKPET_SCOPE,
                 "timestamp": str(time.time()),
                 "message_info": {
                     "user_info": {
@@ -647,6 +659,8 @@ class DeskpetPlugin(MaiBotPlugin):
                     {"type": "text", "data": "看看屏幕上有什么，简短评论一下"},
                 ],
             },
+            external_message_id=message_id,
+            dedupe_key=message_id,
         )
 
     def _format_controls_summary(self) -> list[str]:
