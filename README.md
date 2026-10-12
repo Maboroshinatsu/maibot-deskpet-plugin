@@ -10,12 +10,12 @@
 
 [![Release](https://img.shields.io/badge/Release-v1.0.0-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.0)
 [![Installer](https://img.shields.io/badge/Setup.exe-112.4_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.0/MaiBot-Deskpet-Setup-1.0.0.exe)
-[![Electron](https://img.shields.io/badge/Electron_33-Vue_3_+_TS-5c7cfa?style=flat-square&labelColor=231d19)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron_34-Vue_3_+_TS-5c7cfa?style=flat-square&labelColor=231d19)](https://www.electronjs.org/)
 [![Live2D](https://img.shields.io/badge/Live2D-Cubism_2_/_4-d66853?style=flat-square&labelColor=231d19)](https://www.live2d.com/)
-[![MaiBot](https://img.shields.io/badge/MaiBot-v0.10.0+-8b6fd4?style=flat-square&labelColor=231d19)](https://github.com/MaiM-with-u/MaiBot)
-[![Platform](https://img.shields.io/badge/Platform-Windows_10_/_11-3a8296?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases)
+[![MaiBot](https://img.shields.io/badge/MaiBot-Plugin_SDK_v2-8b6fd4?style=flat-square&labelColor=231d19)](https://github.com/MaiM-with-u/MaiBot)
+[![License](https://img.shields.io/badge/License-MIT-e08b52?style=flat-square&labelColor=231d19)](LICENSE)
 
-**[下载 v1.0.0 安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.0)** &nbsp;·&nbsp; **[核心特性](#-核心特性矩阵)** &nbsp;·&nbsp; **[系统架构](#-系统架构与数据流)** &nbsp;·&nbsp; **[快速开始](#-快速开始)** &nbsp;·&nbsp; **[语音管线对比](#-轻量化双模语音管线)** &nbsp;·&nbsp; **[v1.0 升级全记录](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)** &nbsp;·&nbsp; **[模型适配规范](docs/Live2D模型适配规范.md)**
+**[下载 v1.0.0 安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.0)** &nbsp;·&nbsp; **[核心特性](#-核心特性矩阵)** &nbsp;·&nbsp; **[系统架构](#-系统架构与数据流)** &nbsp;·&nbsp; **[快速开始](#-快速开始)** &nbsp;·&nbsp; **[语音管线对比](#-轻量化双模语音管线)** &nbsp;·&nbsp; **[v1.0 升级全记录](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)** &nbsp;·&nbsp; **[模型适配规范](docs/MODEL-ADAPTER-SPEC.md)**
 
 </div>
 
@@ -131,13 +131,13 @@ flowchart LR
 
     subgraph Core["Electron 主进程 & MaiBot 插件"]
         Main["Electron Main Process\n窗口穿透 / 伴随舞台 / 服务编排"]
-        Bridge["MaiBot WS Bridge (:18002)\n插件 plugin.py + 情绪清洗路由"]
-        MaiBot["MaiBot Core (:8000)\nLLM 思考 + 表情/动作决策"]
+        Bridge["MaiBot WS Bridge (:8523)\n插件 plugin.py + 情绪清洗路由"]
+        MaiBot["MaiBot Core\nLLM 思考 + 表情/动作决策"]
     end
 
-    subgraph SpeechOut["全栈 TTS 引擎 (:9880)"]
-        CloudTTS["云端 TTS 桥接\n(百炼 / 硅基 / Fish / MiMo / OpenAI)"]
-        LocalTTS["本地 GPT-SoVITS\n多情绪参考音频推理"]
+    subgraph SpeechOut["全栈 TTS 管线 (:9881 → :9880)"]
+        CloudTTS["云端 TTS 桥接 (:9880)\n(百炼 / 硅基 / Fish / MiMo / OpenAI)"]
+        LocalTTS["本地 GPT-SoVITS (:9880)\n多情绪参考音频推理"]
     end
 
     subgraph Stage["Renderer · Live2D 舞台"]
@@ -149,9 +149,9 @@ flowchart LR
     CloudSTT & LocalSTT --> Main
     Vision & Text --> Main
     Main <--> Bridge <--> MaiBot
-    Bridge -. "按句并行请求合成" .-> CloudTTS & LocalTTS
-    CloudTTS & LocalTTS -. "WAV 音频流" .-> Main
-    Main --> Queue & Preset
+    Bridge -. "按句并行请求 (:9881)" .-> CloudTTS & LocalTTS
+    CloudTTS & LocalTTS -. "WAV 音频流" .-> Bridge
+    Bridge --> Queue & Preset
 ```
 
 ---
@@ -173,21 +173,28 @@ cd /path/to/MaiBot/plugins
 git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_deskpet_plugin
 ```
 
-首次启动后，插件会在同目录自动生成 `config.toml`，按需确认端口与开关即可：
+插件目录下的 [`config.toml`](config.toml) 默认配置如下（本机使用通常无需修改）：
 
 ```toml
 [plugin]
 enabled = true
+config_version = "1.0.0"
 
-[deskpet]
-host = "127.0.0.1"
-port = 18002                # 桌宠 WebSocket 桥接端口
+[ws_server]
+host = "127.0.0.1"          # 本机；跨设备改为 "0.0.0.0"
+port = 8523                 # 桌宠 WebSocket 连接端口
+auth_token = ""             # 鉴权令牌；局域网/跨设备使用时建议设置
+
+[chat]
+stream_buffer_size = 50
 
 [tts]
 enabled = true
-api_url = "http://127.0.0.1:9880"
-text_lang = "zh"
+url = "http://127.0.0.1:9881/tts"
+timeout = 60
 ```
+
+> 更详细的插件部署与跨设备连接说明请参阅 [**《部署与配置指南 (SETUP.md)》**](docs/SETUP.md)。
 
 ### 3. 配置语音服务（2 分钟开箱）
 
@@ -229,39 +236,48 @@ npm run dev
 ```
 
 #### 构建 Windows 安装包 (`Setup.exe`)
-项目内置了自动化构建脚本 [`build-installer.ps1`](build-installer.ps1)，会自动准备内嵌 Python 环境并调用 `electron-builder` 产出轻量化安装包：
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build-installer.ps1
+项目在 [`deskpet-app/electron-builder.yml`](deskpet-app/electron-builder.yml) 中配置了完整的 NSIS 打包流水线，直接执行 `dist` 脚本即可产出轻量化安装包：
+```bash
+cd deskpet-app
+npm run dist
 ```
 打包产物位于 `deskpet-app/release/MaiBot-Deskpet-Setup-1.0.0.exe`。
 
 </details>
 
 <details>
-<summary><b>🎨 导入自定义 Live2D 模型</b></summary>
+<summary><b>🎨 导入自定义 Live2D 模型与预设编排</b></summary>
 
 1. 打开桌宠伴随设置面板 → **「模型」** 标签页 → 点击 **「导入模型文件夹」**，选择包含 `.model3.json` 或 `.model.json` 的目录。
 2. 切换至新模型后，进入 **「预设」** 标签页：
    - 在 **「状态预设工坊」** 中可利用模型自带的 `.exp3.json` 表情、`.motion3.json` 动作与 `.cdi3.json` 部件自由捏合专属预设，支持一键「试播」与导出分享。
    - 在 **「情绪映射」** 中可将多个预设归入同一情绪组并调节随机权重。
-3. 详细的命名规范与参数自动识别规则请参阅 [**《Live2D 模型适配规范》**](docs/Live2D模型适配规范.md)。
+3. 详细的模型能力导出与 `deskpet-adapter.json` 编写规范请参阅 [**《Live2D 模型适配规范 (MODEL-ADAPTER-SPEC.md)》**](docs/MODEL-ADAPTER-SPEC.md) 及 JSON Schema [`docs/deskpet-adapter.schema.json`](docs/deskpet-adapter.schema.json)。
 
 </details>
 
 <details>
-<summary><b>📂 仓库目录结构一览</b></summary>
+<summary><b>📂 仓库目录结构与核心文档索引</b></summary>
 
 ```text
 maibot-deskpet-plugin/
 ├── plugin.py                     # MaiBot 插件主入口（消息流拦截、情绪解析、按句并行 TTS 调度）
+├── _manifest.json                # MaiBot 插件元数据清单（v1.0.0 · MIT）
+├── config.toml                   # 插件默认配置文件（WS :8523 / TTS :9881）
 ├── cloud-tts-bridge.py           # 多平台云端 TTS 桥接服务（百炼 / 硅基流动 / Fish / MiMo / OpenAI 兼容）
+├── gpt-sovits-bridge.py          # TTS 统一归一化桥接服务（监听 :9881 转发至 :9880）
 ├── stt-bridge.py                 # 本地 SenseVoice INT8 语音识别服务（支持按需自动下载模型至 %APPDATA%）
-├── build-installer.ps1           # Windows 一键式安装包构建脚本
+├── hotkey-bridge.py              # 全局快捷键监听服务（Alt+V 按住说话）
+├── watchdog.py                   # 进程守护脚本
 ├── docs/
-│   ├── assets/                   # 仓库自适应深浅色 SVG 视觉资产
-│   ├── Live2D模型适配规范.md       # Live2D Cubism 2/4 模型接入与标准参数规范
+│   ├── assets/                   # 仓库自适应深浅色 SVG 视觉资产（Hero & Bento Grid）
+│   ├── MODEL-ADAPTER-SPEC.md     # Live2D 模型适配规范（含 AI 自动生成 adapter 指南）
+│   ├── deskpet-adapter.schema.json # 模型适配文件 JSON Schema 校验定义
+│   ├── SETUP.md                  # 插件与桌面端详细部署指南
+│   ├── IMAGE-SET.md              # 视觉识别参考图集配置说明
 │   └── UPGRADE-AND-FIX-LOG-2026-10-12.md  # v1.0.0 升级与架构演进全记录
-└── deskpet-app/                  # Electron 33 + Vue 3 + PixiJS 桌面端源码
+└── deskpet-app/                  # Electron 34 + Vue 3 + PixiJS 桌面端工程
+    ├── electron-builder.yml      # Windows NSIS 安装包构建配置
     ├── src/main/                 # 主进程：透明穿透窗口、伴随舞台缩放、双模语音进程管理
     ├── src/preload/              # 预加载安全 IPC 桥接层
     └── src/renderer/             # 渲染进程：Live2D 控制器、逆变换视线、预设工坊、8 色主题面板

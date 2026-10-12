@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "MaiBot 桌面宠物 - Live2D Deskpet",
   "author": "Maboroshinatsu",
+  "license": "MIT",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
