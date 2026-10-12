@@ -59,7 +59,19 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 
 ---
 
+## 致谢
+
+- **[MaiBot](https://github.com/MaiM-with-u/MaiBot)** — 插件运行的宿主平台
+- **[Airi](https://github.com/moeru-ai/airi)** — PixiJS Live2D 渲染方案的重要参考
+- **[NachoBot](https://github.com/RachelForster/Shinsekai)** — GPT-SoVITS 集成方案与音频处理管线参考
+- **[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)** — 语音合成引擎
+- **[Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx)** — SenseVoice 语音识别运行时
+- **[NapCat](https://github.com/NapNeko/NapCatQQ)** — 图片消息格式参考
+- **[pixi-live2d-display](https://github.com/guansss/pixi-live2d-display)** — PixiJS Live2D 渲染封装库
+
+---
+
 ## 开源协议与素材声明
 
-- **项目源码**：基于 [MIT License](LICENSE) 开源。感谢 [MaiBot](https://github.com/MaiM-with-u/MaiBot)、[pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) 与 [Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx)。
+- **项目源码**：基于 [MIT License](LICENSE) 开源。
 - **示例模型**：演示截图及默认内置的示例模型 **「桃濑日和 (Hiyori Momose / 桃瀬ひより)」** 版权归 **Live2D Inc.** 所有，依据 [Live2D Free Material License Agreement（免费素材使用许可协议）](https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html) 提供，仅用于功能演示，不包含在 MIT 源码协议授权范围内。
