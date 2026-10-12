@@ -1,9 +1,9 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg" />
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.svg" />
-  <img alt="MaiBot Deskpet v1.0.0 Hero Banner" src="docs/assets/hero-light.svg" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.png" />
+  <img alt="MaiBot Deskpet v1.0.0 Hero Banner" src="docs/assets/hero-light.png" width="100%" />
 </picture>
 
 <br />
