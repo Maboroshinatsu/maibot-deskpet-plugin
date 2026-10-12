@@ -381,40 +381,51 @@ class DeskpetPlugin(MaiBotPlugin):
             return {"success": False, "error": "No deskpet client connected"}
 
         response_text = self._extract_text_from_message(message)
-        if not response_text:
-            self.ctx.logger.warning(f"[Deskpet] Empty extracted text, message keys: {list(message.keys())}")
+        media_items = self._extract_media_from_message(message)
+        if not response_text and not media_items:
+            self.ctx.logger.warning(f"[Deskpet] Empty extracted text and media, message keys: {list(message.keys())}")
             return {"success": True}
 
         req_id = uuid.uuid4().hex[:12]
 
-        recent_tool_emotion = time.time() - self._last_tool_emotion_at < TOOL_EMOTION_SUPPRESS_SECONDS
-        if recent_tool_emotion:
-            self.ctx.logger.debug("[Deskpet] Skip auto emotion because tool emotion was recently set")
-        else:
-            emotion = self._infer_emotion_from_text(response_text)
-            if emotion not in ("neutral", "idle"):
-                self.ctx.logger.debug(f"[Deskpet] Auto inferred emotion: {emotion}")
-                await server.broadcast("state:emotion", {"emotion": emotion}, req_id)
+        if response_text:
+            recent_tool_emotion = time.time() - self._last_tool_emotion_at < TOOL_EMOTION_SUPPRESS_SECONDS
+            if recent_tool_emotion:
+                self.ctx.logger.debug("[Deskpet] Skip auto emotion because tool emotion was recently set")
+            else:
+                emotion = self._infer_emotion_from_text(response_text)
+                if emotion not in ("neutral", "idle"):
+                    self.ctx.logger.debug(f"[Deskpet] Auto inferred emotion: {emotion}")
+                    await server.broadcast("state:emotion", {"emotion": emotion}, req_id)
 
-        # 配置成 0/负数会让 range 步长非法，钳到至少 1
-        buf = max(1, self.config.chat.stream_buffer_size)
-        for i in range(0, len(response_text), buf):
+            # 配置成 0/负数会让 range 步长非法，钳到至少 1
+            buf = max(1, self.config.chat.stream_buffer_size)
+            for i in range(0, len(response_text), buf):
+                if self._closing:
+                    # 分块发送中途开始卸载：立即停止，不再向已关闭的服务器推送
+                    return {"success": False, "error": "Plugin unloading"}
+                chunk = response_text[i:i + buf]
+                await server.broadcast("output:text:delta", {"delta": chunk, "request_id": req_id})
+                await asyncio.sleep(0.03)
+
             if self._closing:
-                # 分块发送中途开始卸载：立即停止，不再向已关闭的服务器推送
                 return {"success": False, "error": "Plugin unloading"}
-            chunk = response_text[i:i + buf]
-            await server.broadcast("output:text:delta", {"delta": chunk, "request_id": req_id})
-            await asyncio.sleep(0.03)
+            await server.broadcast("output:text:done", {"request_id": req_id})
 
-        if self._closing:
-            return {"success": False, "error": "Plugin unloading"}
-        await server.broadcast("output:text:done", {"request_id": req_id})
+            # 异步取 TTS 音频；卸载开始后不再新建任务
+            if self.config.tts.enabled and not self._closing:
+                task = asyncio.create_task(self._send_tts_audio(response_text, req_id))
+                self._bg_tasks.add(task)
+                task.add_done_callback(self._reap_bg_task)
 
-        # 异步取 TTS 音频；卸载开始后不再新建任务
-        if self.config.tts.enabled and not self._closing:
-            task = asyncio.create_task(self._send_tts_audio(response_text, req_id))
-            self._bg_tasks.add(task)
-            task.add_done_callback(self._reap_bg_task)
+        for item in media_items:
+            if self._closing:
+                return {"success": False, "error": "Plugin unloading"}
+            await server.broadcast("output:emoji", {
+                "base64": item["base64"],
+                "description": item["description"],
+                "emotion": item.get("emotion", ""),
+            })
 
         return {"success": True}
 
@@ -445,12 +456,53 @@ class DeskpetPlugin(MaiBotPlugin):
             "request_id": req_id,
         })
 
+    def _extract_media_from_message(self, message: Dict[str, Any]) -> list[Dict[str, str]]:
+        """从 MaiBot 出站消息字典中提取表情包与图片组件（支持 binary_data_base64 与 Seg base64）。"""
+        media_list: list[Dict[str, str]] = []
+        raw_items: list[Dict[str, Any]] = []
+
+        raw = message.get("raw_message")
+        if isinstance(raw, list):
+            raw_items.extend(item for item in raw if isinstance(item, dict))
+
+        seg = message.get("message_segment")
+        if isinstance(seg, dict):
+            seg_type = str(seg.get("type") or "").strip().lower()
+            if seg_type == "seglist" and isinstance(seg.get("data"), list):
+                raw_items.extend(item for item in seg["data"] if isinstance(item, dict))
+            elif seg_type in ("emoji", "image"):
+                raw_items.append(seg)
+
+        for comp in raw_items:
+            comp_type = str(comp.get("type") or "").strip().lower()
+            if comp_type not in ("emoji", "image"):
+                continue
+            b64 = str(comp.get("binary_data_base64") or "").strip()
+            raw_data = str(comp.get("data") or "").strip()
+            desc = str(comp.get("description") or "").strip()
+            if not b64 and raw_data and not raw_data.startswith("["):
+                b64 = raw_data
+            if raw_data.startswith("[") and not desc:
+                m = re.match(r"^\[(?:表情包|图片)(?:[：:]\s*([^\]]*))?\]$", raw_data)
+                desc = (m.group(1).strip() if m and m.group(1) else "") or raw_data.strip("[]")
+            if b64.startswith("data:") and "," in b64:
+                b64 = b64.split(",", 1)[1].strip()
+            if b64:
+                media_list.append({
+                    "base64": b64,
+                    "description": desc,
+                    "emotion": str(comp.get("emotion") or ""),
+                })
+        return media_list
+
     def _extract_text_from_message(self, message: Dict[str, Any]) -> str:
-        """从 MaiBot 出站消息字典中提取纯文本。"""
+        """从 MaiBot 出站消息字典中提取纯文本（自动剥离回复前缀与图片/表情包占位标签）。"""
         plain = message.get("processed_plain_text") or ""
         if plain:
             # Strip MaiBot platform reply prefix (e.g. [回复消息], [回复...], @桌宠用户)
             cleaned = re.sub(r'^(?:\[回复[^\]]*\]\s*|@桌宠用户\s*)+', '', str(plain))
+            # Strip MaiBot media component placeholders (e.g. [表情包: 开心], [表情包], [图片：...])
+            cleaned = re.sub(r'\[(?:表情包|图片)(?:[：:][^\]]*)?\]', '', cleaned).strip()
             return cleaned
 
         raw = message.get("raw_message") or []
@@ -460,7 +512,7 @@ class DeskpetPlugin(MaiBotPlugin):
                 for comp in raw
                 if isinstance(comp, dict) and comp.get("type") == "text"
             ]
-            result = "".join(texts)
+            result = "".join(texts).strip()
             if result:
                 return result
 

@@ -664,6 +664,64 @@ class ModelControlsToolTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(exact_res["success"])
         self.assertEqual(exact_res["preset"], "开心·歪头笑")
 
+    async def test_outbound_native_emoji_and_mixed_message(self):
+        plug = _make_plugin()
+        server = _FakeServer()
+        plug._ws_server = server
+
+        # 1) 纯表情包出站消息（模拟 MaiBot PluginMessageUtils 序列化后的 EmojiComponent）
+        res_emoji = await plug.send_to_deskpet({
+            "message_id": "msg-emoji-1",
+            "processed_plain_text": "[表情包: 开心]",
+            "raw_message": [
+                {
+                    "type": "emoji",
+                    "data": "[表情包: 开心]",
+                    "hash": "abc123hash",
+                    "binary_data_base64": "iVBORw0KGgoAAAANSUhEUg==",
+                }
+            ],
+        })
+        self.assertTrue(res_emoji["success"])
+        self.assertEqual(
+            server.sent,
+            [
+                (
+                    "output:emoji",
+                    {
+                        "base64": "iVBORw0KGgoAAAANSUhEUg==",
+                        "description": "开心",
+                        "emotion": "",
+                    },
+                    None,
+                )
+            ],
+        )
+
+        # 2) 图文混合出站消息（带 @桌宠用户 前缀 + 文本 + 表情包）
+        server.sent.clear()
+        res_mixed = await plug.send_to_deskpet({
+            "message_id": "msg-mixed-2",
+            "processed_plain_text": "@桌宠用户 给你看个好玩的 [表情包: 摸摸头]",
+            "raw_message": [
+                {"type": "text", "data": "给你看个好玩的"},
+                {
+                    "type": "emoji",
+                    "data": "[表情包: 摸摸头]",
+                    "hash": "def456hash",
+                    "binary_data_base64": "YWJjMTIz",
+                },
+            ],
+        })
+        self.assertTrue(res_mixed["success"])
+        sent_types = [item[0] for item in server.sent]
+        self.assertEqual(sent_types, ["output:text:delta", "output:text:done", "output:emoji"])
+        self.assertEqual(server.sent[0][1]["delta"], "给你看个好玩的")
+        self.assertEqual(
+            server.sent[2][1],
+            {"base64": "YWJjMTIz", "description": "摸摸头", "emotion": ""},
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
