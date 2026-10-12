@@ -102,6 +102,28 @@ public/models/your_model/
     "gain": 1.0                      // 幅度缩放，0.1~4；嘴张太大就调小
   },
 
+  // ── 底层常驻参数与部件隐藏（去水印/初始修正）──
+  // 选填。桌宠会自动扫描模型目录下的 .exp3.json / .cdi3.json / .vtube.json，
+  // 识别出"去除水印 / shuiyin"等开关并自动写入底层；你也可以在这里显式覆盖。
+  // 底层参数常驻生效，绝不会因为 6 秒情绪回退或控件重置而失效。
+  "baseParameters": {
+    "Paramheadxy": 30
+  },
+  "hiddenParts": [],
+
+  // ── 持久模型控件（服饰/发型/道具/特效开关）──
+  // 选填。桌宠会自动从 .exp3.json / .cdi3.json 中提取按键/发型/外套/道具等控件，
+  // 并上报给 AI（麦麦可通过 set_deskpet_control 工具自行理解和切换，用户也可在设置面板点击切换）。
+  // 如果你想自定义控件名称或组合多个参数，可在此显式声明：
+  "controls": {
+    "戴帽子": {
+      "label": "戴帽子",
+      "category": "outfit",
+      "defaultActive": false,
+      "parameters": { "ParamHat": 1 }
+    }
+  },
+
   // ── 情绪映射 ──────────────────────────────
   // 内置情绪键（可以只写一部分）：
   //   happy sad angry surprise embarrassed thinking shy curious confused neutral idle
@@ -109,7 +131,7 @@ public/models/your_model/
   // AI 之后就能用 set_deskpet_emotion 触发它
   "emotions": {
     "happy": {
-      "expression": "smile",         // 选填，必须是 expressions 清单里的名字
+      "expression": "smile",         // 选填，已注册的表情名或同目录下的 .exp3.json 文件名
       "motion": { "group": "Tap", "index": 1 },   // 选填，index 默认 0
       "parameters": {                // 选填，参数 ID → 目标值
         "ParamMouthForm": 1
@@ -127,11 +149,19 @@ public/models/your_model/
 }
 ```
 
+### 三层状态栈（去水印 / 控件 / 情绪互不干扰）
+
+桌宠内部维护了**三层参数合成栈**（优先级：`baseParameters` < `controls` < `emotions`）：
+
+1. **底层常驻层（`baseParameters` / `hiddenParts`）**：用于永久隐藏作者水印或修正初始姿态（桌宠会自动识别常见的 `shuiyin` / `去除水印` 表情和参数）。
+2. **持久控件层（`controls`）**：如穿脱外套、戴帽子、换马尾、拿手柄/麦克风等开关。开启后持续保持，不会在 6 秒后自动消失；互斥的预设控件（如两种冲突的发型）在切换时会自动关闭前一个。
+3. **瞬态情绪层（`emotions`）**：如 `happy`、`angry` 等对话表情，会在 **6 秒后自动切回 `neutral`**。回退时只释放情绪层参数，绝不会冲掉底层的去水印参数或已开启的服饰/发型控件。
+
 ### 三种映射手段的取舍
 
 | 手段 | 前提 | 效果 | 说明 |
 |---|---|---|---|
-| `expression` | 表情已注册进 `model3.json` 的 `Expressions` | 最好，有淡入淡出 | 见[常见坑 1](#1-exp3-文件存在但用不了) |
+| `expression` | 已注册进 `model3.json` 或同目录下存在 `.exp3.json` | 最好，未注册的 `.exp3.json` 会被桌宠自动内联为参数 | 见[常见坑 1](#1-exp3-文件存在但用不了) |
 | `motion` | 模型有 `Motions` 动作组 | 最生动，全身动作 | 播放期间内置眨眼会暂停（Cubism 标准行为） |
 | `parameters` | 参数在清单里 | 保底方案，静态定格 | 任何模型都能用 |
 
@@ -146,8 +176,7 @@ public/models/your_model/
 
 非中性情绪会在 **6 秒后自动切回 `neutral`**。所以：
 
-- **强烈建议配置 `neutral`**，把其他情绪用到的参数都在这里显式归零/复位，否则表情会残留。
-- 桌宠会自动把"上一次设过、这次没设"的参数写回 0，但显式声明 `neutral` 更可控。
+- 桌宠会在情绪回退时自动把情绪层参数恢复到 `controls` / `baseParameters` / 模型自身的 `default` 值。
 - `expression` 不需要（也没法）用参数去抵消：切到不带 `expression` 的情绪（含 `neutral`）时，桌宠会自动把上一个表情淡出。
 
 ---

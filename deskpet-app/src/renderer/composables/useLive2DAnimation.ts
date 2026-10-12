@@ -12,10 +12,7 @@ import type { DeskpetModel } from '@/services/live2d/loader'
  */
 
 const BREATH_PARAMS = {
-  angleX: { offset: 0, peak: 12, cycle: 6.5345, weight: 0.5 },
-  angleY: { offset: 0, peak: 6, cycle: 3.5345, weight: 0.5 },
-  angleZ: { offset: 0, peak: 8, cycle: 5.5345, weight: 0.5 },
-  bodyAngleX: { offset: 0, peak: 3, cycle: 15.5345, weight: 0.5 },
+  angleZ: { offset: 0, peak: 1.2, cycle: 5.5345, weight: 0.15 },
   breath: { offset: 0.5, peak: 0.5, cycle: 3.2345, weight: 0.5 },
 }
 
@@ -29,13 +26,12 @@ export function useLive2DAnimation() {
 
     try {
       const breath = internalModel.breath
-      if (breath?.setParameters && internalModel.idParamAngleX) {
-        // BreathParameterData 没有从入口导出，直接构造同形状对象即可
+      if (breath?.setParameters && internalModel.idParamBreath) {
+        // 仅驱动呼吸与极轻微自然呼吸摆幅，不向 AngleX/AngleY 注入大幅正弦偏移，确保鼠标对准脸部时模型能稳定正视屏幕
         breath.setParameters([
-          { parameterId: internalModel.idParamAngleX, ...BREATH_PARAMS.angleX },
-          { parameterId: internalModel.idParamAngleY, ...BREATH_PARAMS.angleY },
-          { parameterId: internalModel.idParamAngleZ, ...BREATH_PARAMS.angleZ },
-          { parameterId: internalModel.idParamBodyAngleX, ...BREATH_PARAMS.bodyAngleX },
+          ...(internalModel.idParamAngleZ
+            ? [{ parameterId: internalModel.idParamAngleZ, ...BREATH_PARAMS.angleZ }]
+            : []),
           { parameterId: internalModel.idParamBreath, ...BREATH_PARAMS.breath },
         ])
       }

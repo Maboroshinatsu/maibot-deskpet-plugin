@@ -2,7 +2,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useDeskpetStore } from '@/stores/deskpet'
 import { useChatStore } from '@/stores/chat'
 import { useLipSync } from './useLipSync'
-import { isDeskpetEmotionValue } from '@/services/live2d/emotion-adapter'
+import { findModelStatePreset, isDeskpetEmotionValue } from '@/services/live2d/emotion-adapter'
 import { DEFAULT_WS_URL, type ServerMessage } from '@/services/protocol'
 import { normalizeServerMessage } from '@/services/host/maibot-protocol'
 import { applyHostEvent, type DeskpetEventDeps } from '@/services/host/event-controller'
@@ -27,8 +27,7 @@ function getWsToken(): string {
 }
 
 export function useWebSocket() {
-  const url = getWsUrl()
-  const token = getWsToken()
+  let activeUrl = getWsUrl()
   const store = useDeskpetStore()
   const chatStore = useChatStore()
   const { start: startLipSync, stop: stopLipSync } = useLipSync()
@@ -80,7 +79,7 @@ export function useWebSocket() {
     currentAudioUrl = objectUrl
     if (speakingTailTimer) { clearTimeout(speakingTailTimer); speakingTailTimer = null }
     store.isSpeaking = true
-    startLipSync()
+    startLipSync(audio)
     audio.onended = () => playNextInQueue()
     audio.onerror = () => playNextInQueue()
     audio.play().catch((err) => {
@@ -139,9 +138,12 @@ export function useWebSocket() {
     const state = ws.value?.readyState
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return
     closedByUs = false
+    const currentUrl = getWsUrl()
+    const currentToken = getWsToken()
+    activeUrl = currentUrl
 
     try {
-      ws.value = new WebSocket(url)
+      ws.value = new WebSocket(currentUrl)
     } catch {
       console.warn('[Deskpet] WebSocket connect failed, retrying...')
       scheduleReconnect()
@@ -153,10 +155,30 @@ export function useWebSocket() {
       if (ws.value !== socket) return
       console.log('[Deskpet] WebSocket connected')
       store.wsConnected = true
-      if (token) send('auth', { token })
-      // 重连后插件端的 _model_emotions 可能已丢失或过时，补发当前模型声明的自定义情绪
-      if (store.modelEmotions.length > 0) {
+      if (currentToken) send('auth', { token: currentToken })
+      // 重连后插件端的 _model_emotions / _model_controls 可能已丢失或过时，补发当前模型能力
+      if ((store.modelEmotions?.length ?? 0) > 0) {
         send('sys:emotions', { emotions: store.modelEmotions })
+      }
+      if ((store.modelControls?.length ?? 0) > 0 || (store.statePresets?.length ?? 0) > 0) {
+        send('sys:controls', {
+          controls: (store.modelControls ?? []).map((c) => ({
+            id: c.id,
+            label: c.label,
+            category: c.category,
+            active: c.active,
+          })),
+          presets: (store.statePresets ?? []).map((p) => ({
+            id: p.id,
+            label: p.label,
+            description: p.description,
+            emotion: p.emotion,
+            group: p.group,
+            controls: p.controls,
+            parameters: p.parameters,
+            custom: true,
+          })),
+        })
       }
       lastActivity = Date.now()
       clearStableTimer()
@@ -199,8 +221,15 @@ export function useWebSocket() {
    */
   const eventDeps: DeskpetEventDeps = {
     isKnownEmotion: (emotion) =>
-      isDeskpetEmotionValue(emotion) || store.modelEmotions.includes(emotion),
+      isDeskpetEmotionValue(emotion) ||
+      store.modelEmotions.includes(emotion) ||
+      !!findModelStatePreset(store.statePresets ?? [], emotion),
     setEmotion: (emotion) => {
+      const preset = findModelStatePreset(store.statePresets ?? [], emotion)
+      if (preset && store.live2dModel) {
+        store.applyControlAction(preset.id, 'preset')
+        return
+      }
       // 同值赋值不会触发 watch，pulse 保证相同情绪连发也能重放并刷新回退窗口
       store.currentEmotion = emotion
       store.emotionPulse++
@@ -209,15 +238,18 @@ export function useWebSocket() {
       store.pendingAnimation = name
       store.pendingAnimationLoop = loop
     },
+    setControl: (control, action) => {
+      store.applyControlAction(control, action)
+    },
     appendReplyDelta: (delta, requestId) => { chatStore.appendChatText(delta, requestId) },
-    finishReply: (requestId) => { chatStore.finishChatStream(requestId) },
+    finishReply: (requestId, error) => { chatStore.finishChatStream(requestId, error) },
     showReplyText: (text) => { chatStore.showChatMessage(text) },
     playAudio,
     addEmoji: (base64, description) => { chatStore.addEmojiMessage(base64, description) },
     setThinking: (active) => { store.isThinking = active },
     offerRuntimeCandidate: (python) => {
-      // 来源取真实连接配置（闭包 url），不接受帧内伪造的来源
-      void window.electronAPI?.setDetectedPython(python, url).catch(() => {})
+      // 来源取当前连接真实配置 URL，不接受帧内伪造的来源
+      void window.electronAPI?.setDetectedPython(python, activeUrl).catch(() => {})
     },
     log: (message, ...args) => { console.log(message, ...args) },
     warn: (message, ...args) => { console.warn(message, ...args) },
@@ -286,11 +318,23 @@ export function useWebSocket() {
     ws.value = null
   }
 
+  function reconnectWithNewConfig() {
+    reconnectAttempt.value = 0
+    disconnect()
+    connect()
+  }
+
   onMounted(() => {
     connect()
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('deskpet:ws-config-changed', reconnectWithNewConfig)
+    }
   })
 
   onUnmounted(() => {
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('deskpet:ws-config-changed', reconnectWithNewConfig)
+    }
     disconnect()
   })
 

@@ -216,6 +216,377 @@ function listModels(): ModelEntry[] {
   return merged.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+export interface ModelExpressionAsset {
+  name: string
+  file: string
+  parameters: Array<{
+    id: string
+    value: number
+    blend?: string
+  }>
+}
+
+export interface ModelDiskPresetStep {
+  label?: string
+  durationMs: number
+  holdMs: number
+  controls: string[]
+  parameters: Record<string, number>
+}
+
+export interface ModelDiskPreset {
+  id: string
+  label: string
+  description: string
+  emotion: string
+  group?: string
+  controls: string[]
+  parameters?: Record<string, number>
+  steps?: ModelDiskPresetStep[]
+  finishMode?: 'hold' | 'revert' | 'loop'
+  revertHoldMs?: number
+  motion?: { group: string; index?: number } | 'none'
+  custom?: boolean
+}
+
+export interface ModelDiskAssets {
+  cdiParameters: Record<string, { name: string; group: string }>
+  cdiParts: Record<string, string>
+  physicsOutputIds: string[]
+  vtubeHotkeys: Record<string, string>
+  expressions: ModelExpressionAsset[]
+  poseGroups?: string[][]
+  savedPresets?: ModelDiskPreset[] | null
+}
+
+const MODEL_PRESETS_FILENAME = 'deskpet-presets.json'
+
+function sanitizeParamRecord(raw: unknown): Record<string, number> {
+  const cleanParams: Record<string, number> = {}
+  if (raw && typeof raw === 'object') {
+    for (const [pid, pval] of Object.entries(raw as Record<string, unknown>)) {
+      const num = Number(pval)
+      if (pid && Number.isFinite(num)) cleanParams[pid] = num
+    }
+  }
+  return cleanParams
+}
+
+function sanitizeModelPresets(raw: unknown): ModelDiskPreset[] | null {
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray((raw as { presets?: unknown }).presets)
+      ? (raw as { presets: unknown[] }).presets
+      : null
+  if (!list) return null
+  const result: ModelDiskPreset[] = []
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue
+    const rec = item as Record<string, unknown>
+    const id = String(rec.id || '').trim()
+    const label = String(rec.label || '').trim()
+    if (!id || !label) continue
+    const rawGroup = typeof rec.group === 'string' ? rec.group.trim() : ''
+    const cleanParams = sanitizeParamRecord(rec.parameters)
+    let cleanSteps: ModelDiskPresetStep[] | undefined
+    if (Array.isArray(rec.steps) && rec.steps.length > 0) {
+      const parsedSteps: ModelDiskPresetStep[] = []
+      for (const st of rec.steps) {
+        if (!st || typeof st !== 'object') continue
+        const srec = st as Record<string, unknown>
+        const dur = Number(srec.durationMs)
+        const hold = Number(srec.holdMs)
+        parsedSteps.push({
+          ...(typeof srec.label === 'string' && srec.label.trim()
+            ? { label: srec.label.trim() }
+            : {}),
+          durationMs: Number.isFinite(dur) ? Math.max(40, Math.min(5000, Math.round(dur))) : 350,
+          holdMs: Number.isFinite(hold) ? Math.max(0, Math.min(10000, Math.round(hold))) : 150,
+          controls: Array.isArray(srec.controls)
+            ? srec.controls.map((c) => String(c).trim()).filter(Boolean)
+            : [],
+          parameters: sanitizeParamRecord(srec.parameters),
+        })
+      }
+      if (parsedSteps.length > 0) cleanSteps = parsedSteps
+    }
+    const rawFinish = String(rec.finishMode || '').trim()
+    const finishMode: 'hold' | 'revert' | 'loop' | undefined =
+      rawFinish === 'hold' || rawFinish === 'revert' || rawFinish === 'loop'
+        ? rawFinish
+        : undefined
+    const rawRevertHold = Number(rec.revertHoldMs)
+    const revertHoldMs = Number.isFinite(rawRevertHold)
+      ? Math.max(100, Math.min(15000, Math.round(rawRevertHold)))
+      : undefined
+    let motion: { group: string; index?: number } | 'none' | undefined
+    if (rec.motion === 'none') {
+      motion = 'none'
+    } else if (rec.motion && typeof rec.motion === 'object') {
+      const mrec = rec.motion as Record<string, unknown>
+      const group = String(mrec.group || '').trim()
+      if (group) {
+        const idx = Number(mrec.index)
+        motion = Number.isFinite(idx) && idx >= 0 ? { group, index: Math.floor(idx) } : { group }
+      }
+    }
+
+    result.push({
+      id,
+      label,
+      description: String(rec.description || '').trim(),
+      emotion: String(rec.emotion || 'neutral').trim() || 'neutral',
+      ...(rawGroup ? { group: rawGroup } : {}),
+      controls: Array.isArray(rec.controls)
+        ? rec.controls.map((c) => String(c).trim()).filter(Boolean)
+        : [],
+      parameters: cleanParams,
+      ...(cleanSteps ? { steps: cleanSteps } : {}),
+      ...(finishMode ? { finishMode } : {}),
+      ...(revertHoldMs !== undefined ? { revertHoldMs } : {}),
+      ...(motion !== undefined ? { motion } : {}),
+      custom: true,
+    })
+  }
+  return result
+}
+
+function resolveModelFilePath(modelUrl: string): string | null {
+  if (!modelUrl || typeof modelUrl !== 'string') return null
+  let rel = ''
+  try {
+    if (modelUrl.startsWith('deskpet://models/')) {
+      const parsed = new URL(modelUrl)
+      rel = decodeURIComponent(parsed.pathname).replace(/^\/+/, '')
+    } else if (modelUrl.startsWith('./models/')) {
+      rel = decodeURIComponent(modelUrl.slice('./models/'.length)).replace(/^\/+/, '')
+    } else if (modelUrl.startsWith('/models/')) {
+      rel = decodeURIComponent(modelUrl.slice('/models/'.length)).replace(/^\/+/, '')
+    } else {
+      const parsed = new URL(modelUrl)
+      const idx = parsed.pathname.indexOf('/models/')
+      if (idx >= 0) {
+        rel = decodeURIComponent(parsed.pathname.slice(idx + '/models/'.length)).replace(/^\/+/, '')
+      }
+    }
+  } catch {
+    return null
+  }
+  if (!rel) return null
+
+  for (const root of getModelsRoots()) {
+    const candidate = path.normalize(path.join(root.fsPath, rel))
+    if (!candidate.startsWith(path.normalize(root.fsPath + path.sep))) continue
+    if (fs.existsSync(candidate)) return candidate
+  }
+  return null
+}
+
+function saveModelPresetsToDisk(modelUrl: string, presets: unknown): boolean {
+  const modelFile = resolveModelFilePath(modelUrl)
+  if (!modelFile) return false
+  const sanitized = sanitizeModelPresets(presets)
+  if (!sanitized) return false
+  const targetFile = path.join(path.dirname(modelFile), MODEL_PRESETS_FILENAME)
+  try {
+    fs.writeFileSync(
+      targetFile,
+      JSON.stringify(
+        {
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          presets: sanitized,
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    )
+    return true
+  } catch (err) {
+    console.warn('[deskpet] Failed to write deskpet-presets.json:', err)
+    return false
+  }
+}
+
+function inspectModelAssets(modelUrl: string): ModelDiskAssets | null {
+  const modelFile = resolveModelFilePath(modelUrl)
+  if (!modelFile) return null
+  const modelDir = path.dirname(modelFile)
+
+  const cdiParameters: Record<string, { name: string; group: string }> = {}
+  const cdiParts: Record<string, string> = {}
+  const physicsOutputSet = new Set<string>()
+  const vtubeHotkeys: Record<string, string> = {}
+  const expressions: ModelExpressionAsset[] = []
+
+  const cdiFiles: string[] = []
+  const physicsFiles: string[] = []
+  const vtubeFiles: string[] = []
+  const expFiles: string[] = []
+  const poseFiles: string[] = []
+  const poseGroups: string[][] = []
+
+  const walkAssets = (dir: string, depth: number): void => {
+    if (depth > 2) return
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walkAssets(full, depth + 1)
+      } else if (entry.isFile()) {
+        const lower = entry.name.toLowerCase()
+        if (lower.endsWith('.cdi3.json')) cdiFiles.push(full)
+        else if (lower.endsWith('.physics3.json')) physicsFiles.push(full)
+        else if (lower.endsWith('.vtube.json')) vtubeFiles.push(full)
+        else if (lower.endsWith('.exp3.json')) expFiles.push(full)
+        else if (lower.endsWith('.pose3.json')) poseFiles.push(full)
+      }
+    }
+  }
+
+  walkAssets(modelDir, 0)
+
+  for (const posePath of poseFiles) {
+    try {
+      const pose = JSON.parse(fs.readFileSync(posePath, 'utf-8'))
+      if (Array.isArray(pose?.Groups)) {
+        for (const group of pose.Groups) {
+          if (!Array.isArray(group)) continue
+          const partIds = group
+            .map((entry: any) => (typeof entry?.Id === 'string' ? entry.Id.trim() : ''))
+            .filter(Boolean)
+          if (partIds.length >= 2) {
+            poseGroups.push(partIds)
+          }
+        }
+      }
+    } catch {
+      // ignore malformed pose3.json
+    }
+  }
+
+  for (const cdiPath of cdiFiles) {
+    try {
+      const cdi = JSON.parse(fs.readFileSync(cdiPath, 'utf-8'))
+      const groups: Record<string, string> = {}
+      if (Array.isArray(cdi?.ParameterGroups)) {
+        for (const g of cdi.ParameterGroups) {
+          if (typeof g?.Id === 'string') {
+            groups[g.Id] = typeof g?.Name === 'string' ? g.Name.trim() : ''
+          }
+        }
+      }
+      if (Array.isArray(cdi?.Parameters)) {
+        for (const p of cdi.Parameters) {
+          if (typeof p?.Id === 'string') {
+            cdiParameters[p.Id] = {
+              name: typeof p?.Name === 'string' ? p.Name.trim() : '',
+              group: typeof p?.GroupId === 'string' ? (groups[p.GroupId] ?? '') : '',
+            }
+          }
+        }
+      }
+      if (Array.isArray(cdi?.Parts)) {
+        for (const part of cdi.Parts) {
+          if (typeof part?.Id === 'string' && typeof part?.Name === 'string') {
+            cdiParts[part.Id] = part.Name.trim()
+          }
+        }
+      }
+    } catch {
+      // ignore malformed cdi3.json
+    }
+  }
+
+  for (const physPath of physicsFiles) {
+    try {
+      const phys = JSON.parse(fs.readFileSync(physPath, 'utf-8'))
+      if (Array.isArray(phys?.PhysicsSettings)) {
+        for (const setting of phys.PhysicsSettings) {
+          if (!Array.isArray(setting?.Output)) continue
+          for (const out of setting.Output) {
+            const destId = out?.Destination?.Id
+            if (typeof destId === 'string' && destId) {
+              physicsOutputSet.add(destId)
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore malformed physics3.json
+    }
+  }
+
+  for (const vtPath of vtubeFiles) {
+    try {
+      const vt = JSON.parse(fs.readFileSync(vtPath, 'utf-8'))
+      if (Array.isArray(vt?.Hotkeys)) {
+        for (const hk of vt.Hotkeys) {
+          if (typeof hk?.File === 'string' && hk.File && typeof hk?.Name === 'string' && hk.Name.trim()) {
+            vtubeHotkeys[hk.File] = hk.Name.trim()
+          }
+        }
+      }
+    } catch {
+      // ignore malformed vtube.json
+    }
+  }
+
+  expFiles.sort((a, b) => a.localeCompare(b))
+  for (const expPath of expFiles) {
+    try {
+      const exp = JSON.parse(fs.readFileSync(expPath, 'utf-8'))
+      if (!Array.isArray(exp?.Parameters)) continue
+      const params: Array<{ id: string; value: number; blend?: string }> = []
+      for (const p of exp.Parameters) {
+        if (typeof p?.Id === 'string' && typeof p?.Value === 'number') {
+          params.push({
+            id: p.Id,
+            value: p.Value,
+            ...(typeof p?.Blend === 'string' ? { blend: p.Blend } : {}),
+          })
+        }
+      }
+      const baseName = path.basename(expPath)
+      const stem = baseName.replace(/\.exp3\.json$/i, '')
+      expressions.push({
+        name: stem,
+        file: baseName,
+        parameters: params,
+      })
+    } catch {
+      // ignore malformed exp3.json
+    }
+  }
+
+  let savedPresets: ModelDiskPreset[] | null = null
+  const presetsPath = path.join(modelDir, MODEL_PRESETS_FILENAME)
+  try {
+    if (fs.existsSync(presetsPath) && fs.statSync(presetsPath).isFile()) {
+      const rawPresets = JSON.parse(fs.readFileSync(presetsPath, 'utf-8'))
+      savedPresets = sanitizeModelPresets(rawPresets)
+    }
+  } catch {
+    // ignore malformed deskpet-presets.json
+  }
+
+  return {
+    cdiParameters,
+    cdiParts,
+    physicsOutputIds: [...physicsOutputSet],
+    vtubeHotkeys,
+    expressions,
+    poseGroups,
+    savedPresets,
+  }
+}
+
 /** 随包目录里非自带的文件夹视为用户模型，一次性迁到 userData（之后重装不再丢） */
 function migrateUserModelsOnce(): void {
   const bundled = getModelsRoot()
@@ -352,6 +723,7 @@ function setAlwaysOnTopState(flag: boolean): void {
 function setClickThroughLocked(flag: boolean): void {
   clickThroughLocked = flag
   mainWindow?.setIgnoreMouseEvents(flag, { forward: true })
+  mainWindow?.webContents.send('set-click-through-locked', flag)
   saveWindowState()
   createTray()
 }
@@ -374,7 +746,7 @@ function startGlobalCursorPolling(): void {
   if (cursorPollTimer) return
 
   cursorPollTimer = setInterval(() => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return
 
     const cursor = screen.getCursorScreenPoint()
     if (cursor.x === lastCursorX && cursor.y === lastCursorY) return
@@ -382,7 +754,7 @@ function startGlobalCursorPolling(): void {
     lastCursorX = cursor.x
     lastCursorY = cursor.y
 
-    const bounds = mainWindow.getBounds()
+    const bounds = lastSavedBounds
     mainWindow.webContents.send('global-cursor-position', {
       screenX: cursor.x,
       screenY: cursor.y,
@@ -408,6 +780,36 @@ function getAppIconPath(): string {
     }
   }
   return candidates[0]
+}
+
+function getWindowPlacement(): {
+  windowX: number
+  windowY: number
+  windowWidth: number
+  windowHeight: number
+  workAreaX: number
+  workAreaY: number
+  workAreaWidth: number
+  workAreaHeight: number
+} {
+  const bounds = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : lastSavedBounds
+  const display = screen.getDisplayMatching(bounds)
+  const area = display.workArea
+  return {
+    windowX: bounds.x,
+    windowY: bounds.y,
+    windowWidth: bounds.width,
+    windowHeight: bounds.height,
+    workAreaX: area.x,
+    workAreaY: area.y,
+    workAreaWidth: area.width,
+    workAreaHeight: area.height,
+  }
+}
+
+function sendWindowPlacement(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('window-placement', getWindowPlacement())
 }
 
 function createWindow(): void {
@@ -456,6 +858,8 @@ function createWindow(): void {
 
   mainWindow.webContents.once('did-finish-load', () => {
     mainWindow?.webContents.send('set-hover-fade', hoverFadeEnabled)
+    mainWindow?.webContents.send('set-click-through-locked', clickThroughLocked)
+    sendWindowPlacement()
   })
 
   // 无边框窗口没有菜单，快捷键要手动接：设置项大多需要重载渲染层才生效
@@ -474,10 +878,12 @@ function createWindow(): void {
   // move/resize 在拖动期间以指针频率触发，直接 writeFileSync 会每秒阻塞主进程数百次
   mainWindow.on('move', () => {
     enforceWindowBounds()
+    sendWindowPlacement()
     scheduleSaveWindowState()
   })
   mainWindow.on('resize', () => {
     enforceWindowBounds()
+    sendWindowPlacement()
     scheduleSaveWindowState()
   })
   mainWindow.on('close', saveWindowState)
@@ -622,6 +1028,8 @@ app.whenReady().then(() => {
     scheduleSaveWindowState()
   })
 
+  ipcMain.handle('get-window-placement', () => getWindowPlacement())
+
   ipcMain.handle('set-always-on-top', (_event, flag: boolean) => {
     setAlwaysOnTopState(flag)
   })
@@ -635,6 +1043,99 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('stt-transcribe', async (_event, audioBuffer: ArrayBuffer, url?: string) => {
+    const cleanTranscript = (rawText: unknown): string | null => {
+      if (typeof rawText !== 'string') return null
+      const cleaned = rawText.replace(/<\|[^|]+\|>/g, '').trim()
+      return cleaned || null
+    }
+
+    const body = Buffer.from(audioBuffer)
+    const cloudStt = serviceManager.getSttRuntimeConfig()
+
+    if (cloudStt.backend) {
+      if (!cloudStt.apiKey && cloudStt.backend !== 'openai') {
+        throw new Error(`云端 STT (${cloudStt.backend}) 尚未配置 API Key`)
+      }
+
+      if (cloudStt.backend === 'dashscope') {
+        const endpoint =
+          cloudStt.endpoint ||
+          'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation'
+        const model = cloudStt.model || 'qwen-audio-asr'
+        const audioDataUri = `data:audio/wav;base64,${body.toString('base64')}`
+        const resp = await net.fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cloudStt.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            input: {
+              messages: [
+                {
+                  role: 'user',
+                  content: [{ audio: audioDataUri }],
+                },
+              ],
+            },
+          }),
+        })
+        if (!resp.ok) {
+          throw new Error(`DashScope STT HTTP ${resp.status}`)
+        }
+        const json = (await resp.json()) as {
+          output?: { choices?: Array<{ message?: { content?: Array<{ text?: string }> | string } }> }
+          text?: string
+        }
+        const msgContent = json.output?.choices?.[0]?.message?.content
+        const text =
+          typeof msgContent === 'string'
+            ? msgContent
+            : Array.isArray(msgContent)
+              ? msgContent.map((c) => c.text || '').join('')
+              : json.text
+        return cleanTranscript(text)
+      }
+
+      // OpenAI 兼容 /v1/audio/transcriptions 格式：siliconflow / groq / openai
+      const defaultEndpoints: Record<string, string> = {
+        siliconflow: 'https://api.siliconflow.cn/v1/audio/transcriptions',
+        groq: 'https://api.groq.com/openai/v1/audio/transcriptions',
+        openai: 'https://api.openai.com/v1/audio/transcriptions',
+      }
+      const defaultModels: Record<string, string> = {
+        siliconflow: 'FunAudioLLM/SenseVoiceSmall',
+        groq: 'whisper-large-v3-turbo',
+        openai: 'whisper-1',
+      }
+      const endpoint = cloudStt.endpoint || defaultEndpoints[cloudStt.backend] || defaultEndpoints.openai
+      const model = cloudStt.model || defaultModels[cloudStt.backend] || 'FunAudioLLM/SenseVoiceSmall'
+
+      const form = new FormData()
+      form.append('file', new Blob([body], { type: 'audio/wav' }), 'speech.wav')
+      form.append('model', model)
+      if (cloudStt.backend === 'groq') {
+        form.append('language', 'zh')
+      }
+
+      const headers: Record<string, string> = {}
+      if (cloudStt.apiKey) {
+        headers.Authorization = `Bearer ${cloudStt.apiKey}`
+      }
+
+      const resp = await net.fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: form,
+      })
+      if (!resp.ok) {
+        throw new Error(`Cloud STT (${cloudStt.backend}) HTTP ${resp.status}`)
+      }
+      const json = (await resp.json()) as { text?: string }
+      return cleanTranscript(json.text)
+    }
+
     let sttUrl: URL
     try {
       sttUrl = new URL(url || 'http://127.0.0.1:18530/stt')
@@ -650,25 +1151,28 @@ app.whenReady().then(() => {
       // 允许局域网 STT，但把目标记下来，避免录音被静默发去意料之外的主机
       console.warn('[deskpet] STT request to non-loopback host:', sttUrl.hostname)
     }
-    const body = Buffer.from(audioBuffer)
-    return new Promise<string | null>((resolve) => {
+    return new Promise<string | null>((resolve, reject) => {
       const req = http.request({
         hostname: sttUrl.hostname, port: sttUrl.port, path: sttUrl.pathname + sttUrl.search, method: 'POST',
         headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': body.length },
-        // 桥挂起时不设超时会让 promise 永不 settle，语音输入 UI 永久卡死
-        timeout: 30_000,
+        // 首次按需下载 226MB INT8 模型或桥首载可能耗时较长，放宽超时上限
+        timeout: 180_000,
       }, (res) => {
         // 不设编码则逐 chunk 独立转字符串，跨 TCP 包的 UTF-8 中文会碎成乱码
         res.setEncoding('utf-8')
         let data = ''
         res.on('data', (chunk: string) => data += chunk)
         res.on('end', () => {
-          try { resolve(JSON.parse(data).text || null) } catch { resolve(null) }
+          if (res.statusCode && res.statusCode >= 400) {
+            reject(new Error(`STT HTTP ${res.statusCode}`))
+            return
+          }
+          try { resolve(cleanTranscript(JSON.parse(data).text)) } catch { resolve(null) }
         })
-        res.on('error', () => resolve(null))
+        res.on('error', (err) => reject(err))
       })
       req.on('timeout', () => { req.destroy(new Error('STT request timeout')) })
-      req.on('error', () => resolve(null))
+      req.on('error', (err) => reject(err))
       req.write(body)
       req.end()
     })
@@ -682,6 +1186,10 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('list-models', () => listModels())
+  ipcMain.handle('inspect-model-assets', (_event, modelUrl: string) => inspectModelAssets(modelUrl))
+  ipcMain.handle('save-model-presets', (_event, modelUrl: string, presets: unknown) =>
+    saveModelPresetsToDisk(modelUrl, presets),
+  )
 
   ipcMain.handle('open-models-folder', () => {
     const dir = getUserModelsRoot()

@@ -13,6 +13,7 @@ import {
   type HostCapabilities,
   type HostConnectionState,
   type HostEventListener,
+  type ModelControlSummary,
 } from './contracts'
 
 export interface FakeHostOptions {
@@ -25,6 +26,7 @@ export interface FakeHostRecord {
   userText: string[]
   screenshots: string[]
   modelEmotions: string[][]
+  modelControls: ModelControlSummary[][]
 }
 
 export interface FakeHost extends HostAdapter {
@@ -40,7 +42,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   const capabilities: HostCapabilities = { ...NO_CAPABILITIES, ...(options.capabilities ?? {}) }
   const acceptsInput = options.acceptsInput ?? true
   const listeners = new Set<HostEventListener>()
-  const record: FakeHostRecord = { userText: [], screenshots: [], modelEmotions: [] }
+  const record: FakeHostRecord = { userText: [], screenshots: [], modelEmotions: [], modelControls: [] }
   let state: HostConnectionState = 'disconnected'
 
   function emit(event: DeskpetHostEvent): void {
@@ -81,6 +83,11 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
     sendModelEmotions(emotions: string[]) {
       if (!acceptsInput) return false
       record.modelEmotions.push([...emotions])
+      return true
+    },
+    sendModelControls(controls: ModelControlSummary[]) {
+      if (!acceptsInput) return false
+      record.modelControls.push(controls.map((c) => ({ ...c })))
       return true
     },
 

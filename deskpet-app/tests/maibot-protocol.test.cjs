@@ -31,6 +31,10 @@ test('full text, emotion, animation, audio, thinking, emoji map correctly', () =
     { kind: 'animation', name: 'wave', loop: true })
   same(n('state:animation', { name: 'wave' }),
     { kind: 'animation', name: 'wave', loop: false })
+  same(n('state:control', { control: '戴帽子', action: 'on' }),
+    { kind: 'control', control: '戴帽子', action: 'on' })
+  same(n('state:control', { control: '戴帽子' }),
+    { kind: 'control', control: '戴帽子', action: 'toggle' })
   same(n('output:audio', { base64: 'AAA' }), { kind: 'audio', base64: 'AAA' })
   same(n('state:thinking', {}), { kind: 'thinking', active: true })
   same(n('output:emoji', { base64: 'B', description: '贴贴' }),

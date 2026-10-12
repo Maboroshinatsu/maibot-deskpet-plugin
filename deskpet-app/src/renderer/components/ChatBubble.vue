@@ -1,29 +1,40 @@
 <template>
-  <!-- floating comic bubbles (text + emoji) -->
-  <div class="comic-bubbles">
-    <TransitionGroup name="comic-pop">
-      <div v-if="thinking" key="__thinking__" class="comic-bubble assistant thinking-bubble">
+  <!-- 位于窗口下 1/3 处的对话气泡（自动换行，不遮挡角色脸部） -->
+  <div class="speech-bubbles-anchor">
+    <TransitionGroup name="bubble-pop">
+      <div v-if="thinking" key="__thinking__" class="speech-bubble assistant thinking-bubble">
         <span class="dot" /><span class="dot" /><span class="dot" />
       </div>
-      <div v-for="b in floatingBubbles" :key="b.id" class="comic-bubble" :class="b.role">
+      <div v-for="b in floatingBubbles" :key="b.id" class="speech-bubble" :class="b.role">
         <img v-if="b.type === 'emoji'" :src="'data:image/png;base64,' + b.base64" class="emoji-img" />
         <template v-else>{{ b.text }}<span v-if="b.streaming" class="msg-cursor">|</span></template>
       </div>
     </TransitionGroup>
   </div>
 
-  <!-- chat history panel（与设置面板同一套交互：遮罩 + 右侧抽屉 + 头部关闭） -->
-  <Transition name="panel-slide">
-    <div v-if="panelOpen" class="chat-overlay" @mousedown.stop>
-      <div class="chat-panel">
-      <div class="panel-header">
-        <span>对话记录</span>
-        <span class="panel-header-right">
-          <span class="panel-count">{{ messages.length }}</span>
-          <button class="panel-close" @click="emit('close')">&times;</button>
-        </span>
+  <!-- 独立消息记录伴随浮窗（四角方向自适应 + 阻尼滑入/滑出动画） -->
+  <Transition name="companion-slide">
+    <div
+      v-if="panelOpen"
+      class="companion-window message-companion"
+      :class="[`pop-${popDirectionX}`, `align-${alignY}`]"
+      @mousedown.stop
+      @wheel.stop
+    >
+      <div class="comp-header">
+        <div class="comp-title">
+          <span class="comp-title-dot" />
+          <span>消息记录</span>
+          <span v-if="messages.length > 0" class="comp-count">{{ messages.length }}</span>
+        </div>
+        <button class="icon-close-btn" @click="emit('close')" title="收起消息记录">
+          <svg viewBox="0 0 24 24">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-      <div class="panel-messages" ref="messagesRef">
+
+      <div class="comp-body" ref="messagesRef">
         <div v-for="msg in messages" :key="msg.id" :class="['msg-row', msg.role]">
           <div class="msg-label">{{ msg.role === 'user' ? '你' : '麦麦' }}</div>
           <div class="msg-bubble" :class="{ streaming: msg.type === 'text' && msg.streaming }">
@@ -32,14 +43,12 @@
           </div>
         </div>
         <div v-if="messages.length === 0" class="msg-empty">
-          <div class="msg-empty-title">还没有消息</div>
-          <div class="msg-empty-hint">双击桌宠打开输入框<br />或点左下麦克风开始语音</div>
+          <div class="msg-empty-title">暂无消息记录</div>
+          <div class="msg-empty-hint">双击桌宠唤出输入框<br />或点击侧边麦克风开启语音</div>
         </div>
-      </div>
       </div>
     </div>
   </Transition>
-
 </template>
 
 <script setup lang="ts">
@@ -47,7 +56,6 @@ import { ref, watch, nextTick, onUnmounted } from 'vue'
 import type { ChatMessage } from '@/stores/chat'
 
 const BUBBLE_TTL = 5000
-/** 流式气泡的兜底存活时间：output:text:done 帧丢失时不至于永久挂在屏幕上 */
 const STREAMING_BUBBLE_TTL = 30_000
 
 interface FloatingBubble {
@@ -59,12 +67,20 @@ interface FloatingBubble {
   base64?: string
 }
 
-const props = defineProps<{
-  messages: ChatMessage[]
-  lastBubble: { text: string; visible: boolean; streaming: boolean }
-  panelOpen: boolean
-  thinking: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    messages: ChatMessage[]
+    lastBubble: { text: string; visible: boolean; streaming: boolean }
+    panelOpen: boolean
+    thinking: boolean
+    popDirectionX?: 'left' | 'right'
+    alignY?: 'bottom' | 'top'
+  }>(),
+  {
+    popDirectionX: 'left',
+    alignY: 'bottom',
+  },
+)
 
 const emit = defineEmits<{ 'bubbles-cleared': []; close: [] }>()
 
@@ -85,56 +101,79 @@ function scheduleDismiss(msgId: string, ttl = BUBBLE_TTL, replace = false) {
   timers.set(msgId, t)
 }
 
-// 不能只盯 length：流式 delta 只改 text 不改 length（气泡会冻结在第一个字块），
-// 消息数到达上限后 push+splice 使 length 恒定（之后所有新气泡都不出现）
-watch(() => {
-  const latest = props.messages[props.messages.length - 1]
-  if (!latest) return ''
-  return latest.type === 'text'
-    ? `${latest.id}:${latest.text.length}:${latest.streaming}`
-    : latest.id
-}, () => {
-  const latest = props.messages[props.messages.length - 1]
-  if (!latest || latest.role !== 'assistant') return
-  const existing = floatingBubbles.value.find((b) => b.id === latest.id)
-  if (existing) {
-    if (latest.type === 'text') { existing.text = latest.text; existing.streaming = latest.streaming }
-  } else {
-    const fb: FloatingBubble = latest.type === 'emoji'
-      ? { id: latest.id, role: 'assistant', text: '', streaming: false, type: 'emoji', base64: latest.base64 }
-      : { id: latest.id, role: 'assistant', text: latest.text, streaming: latest.streaming, type: 'text' }
-    floatingBubbles.value.push(fb)
-    if (floatingBubbles.value.length > 2) {
-      const removed = floatingBubbles.value.shift()!
-      const t = timers.get(removed.id)
-      if (t) { clearTimeout(t); timers.delete(removed.id) }
+watch(
+  () => {
+    const latest = props.messages[props.messages.length - 1]
+    if (!latest) return ''
+    return latest.type === 'text'
+      ? `${latest.id}:${latest.text.length}:${latest.streaming}`
+      : latest.id
+  },
+  () => {
+    const latest = props.messages[props.messages.length - 1]
+    if (!latest || latest.role !== 'assistant') return
+    const existing = floatingBubbles.value.find((b) => b.id === latest.id)
+    if (existing) {
+      if (latest.type === 'text') {
+        existing.text = latest.text
+        existing.streaming = latest.streaming
+      }
+    } else {
+      const fb: FloatingBubble =
+        latest.type === 'emoji'
+          ? { id: latest.id, role: 'assistant', text: '', streaming: false, type: 'emoji', base64: latest.base64 }
+          : { id: latest.id, role: 'assistant', text: latest.text, streaming: latest.streaming, type: 'text' }
+      floatingBubbles.value.push(fb)
+      if (floatingBubbles.value.length > 2) {
+        const removed = floatingBubbles.value.shift()!
+        const t = timers.get(removed.id)
+        if (t) {
+          clearTimeout(t)
+          timers.delete(removed.id)
+        }
+      }
     }
-  }
-  if (latest.type === 'emoji' || !latest.streaming) {
-    scheduleDismiss(latest.id)
-  } else {
-    // 流式气泡也挂兜底：正常结束时会被 5 秒的正式 TTL 替换
-    scheduleDismiss(latest.id, STREAMING_BUBBLE_TTL)
-  }
-})
+    if (latest.type === 'emoji' || !latest.streaming) {
+      scheduleDismiss(latest.id)
+    } else {
+      scheduleDismiss(latest.id, STREAMING_BUBBLE_TTL)
+    }
+  },
+)
 
-watch(() => props.lastBubble.streaming, (streaming) => {
-  if (streaming) return
-  const latest = props.messages[props.messages.length - 1]
-  if (!latest || latest.role !== 'assistant') return
-  const fb = floatingBubbles.value.find((b) => b.id === latest.id)
-  if (fb) fb.streaming = false
-  // 流正常结束：把 30 秒兜底换成 5 秒正式 TTL
-  scheduleDismiss(latest.id, BUBBLE_TTL, true)
-})
+watch(
+  () => props.lastBubble.streaming,
+  (streaming) => {
+    if (streaming) return
+    const latest = props.messages[props.messages.length - 1]
+    if (!latest || latest.role !== 'assistant') return
+    const fb = floatingBubbles.value.find((b) => b.id === latest.id)
+    if (fb) fb.streaming = false
+    scheduleDismiss(latest.id, BUBBLE_TTL, true)
+  },
+)
 
 const messagesRef = ref<HTMLElement>()
-watch(() => props.panelOpen, (open) => {
-  if (open) nextTick(() => { if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight })
-})
-watch(() => props.messages.length, () => {
-  if (props.panelOpen) nextTick(() => { if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight })
-})
+watch(
+  () => props.panelOpen,
+  (open) => {
+    if (open) {
+      nextTick(() => {
+        if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+      })
+    }
+  },
+)
+watch(
+  () => props.messages.length,
+  () => {
+    if (props.panelOpen) {
+      nextTick(() => {
+        if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+      })
+    }
+  },
+)
 
 onUnmounted(() => {
   timers.forEach((t) => clearTimeout(t))
@@ -143,141 +182,345 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* ── comic floating bubbles ── */
-.comic-bubbles {
+/* ── 位于窗口下 1/3 处的对话气泡（跟随角色水平偏移，自动换行，不遮挡脸部） ── */
+.speech-bubbles-anchor {
   position: absolute;
-  top: 14%;
-  left: 4%;
-  z-index: 15;
+  top: 58%;
+  width: 256px;
+  max-width: calc(100vw - 32px);
+  left: calc(50% - 128px + var(--stage-shift-x, 0px));
+  z-index: 25;
   pointer-events: none;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
+  align-items: center;
   gap: 6px;
+  transition: left 0.56s var(--spring-gentle);
 }
-.comic-bubble {
-  max-width: 340px;
-  padding: 12px 18px;
-  border-radius: 20px 20px 6px 20px;
-  font-size: 15px;
+
+.speech-bubble {
+  max-width: 256px;
+  padding: 9px 14px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 500;
   line-height: 1.55;
-  color: #222;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 14px rgba(0,0,0,0.12);
+  color: var(--dp-text-main);
+  background: var(--dp-panel-bg);
+  border: 1px solid var(--dp-border-strong);
+  box-shadow: var(--dp-shadow);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: left;
   position: relative;
 }
-.comic-bubble::after {
+
+.speech-bubble::before {
   content: '';
   position: absolute;
-  bottom: 6px;
-  right: -6px;
-  width: 12px;
-  height: 12px;
-  background: inherit;
-  clip-path: polygon(0 0, 100% 100%, 0 100%);
+  top: -5px;
+  left: calc(50% - 4px);
+  transform: rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--dp-panel-bg);
+  border-left: 1px solid var(--dp-border-strong);
+  border-top: 1px solid var(--dp-border-strong);
 }
-.msg-cursor { animation: blink 0.8s infinite; color: #666; }
-.comic-bubble.user .msg-cursor { color: #b0d0ff; }
-@keyframes blink { 50% { opacity: 0; } }
-.emoji-img { max-width: 180px; max-height: 180px; border-radius: 8px; display: block; }
 
-/* 「正在思考」指示器：后端发 state:thinking 时显示 */
-.thinking-bubble { display: flex; gap: 5px; align-items: center; padding: 14px 18px; }
+.msg-cursor {
+  animation: blink 0.8s infinite;
+  color: var(--dp-accent);
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.emoji-img {
+  max-width: 150px;
+  max-height: 150px;
+  border-radius: 8px;
+  display: block;
+}
+
+/* 正在思考指示器 */
+.thinking-bubble {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 11px 16px;
+}
 .thinking-bubble .dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #888;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-accent);
   animation: think-bounce 1.2s ease-in-out infinite;
 }
-.thinking-bubble .dot:nth-child(2) { animation-delay: 0.15s; }
-.thinking-bubble .dot:nth-child(3) { animation-delay: 0.3s; }
+.thinking-bubble .dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.thinking-bubble .dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
 @keyframes think-bounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
-  30% { transform: translateY(-4px); opacity: 1; }
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
-.comic-pop-enter-active { transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
-.comic-pop-leave-active { transition: all 0.4s ease; }
-.comic-pop-enter-from { opacity: 0; transform: translateY(16px) scale(0.9); }
-.comic-pop-leave-to { opacity: 0; transform: translateY(-8px); }
 
-/* ── history panel：与 SettingsPanel 同一套抽屉模式 ── */
-.chat-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  justify-content: flex-end;
-  background: linear-gradient(to left, rgba(9, 9, 11, 0.35), transparent 45%);
+.bubble-pop-enter-active {
+  transition:
+    opacity 0.2s var(--ease-out-expo),
+    transform 0.24s var(--ease-out-expo);
 }
-.chat-panel {
-  width: 280px;
-  height: 100%;
-  background: rgba(24, 24, 27, 0.94);
-  backdrop-filter: blur(20px) saturate(1.2);
-  border-left: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.55);
-  overflow: hidden;
+.bubble-pop-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.18s ease;
+}
+.bubble-pop-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.bubble-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* ── 独立消息记录伴随浮窗 ── */
+.companion-window {
+  position: absolute;
+  width: 296px;
+  height: min(468px, calc(100vh - 52px));
+  background: var(--dp-panel-bg);
+  border: none;
+  border-radius: 28px;
+  box-shadow: var(--dp-shadow);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  z-index: 66;
+  color: var(--dp-text-main);
+  -webkit-app-region: no-drag;
+  transition: background-color 0.28s ease, color 0.28s ease, box-shadow 0.28s ease;
 }
-.panel-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 15px 18px 13px;
-  color: #e4e4e7; font-size: 14px; font-weight: 600; letter-spacing: 0.3px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+
+.companion-window.pop-left {
+  left: 12px;
+  --slide-x: 18px;
 }
-.panel-header-right { display: flex; align-items: center; gap: 8px; }
-.panel-count { color: #63636b; font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 400; }
-.panel-close {
-  width: 26px; height: 26px; display: grid; place-items: center;
-  background: none; border: none; border-radius: 8px; color: #71717a; font-size: 18px; cursor: pointer;
-  transition: color 0.18s ease, background 0.18s ease;
+
+.companion-window.pop-right {
+  right: 12px;
+  --slide-x: -18px;
 }
-.panel-close:hover { color: #e4e4e7; background: rgba(255, 255, 255, 0.08); }
-.panel-close:active { transform: translateY(1px); }
-.panel-messages {
+
+.companion-window.align-bottom {
+  bottom: 36px;
+}
+
+.companion-window.align-top {
+  top: 20px;
+}
+
+.companion-slide-enter-active {
+  transition:
+    opacity 200ms var(--ease-out-expo),
+    transform 240ms var(--ease-out-expo);
+}
+
+.companion-slide-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 170ms ease;
+}
+
+.companion-slide-enter-from,
+.companion-slide-leave-to {
+  opacity: 0;
+  transform: translateX(var(--slide-x, 18px));
+}
+
+.comp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 10px;
+  flex-shrink: 0;
+}
+
+.comp-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dp-text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comp-title-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dp-orb-grad);
+  box-shadow: 0 2px 8px var(--dp-accent-glow);
+}
+
+.comp-count {
+  color: var(--dp-text-sub);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: var(--dp-card-bg);
+}
+
+.icon-close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: none;
+  background: var(--dp-card-bg);
+  color: var(--dp-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 460ms var(--spring-gentle) 45ms;
+}
+
+.icon-close-btn:hover {
+  background: var(--dp-card-hover);
+  color: var(--dp-text-main);
+}
+
+.icon-close-btn:active {
+  transform: scale(0.92);
+  transition: transform 95ms cubic-bezier(0.22, 1, 0.36, 1) 0ms;
+}
+
+.icon-close-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.comp-body {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: 8px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comp-body::-webkit-scrollbar {
+  width: 4px;
+}
+.comp-body::-webkit-scrollbar-thumb {
+  background: var(--dp-scrollbar);
+  border-radius: 999px;
+}
+
+.msg-row {
+  display: flex;
+  flex-direction: column;
+  animation: msg-row-pop 0.24s var(--ease-out-expo);
+}
+
+@keyframes msg-row-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.msg-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--dp-text-dim);
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.msg-row.user {
+  align-items: flex-end;
+}
+
+.msg-row.user .msg-label {
+  color: var(--dp-accent-vivid);
+}
+
+.msg-row.assistant {
+  align-items: flex-start;
+}
+
+.msg-bubble {
+  max-width: 90%;
+  padding: 9px 13px;
+  border-radius: 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  color: var(--dp-text-main);
+}
+
+.msg-row.user .msg-bubble {
+  background: var(--dp-accent);
+  color: var(--dp-accent-text);
+  border-bottom-right-radius: 5px;
+  box-shadow: 0 4px 12px -2px var(--dp-accent-glow);
+}
+
+.msg-row.assistant .msg-bubble {
+  background: var(--dp-card-bg);
+  border: none;
+  border-bottom-left-radius: 5px;
+}
+
+.msg-empty {
+  text-align: center;
+  margin-top: 42px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.panel-messages::-webkit-scrollbar { width: 7px; }
-.panel-messages::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12); border-radius: 4px;
-  border: 2px solid transparent; background-clip: padding-box;
+
+.msg-empty-title {
+  color: var(--dp-text-main);
+  font-size: 13px;
+  font-weight: 600;
 }
-.msg-row { display: flex; flex-direction: column; }
-.msg-label { font-size: 10px; color: #71717a; margin-bottom: 2px; padding: 0 4px; }
-.msg-row.user { align-items: flex-end; }
-.msg-row.user .msg-label { color: #8fb4d9; }
-.msg-row.assistant { align-items: flex-start; }
-.msg-bubble {
-  max-width: 90%;
-  padding: 6px 10px;
-  border-radius: 12px;
+
+.msg-empty-hint {
+  color: var(--dp-text-sub);
   font-size: 12px;
-  line-height: 1.5;
-  word-break: break-word;
-  color: #e4e4e7;
+  font-weight: 500;
+  line-height: 1.65;
 }
-.msg-row.user .msg-bubble {
-  background: rgba(109, 155, 209, 0.28);
-  border: 1px solid rgba(109, 155, 209, 0.22);
-  border-bottom-right-radius: 3px;
-}
-.msg-row.assistant .msg-bubble {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-bottom-left-radius: 3px;
-}
-.msg-empty { text-align: center; margin-top: 36px; display: flex; flex-direction: column; gap: 6px; }
-.msg-empty-title { color: #a1a1aa; font-size: 12px; }
-.msg-empty-hint { color: #63636b; font-size: 11px; line-height: 1.7; }
-.panel-slide-enter-active, .panel-slide-leave-active { transition: opacity 0.28s ease; }
-.panel-slide-enter-from, .panel-slide-leave-to { opacity: 0; }
-.panel-slide-enter-active .chat-panel, .panel-slide-leave-active .chat-panel {
-  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.panel-slide-enter-from .chat-panel, .panel-slide-leave-to .chat-panel { transform: translateX(48px); }
 </style>

@@ -24,11 +24,11 @@ export function useExpressionState(store: ReturnType<typeof useDeskpetStore>) {
       clearExpression(model)
       expressionActive = false
     }
-    if (target?.parameters) {
+    if (emotion !== 'neutral' && emotion !== 'idle' && target?.parameters) {
       applyParameters(model, target.parameters)
     } else {
-      // 目标情绪没有声明参数（含 6 秒后回退到的 neutral）时必须显式释放，
-      // 否则上一个情绪的 parameters（腮红/眼泪等）会永久残留在模型上
+      // neutral/idle 常态或目标情绪没有声明参数时必须显式清空 stack.emotion，
+      // 否则 neutral 的默认参数会常驻在 stack.emotion 层并覆盖 stack.controls（预设与面捕滑块）
       applyParameters(model, {})
     }
   }

@@ -2,11 +2,12 @@
 #
 # 布局约定（与 main/services.ts、main/index.ts 的路径解析一一对应）：
 #   resources/bridges/            STT/TTS 桥脚本（ServiceManager 在这里找）
-#   resources/bridges/sensevoice/ SenseVoice 模型（~900MB，随包分发，装完即用）
 #   resources/models/             Live2D 模型（getModelsRoot → deskpet:// 协议提供）
 #   resources/icon.png            托盘/窗口图标（getAppIconPath）
-# 注意：桥脚本的 Python 直接复用 MaiBot 插件上报的解释器（sys.executable），
-# 插件依赖按 _manifest.json 装进 MaiBot 环境，因此安装包无需内置 Python。
+# 注意：
+#   1. STT 默认推荐云端 ASR 直连（0 体积、无需启动本地桥）；若启用本地离线 STT，
+#      stt-bridge.py 会在首次使用时按需自动下载轻量级 INT8 模型（~226MB）到 userData 目录。
+#   2. 桥脚本的 Python 直接复用 MaiBot 插件上报并经用户确认的解释器（sys.executable）。
 appId: com.maboroshinatsu.maibot-deskpet
 productName: MaiBot Deskpet
 electronDist: node_modules/electron/dist
@@ -29,9 +30,7 @@ extraResources:
     to: bridges/hotkey-bridge.py
   - from: ../watchdog.py
     to: bridges/watchdog.py
-  - from: sensevoice
-    to: bridges/sensevoice
-  # 只随包分发默认模型与静态立绘示例包；个人测试模型不进安装包
+  # 只随包分发默认模型与静态立绘示例包；个人测试模型与离线语音包不进安装包
   - from: src/renderer/public/models/hiyori_pro_zh
     to: models/hiyori_pro_zh
   - from: src/renderer/public/models/sample_static

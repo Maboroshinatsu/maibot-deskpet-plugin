@@ -474,5 +474,196 @@ class BoundedUnloadTest(unittest.IsolatedAsyncioTestCase):
             pass
 
 
+# ── 6. 模型控件上报与 AI 调用 (sys:controls / set_deskpet_control) ──
+
+class ModelControlsToolTest(unittest.IsolatedAsyncioTestCase):
+    async def test_sys_controls_and_fuzzy_tool_execution(self):
+        plug = _make_plugin()
+        server = _FakeServer()
+        plug._ws_server = server
+
+        await plug.handle_client_message(
+            plugin.DeskpetMessage(
+                type="sys:controls",
+                data={
+                    "controls": [
+                        {"id": "戴帽子", "label": "戴帽子", "category": "outfit", "active": False},
+                        {"id": "HAIR11", "label": "HAIR11 (后发包包关L)", "category": "hair", "active": False},
+                        {"id": "眼泪", "label": "眼泪", "category": "face_effect", "active": False},
+                        {"id": "捂胸口", "label": "捂胸口", "category": "pose_prop", "active": False},
+                    ]
+                },
+            )
+        )
+
+        # 1) list 查询
+        listed = await plug.handle_set_control(action="list")
+        self.assertTrue(listed["success"])
+        self.assertEqual(len(listed["controls"]), 4)
+
+        # 2) 中文模糊匹配开启 ("帽子" -> "戴帽子")
+        res_on = await plug.handle_set_control(action="on", control="帽子")
+        self.assertTrue(res_on["success"])
+        self.assertEqual(res_on["control"], "戴帽子")
+        self.assertTrue(res_on["active"])
+        self.assertEqual(server.sent[-1][:2], ("state:control", {"action": "on", "control": "戴帽子"}))
+
+        # 3) 一次请求组合多个瞬态控件 + 联动情绪，同时保留常驻服装 ("戴帽子")
+        res_set = await plug.handle_set_control(action="set", control="眼泪, 捂胸口", emotion="sad")
+        self.assertTrue(res_set["success"])
+        self.assertEqual(res_set["controls"], ["眼泪", "捂胸口"])
+        self.assertIn("戴帽子(on)", res_set["available_controls"])
+        self.assertIn("眼泪(on)", res_set["available_controls"])
+        self.assertIn("捂胸口(on)", res_set["available_controls"])
+
+        # 4) 表情工具返回中附带 available_controls 上下文，供 AI 感知身体控件
+        emo_res = await plug.handle_set_emotion(emotion="happy")
+        self.assertTrue(emo_res["success"])
+        self.assertIn("戴帽子(on)", emo_res["available_controls"])
+
+        # 5) reset 重置全部控件
+        res_reset = await plug.handle_set_control(action="reset")
+        self.assertTrue(res_reset["success"])
+        self.assertEqual(server.sent[-1][:2], ("state:control", {"action": "reset", "control": ""}))
+        self.assertIn("戴帽子(off)", res_reset["available_controls"])
+
+    async def test_custom_presets_reporting_and_invocation(self):
+        plug = _make_plugin()
+        server = _FakeServer()
+        plug._ws_server = server
+
+        await plug.handle_client_message(
+            plugin.DeskpetMessage(
+                type="sys:controls",
+                data={
+                    "controls": [
+                        {"id": "比耶", "label": "比耶", "category": "pose_prop", "active": False},
+                        {"id": "星星眼", "label": "星星眼", "category": "face_effect", "active": False},
+                        {"id": "眼泪", "label": "眼泪", "category": "face_effect", "active": False},
+                    ],
+                    "presets": [
+                        {
+                            "id": "custom_1",
+                            "label": "得意比耶",
+                            "description": "比耶 + 星星眼",
+                            "emotion": "happy",
+                            "controls": ["比耶", "星星眼"],
+                            "custom": True,
+                        }
+                    ],
+                },
+            )
+        )
+
+        listed = await plug.handle_set_control(action="list")
+        self.assertTrue(listed["success"])
+        self.assertEqual(len(listed["presets"]), 1)
+        self.assertTrue(any("得意比耶[自定义]" in s for s in listed["available_presets"]))
+
+        # 模型直接调用自定义命名组合
+        res_preset = await plug.handle_set_control(action="preset", control="得意比耶")
+        self.assertTrue(res_preset["success"])
+        self.assertEqual(res_preset["preset"], "得意比耶")
+        self.assertEqual(res_preset["controls"], ["比耶", "星星眼"])
+        self.assertEqual(res_preset["emotion"], "happy")
+        self.assertEqual(
+            server.sent[-1][:2],
+            (
+                "state:control",
+                {
+                    "action": "preset",
+                    "control": "得意比耶",
+                    "controls": ["比耶", "星星眼"],
+                    "emotion": "happy",
+                },
+            ),
+        )
+
+    async def test_tts_audio_broadcast_preserves_reply_order_when_short_reply_finishes_first(self):
+        plug = _make_plugin(tts_enabled=True)
+        server = _FakeServer()
+        plug._ws_server = server
+
+        gate_first = asyncio.Event()
+
+        async def fake_fetch(text: str):
+            if text == "第一句长回复":
+                await gate_first.wait()
+                return "audio-1"
+            if text == "第二句失败回复":
+                return None
+            return "audio-3"
+
+        plug._fetch_tts_audio = fake_fetch
+
+        await plug.send_to_deskpet({"processed_plain_text": "第一句长回复"})
+        await plug.send_to_deskpet({"processed_plain_text": "第二句失败回复"})
+        await plug.send_to_deskpet({"processed_plain_text": "第三句短回复"})
+
+        # 给第 2、3 句留出合成完成的时间；由于第 1 句尚未完成，第 3 句不应抢先播报
+        await asyncio.sleep(0.05)
+        audio_events_before = [d["base64"] for t, d, _r in server.sent if t == "output:audio"]
+        self.assertEqual(audio_events_before, [])
+
+        # 放行第 1 句后，应严格按 audio-1 -> audio-3 顺序广播
+        gate_first.set()
+        if plug._bg_tasks:
+            await asyncio.wait(list(plug._bg_tasks), timeout=2.0)
+
+        audio_events_after = [d["base64"] for t, d, _r in server.sent if t == "output:audio"]
+        self.assertEqual(audio_events_after, ["audio-1", "audio-3"])
+
+    async def test_preset_group_non_repeating_random_selection(self):
+        plug = _make_plugin()
+        server = _FakeServer()
+        plug._ws_server = server
+
+        await plug.handle_client_message(
+            plugin.DeskpetMessage(
+                type="sys:controls",
+                data={
+                    "controls": [
+                        {"id": "星星眼", "label": "星星眼", "category": "face_effect", "active": False},
+                        {"id": "双手举起", "label": "双手举起", "category": "pose_prop", "active": False},
+                    ],
+                    "presets": [
+                        {
+                            "id": "happy_cheer",
+                            "label": "开心·欢呼",
+                            "group": "开心",
+                            "emotion": "happy",
+                            "controls": ["双手举起"],
+                            "custom": True,
+                        },
+                        {
+                            "id": "happy_tilt",
+                            "label": "开心·歪头笑",
+                            "group": "开心",
+                            "emotion": "happy",
+                            "controls": ["星星眼"],
+                            "custom": True,
+                        },
+                    ],
+                },
+            )
+        )
+
+        # 按分组名 "开心" 连续调用 4 次，2 个变体应当交替出现（防连续重复）
+        picked_labels = []
+        for _ in range(4):
+            res = await plug.handle_set_emotion(emotion="开心")
+            self.assertTrue(res["success"])
+            picked_labels.append(res["applied_preset"])
+
+        self.assertEqual(set(picked_labels), {"开心·欢呼", "开心·歪头笑"})
+        for idx in range(1, len(picked_labels)):
+            self.assertNotEqual(picked_labels[idx], picked_labels[idx - 1])
+
+        # 指定具体变体名时精确命中对应变体
+        exact_res = await plug.handle_set_control(action="preset", control="开心·歪头笑")
+        self.assertTrue(exact_res["success"])
+        self.assertEqual(exact_res["preset"], "开心·歪头笑")
+
+
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main(verbosity=2)

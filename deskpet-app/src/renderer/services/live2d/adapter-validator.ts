@@ -19,6 +19,7 @@ export interface AdapterValidationResult {
   /** 有实际映射（表情/动作/参数任一）的情绪数量 */
   mappedEmotions: number
   mappedAnimations: number
+  mappedControls: number
 }
 
 function formatRange(min: number, max: number): string {
@@ -33,7 +34,9 @@ export function validateAdapter(
   const warnings: string[] = []
 
   const paramById = new Map(caps.parameters.map((p) => [p.id, p]))
+  const partIds = new Set((caps.parts ?? []).map((p) => p.id))
   const expressionNames = new Set(caps.expressions)
+  const unregisteredNames = new Set((caps.unregisteredExpressions ?? []).map((n) => n.toLowerCase()))
   const groupSizes = caps.motionGroups
 
   const checkParameters = (where: string, parameters: Record<string, number>) => {
@@ -47,6 +50,15 @@ export function validateAdapter(
         warnings.push(
           `${where}: 参数 "${id}" 的值 ${value} 超出模型范围 ${formatRange(info.min, info.max)}，会被钳制`,
         )
+      }
+    }
+  }
+
+  const checkHiddenParts = (where: string, hiddenParts: string[]) => {
+    if (partIds.size === 0) return
+    for (const partId of hiddenParts) {
+      if (!partIds.has(partId)) {
+        errors.push(`${where}: 部件 "${partId}" 在该模型里不存在`)
       }
     }
   }
@@ -67,17 +79,24 @@ export function validateAdapter(
   }
 
   const checkExpression = (where: string, name: string) => {
-    if (expressionNames.has(name)) return
-    if (expressionNames.size === 0) {
+    if (expressionNames.has(name) || unregisteredNames.has(name.toLowerCase())) return
+    if (expressionNames.size === 0 && unregisteredNames.size === 0) {
       errors.push(
-        `${where}: 表情 "${name}" 用不了 —— 该模型的 .model3.json 里没有 Expressions 段。` +
-          `即使目录下有 .exp3.json 文件，也必须先注册进 model3.json 才能调用`,
+        `${where}: 表情 "${name}" 用不了 —— 该模型的 .model3.json 里没有 Expressions 段，且目录下未找到同名 .exp3.json 文件`,
       )
     } else {
+      const allKnown = [...expressionNames, ...(caps.unregisteredExpressions ?? [])]
       errors.push(
-        `${where}: 表情 "${name}" 不存在，已注册的表情：${[...expressionNames].join(', ')}`,
+        `${where}: 表情 "${name}" 不存在，可用的表情：${allKnown.join(', ')}`,
       )
     }
+  }
+
+  if (Object.keys(adapter.baseParameters ?? {}).length > 0) {
+    checkParameters('baseParameters', adapter.baseParameters)
+  }
+  if ((adapter.hiddenParts ?? []).length > 0) {
+    checkHiddenParts('hiddenParts', adapter.hiddenParts)
   }
 
   let mappedEmotions = 0
@@ -97,6 +116,16 @@ export function validateAdapter(
     checkMotion(`animations.${animation}`, target.motion.group, target.motion.index ?? 0)
   }
 
+  let mappedControls = 0
+  for (const [controlId, target] of Object.entries(adapter.controls ?? {})) {
+    if (!target) continue
+    mappedControls++
+    const where = `controls.${controlId}`
+    if (target.expression) checkExpression(where, target.expression)
+    if (target.parameters) checkParameters(where, target.parameters)
+    if (target.hiddenParts) checkHiddenParts(where, target.hiddenParts)
+  }
+
   for (const group of adapter.idleMotions) {
     checkMotion('idleMotions', group, 0)
   }
@@ -113,7 +142,7 @@ export function validateAdapter(
     }
   }
 
-  return { errors, warnings, mappedEmotions, mappedAnimations }
+  return { errors, warnings, mappedEmotions, mappedAnimations, mappedControls }
 }
 
 /** 把校验结果打到控制台，用户/AI 照着改就行。 */
@@ -123,10 +152,11 @@ export function reportAdapterValidation(
   adapterName: string,
 ): void {
   const { errors, warnings } = result
+  const totalControls = caps.controls?.length ?? result.mappedControls
   if (errors.length === 0 && warnings.length === 0) {
     console.info(
-      `[Deskpet] Adapter 校验通过：${adapterName}（情绪 ${result.mappedEmotions} 项，动作 ${result.mappedAnimations} 项）。` +
-        `可用 deskpetTestEmotion('happy') / deskpetTestAnimation('wave') 逐项预览效果`,
+      `[Deskpet] Adapter 校验通过：${adapterName}（情绪 ${result.mappedEmotions} 项，动作 ${result.mappedAnimations} 项，控件 ${totalControls} 项）。` +
+        `可用 deskpetTestEmotion('happy') / deskpetTestAnimation('wave') / deskpetListControls() 预览效果`,
     )
     return
   }
@@ -136,7 +166,7 @@ export function reportAdapterValidation(
   for (const warning of warnings) console.warn(`  ! ${warning}`)
   console.info(
     `  模型能力：动作组 ${Object.keys(caps.motionGroups).length} 个、` +
-      `表情 ${caps.expressions.length} 个、参数 ${caps.parameters.length} 个`,
+      `表情 ${caps.expressions.length} 个、参数 ${caps.parameters.length} 个、控件 ${totalControls} 个`,
   )
   console.info('  运行 deskpetInspectModel() 可导出完整能力清单，交给 AI 重新生成适配')
   console.groupEnd()

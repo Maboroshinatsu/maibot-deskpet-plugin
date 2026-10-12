@@ -1,4 +1,5 @@
 import { useWebSocket } from '@/composables/useWebSocket'
+import type { ModelControlPresetSummary, ModelControlSummary } from '@/services/host/contracts'
 import type { DeskpetTransport } from './types'
 
 export function useChimeraTransport(): DeskpetTransport {
@@ -11,5 +12,7 @@ export function useChimeraTransport(): DeskpetTransport {
     sendUserText: (text: string) => send('input:text', { text }),
     sendScreenshot: (base64: string) => wsSendScreenshot(base64),
     sendModelEmotions: (emotions: string[]) => send('sys:emotions', { emotions }),
+    sendModelControls: (controls: ModelControlSummary[], presets?: ModelControlPresetSummary[]) =>
+      send('sys:controls', presets ? { controls, presets } : { controls }),
   }
 }

@@ -39,7 +39,9 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   return buf
 }
 
-export function useVoiceInput() {
+const MAX_RECORD_DURATION_MS = 60_000
+
+export function useVoiceInput(options?: { onError?: (msg: string) => void }) {
   const store = useDeskpetStore()
   const vad = useVad()
   const recordingActive = ref(false)
@@ -57,6 +59,7 @@ export function useVoiceInput() {
     owner: object
     cancelled: boolean
     recorder: MediaRecorder | null
+    maxTimer: ReturnType<typeof setTimeout> | null
     done: Promise<string | null>
     settle: (text: string | null) => void
   }
@@ -68,7 +71,22 @@ export function useVoiceInput() {
     if (micStream && micStream.getTracks().some((t) => t.readyState === 'live')) return micStream
     if (!micPromise) {
       micPromise = navigator.mediaDevices.getUserMedia({ audio: true })
-        .then((stream) => { micStream = stream; return stream })
+        .then((stream) => {
+          micStream = stream
+          stream.getTracks().forEach((track) => {
+            if (typeof track.addEventListener === 'function') {
+              track.addEventListener('ended', () => {
+                if (micStream === stream) {
+                  micStream = null
+                  if (vadActive.value) disableVad()
+                  cancelRecording()
+                  options?.onError?.('（麦克风已断开）')
+                }
+              })
+            }
+          })
+          return stream
+        })
         .finally(() => { micPromise = null })
     }
     return micPromise
@@ -94,6 +112,10 @@ export function useVoiceInput() {
   }
 
   function detachCapture(cycle: RecordCycle): void {
+    if (cycle.maxTimer !== null) {
+      if (typeof clearTimeout === 'function') clearTimeout(cycle.maxTimer)
+      cycle.maxTimer = null
+    }
     if (currentCycle === cycle) {
       currentCycle = null
       recordingActive.value = false
@@ -105,7 +127,7 @@ export function useVoiceInput() {
     if (disposed || currentCycle) return false
     let settle!: (text: string | null) => void
     const done = new Promise<string | null>((resolve) => { settle = resolve })
-    const cycle: RecordCycle = { owner, cancelled: false, recorder: null, done, settle }
+    const cycle: RecordCycle = { owner, cancelled: false, recorder: null, maxTimer: null, done, settle }
     currentCycle = cycle // await 前先声明该轮次的所有权。
     cycles.add(cycle)
     const deliver = owner === vadOwner ? onTranscribed : null
@@ -133,6 +155,9 @@ export function useVoiceInput() {
           }
         } catch (err) {
           console.warn('[Deskpet] Transcription failed:', err)
+          if (!cycle.cancelled && !disposed) {
+            options?.onError?.('（语音识别失败，请检查 STT 服务是否运行）')
+          }
         } finally {
           cycles.delete(cycle)
           cycle.settle(text)
@@ -140,6 +165,13 @@ export function useVoiceInput() {
         }
       }
       recorder.start()
+      if (typeof setTimeout === 'function') {
+        cycle.maxTimer = setTimeout(() => {
+          if (currentCycle === cycle && recorder.state === 'recording') {
+            void stopRecording(owner)
+          }
+        }, MAX_RECORD_DURATION_MS)
+      }
       recordingActive.value = true
       return true
     } catch (err) {

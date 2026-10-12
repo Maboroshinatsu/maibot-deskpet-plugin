@@ -88,9 +88,18 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function finishChatStream(requestId: string) {
+  function finishChatStream(requestId: string, error?: string) {
     const msg = findStreamingMessage(requestId)
-    if (msg) msg.streaming = false
+    if (msg) {
+      msg.streaming = false
+      if (error) {
+        msg.text = msg.text.trim()
+          ? `${msg.text}\n（回复中断：${error}）`
+          : `（回复失败：${error}）`
+      }
+    } else if (error) {
+      showChatMessage(`（回复失败：${error}）`)
+    }
   }
 
   function showChatMessage(text: string) {

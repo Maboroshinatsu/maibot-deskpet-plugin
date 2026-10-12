@@ -9,6 +9,17 @@ interface GlobalCursorPosition {
   y: number
 }
 
+interface WindowPlacement {
+  windowX: number
+  windowY: number
+  windowWidth: number
+  windowHeight: number
+  workAreaX: number
+  workAreaY: number
+  workAreaWidth: number
+  workAreaHeight: number
+}
+
 interface ModelEntry {
   name: string
   url: string
@@ -16,6 +27,12 @@ interface ModelEntry {
 
 contextBridge.exposeInMainWorld('electronAPI', {
   dragWindow: (dx: number, dy: number) => ipcRenderer.invoke('drag-window', { dx, dy }),
+  getWindowPlacement: (): Promise<WindowPlacement> => ipcRenderer.invoke('get-window-placement'),
+  onWindowPlacement: (callback: (placement: WindowPlacement) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, placement: WindowPlacement) => callback(placement)
+    ipcRenderer.on('window-placement', listener)
+    return () => ipcRenderer.removeListener('window-placement', listener)
+  },
   setAlwaysOnTop: (flag: boolean) => ipcRenderer.invoke('set-always-on-top', flag),
   setClickThroughLocked: (flag: boolean) => ipcRenderer.invoke('set-click-through-locked', flag),
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
@@ -35,6 +52,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('set-hover-fade', listener)
     return () => ipcRenderer.removeListener('set-hover-fade', listener)
   },
+  onSetClickThroughLocked: (callback: (locked: boolean) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, locked: boolean) => callback(locked)
+    ipcRenderer.on('set-click-through-locked', listener)
+    return () => ipcRenderer.removeListener('set-click-through-locked', listener)
+  },
   onScreenshotCaptured: (callback: (base64: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, base64: string) => callback(base64)
     ipcRenderer.on('screenshot-captured', listener)
@@ -43,6 +65,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAutoScreenshotInterval: (sec: number) => ipcRenderer.invoke('set-auto-screenshot-interval', sec),
   sttTranscribe: (audio: ArrayBuffer, url?: string): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio, url),
   listModels: (): Promise<ModelEntry[]> => ipcRenderer.invoke('list-models'),
+  inspectModelAssets: (modelUrl: string): Promise<unknown> => ipcRenderer.invoke('inspect-model-assets', modelUrl),
+  saveModelPresets: (modelUrl: string, presets: unknown): Promise<boolean> => ipcRenderer.invoke('save-model-presets', modelUrl, presets),
   openModelsFolder: () => ipcRenderer.invoke('open-models-folder'),
   reloadWindow: () => ipcRenderer.invoke('reload-window'),
 

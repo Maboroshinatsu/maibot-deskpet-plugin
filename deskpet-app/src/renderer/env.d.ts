@@ -15,6 +15,17 @@ interface GlobalCursorPosition {
   y: number
 }
 
+interface WindowPlacement {
+  windowX: number
+  windowY: number
+  windowWidth: number
+  windowHeight: number
+  workAreaX: number
+  workAreaY: number
+  workAreaWidth: number
+  workAreaHeight: number
+}
+
 interface ModelEntry {
   /** 展示名，取自模型文件夹名 + 文件名 */
   name: string
@@ -45,15 +56,23 @@ interface ServicesConfig {
   ttsRefAudio: string
   ttsPromptText: string
   pttKey: string
+  sttBackend: string
+  sttApiKey: string
+  sttModel: string
+  sttEndpoint: string
   ttsBackend: string
   ttsApiKey: string
   ttsVoice: string
+  ttsModel: string
+  ttsEndpoint: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
 
 interface ElectronAPI {
   dragWindow: (dx: number, dy: number) => Promise<void>
+  getWindowPlacement: () => Promise<WindowPlacement>
+  onWindowPlacement: (callback: (placement: WindowPlacement) => void) => () => void
   setAlwaysOnTop: (flag: boolean) => Promise<void>
   setClickThroughLocked: (flag: boolean) => Promise<void>
   minimizeWindow: () => Promise<void>
@@ -61,10 +80,43 @@ interface ElectronAPI {
   onGlobalCursorPosition: (callback: (position: GlobalCursorPosition) => void) => () => void
   onResetModelView: (callback: () => void) => () => void
   onSetHoverFade: (callback: (enabled: boolean) => void) => () => void
+  onSetClickThroughLocked: (callback: (locked: boolean) => void) => () => void
   onScreenshotCaptured: (callback: (base64: string) => void) => () => void
   setAutoScreenshotInterval: (sec: number) => void
   sttTranscribe: (audio: ArrayBuffer, url?: string) => Promise<string | null>
   listModels: () => Promise<ModelEntry[]>
+  inspectModelAssets: (modelUrl: string) => Promise<{
+    cdiParameters: Record<string, { name: string; group: string }>
+    cdiParts: Record<string, string>
+    physicsOutputIds: string[]
+    vtubeHotkeys: Record<string, string>
+    expressions: Array<{
+      name: string
+      file: string
+      parameters: Array<{ id: string; value: number; blend?: string }>
+    }>
+    poseGroups?: string[][]
+    savedPresets?: Array<{
+      id: string
+      label: string
+      description: string
+      emotion: string
+      controls: string[]
+      parameters?: Record<string, number>
+      steps?: Array<{
+        label?: string
+        durationMs: number
+        holdMs: number
+        controls: string[]
+        parameters: Record<string, number>
+      }>
+      finishMode?: 'hold' | 'revert' | 'loop'
+      revertHoldMs?: number
+      motion?: { group: string; index?: number } | 'none'
+      custom?: boolean
+    }> | null
+  } | null>
+  saveModelPresets: (modelUrl: string, presets: unknown) => Promise<boolean>
   openModelsFolder: () => Promise<string>
   reloadWindow: () => Promise<void>
   listServices: () => Promise<ServiceState[]>

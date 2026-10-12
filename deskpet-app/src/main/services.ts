@@ -13,8 +13,10 @@ import { spawn, execFile, execFileSync, ChildProcess } from 'child_process'
 import net from 'net'
 import path from 'path'
 import fs from 'fs'
-import { app } from 'electron'
+import { app, safeStorage } from 'electron'
 import { validateDetectedPython } from './runtime-policy'
+
+const API_KEY_MASK = '••••••••'
 
 export type ServiceId = 'stt-bridge' | 'tts-bridge' | 'gpt-sovits' | 'hotkey' | 'cloud-tts'
 export type ServiceStatus = 'stopped' | 'starting' | 'running' | 'error'
@@ -30,12 +32,24 @@ export interface ServicesConfig {
   ttsPromptText: string
   /** 全局 PTT 热键（pynput 键名，如 f9 / scroll_lock / mouse_x1）；空串 = 热键桥不可用 */
   pttKey: string
-  /** 云 TTS 后端：mimo / cosyvoice / gsv2p；空串 = 云 TTS 桥不可用 */
+  /** 云端 STT 后端：空串 = 本地离线 STT 桥；siliconflow / dashscope / groq / openai */
+  sttBackend: string
+  /** 云端 STT API Key（加密落盘；选 dashscope 且留空时可自动复用云 TTS 的百炼 Key） */
+  sttApiKey: string
+  /** 云端 STT 模型名（空 = 各后端推荐默认模型） */
+  sttModel: string
+  /** 自定义 STT 端点（仅 openai 兼容模式或自建服务使用） */
+  sttEndpoint: string
+  /** 云 TTS 后端：siliconflow / cosyvoice / mimo / fishaudio / gsv2p / openai；空串 = 本地 GSV；off = 不启用 */
   ttsBackend: string
   /** 云 TTS 的 API Key / Token（后端对应的那把） */
   ttsApiKey: string
   /** 云 TTS 音色名（空 = 各后端默认音色） */
   ttsVoice: string
+  /** 云 TTS 模型名（空 = 各后端默认模型） */
+  ttsModel: string
+  /** 自定义 TTS 端点地址（空 = 各后端官方默认地址） */
+  ttsEndpoint: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
@@ -76,9 +90,15 @@ const DEFAULT_CONFIG: ServicesConfig = {
   ttsRefAudio: '',
   ttsPromptText: '',
   pttKey: 'f9',
+  sttBackend: '',
+  sttApiKey: '',
+  sttModel: '',
+  sttEndpoint: '',
   ttsBackend: '',
   ttsApiKey: '',
   ttsVoice: '',
+  ttsModel: '',
+  ttsEndpoint: '',
   autoStart: { 'stt-bridge': true, 'tts-bridge': true, 'gpt-sovits': true, hotkey: true, 'cloud-tts': false },
   showTerminal: { 'stt-bridge': false, 'tts-bridge': false, 'gpt-sovits': false, hotkey: false, 'cloud-tts': false },
 }
@@ -88,6 +108,97 @@ const GSV_CANDIDATES = [
   'C:\\GPT-SoVITS-v2pro-20250604',
   path.join(process.env.USERPROFILE || '', 'GPT-SoVITS-v2pro-20250604'),
 ]
+
+const WIN32_VK_MAP: Record<string, number> = {
+  mouse4: 0x05,
+  mouse_x1: 0x05,
+  mouse5: 0x06,
+  mouse_x2: 0x06,
+  mouse3: 0x04,
+  mouse_middle: 0x04,
+  scroll_lock: 0x91,
+  pause: 0x13,
+  caps_lock: 0x14,
+  print_screen: 0x2c,
+  insert: 0x2d,
+  delete: 0x2e,
+  home: 0x24,
+  end: 0x23,
+  page_up: 0x21,
+  page_down: 0x22,
+  space: 0x20,
+  tab: 0x09,
+  '`': 0xc0,
+  '~': 0xc0,
+  '-': 0xbd,
+  '_': 0xbd,
+  '=': 0xbb,
+  '+': 0xbb,
+  '[': 0xdb,
+  '{': 0xdb,
+  ']': 0xdd,
+  '}': 0xdd,
+  '\\': 0xdc,
+  '|': 0xdc,
+  ';': 0xba,
+  ':': 0xba,
+  "'": 0xde,
+  '"': 0xde,
+  ',': 0xbc,
+  '<': 0xbc,
+  '.': 0xbe,
+  '>': 0xbe,
+  '/': 0xbf,
+  '?': 0xbf,
+}
+
+function resolveHotkeyVirtualKey(rawSpec: string): number | null {
+  const spec = rawSpec.trim().toLowerCase()
+  if (!spec) return null
+  if (Object.prototype.hasOwnProperty.call(WIN32_VK_MAP, spec)) {
+    return WIN32_VK_MAP[spec]
+  }
+  const fnMatch = /^f(\d{1,2})$/.exec(spec)
+  if (fnMatch) {
+    const fnNum = Number(fnMatch[1])
+    if (fnNum >= 1 && fnNum <= 24) return 0x70 + (fnNum - 1)
+  }
+  if (/^[a-z0-9]$/.test(spec)) {
+    return spec.toUpperCase().charCodeAt(0)
+  }
+  return null
+}
+
+function buildWin32HotkeyScript(vk: number, keySpec: string): string {
+  const safeSpec = keySpec.replace(/["`$]/g, '')
+  return [
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;',
+    'Add-Type -TypeDefinition @"',
+    'using System;',
+    'using System.Runtime.InteropServices;',
+    'public static class DeskpetNativeKey {',
+    '  [DllImport("user32.dll")]',
+    '  public static extern short GetAsyncKeyState(int vKey);',
+    '}',
+    '"@;',
+    `[Console]::WriteLine("[hotkey-win32] listening key=${safeSpec} vk=0x${vk.toString(16).toUpperCase()}");`,
+    '[Console]::Out.Flush();',
+    '$parentPid = 0;',
+    '[void][int]::TryParse($env:DESKPET_PARENT_PID, [ref]$parentPid);',
+    '$pressed = $false;',
+    '$tick = 0;',
+    'while ($true) {',
+    `  $down = ([DeskpetNativeKey]::GetAsyncKeyState(${vk}) -band 0x8000) -ne 0;`,
+    '  if ($down -and -not $pressed) { $pressed = $true; [Console]::WriteLine("PTT_DOWN"); [Console]::Out.Flush(); }',
+    '  elseif (-not $down -and $pressed) { $pressed = $false; [Console]::WriteLine("PTT_UP"); [Console]::Out.Flush(); }',
+    '  $tick++;',
+    '  if ($parentPid -gt 0 -and ($tick % 60 -eq 0)) {',
+    '    try { [void][System.Diagnostics.Process]::GetProcessById($parentPid) } catch { exit 0 }',
+    '  }',
+    '  [System.Threading.Thread]::Sleep(16);',
+    '}',
+  ].join('\n')
+}
 
 export class ServiceManager {
   private config: ServicesConfig
@@ -125,16 +236,45 @@ export class ServiceManager {
 
   private loadConfig(): ServicesConfig {
     try {
-      const raw = JSON.parse(fs.readFileSync(this.configPath(), 'utf-8')) as Partial<ServicesConfig>
+      const raw = JSON.parse(fs.readFileSync(this.configPath(), 'utf-8')) as Partial<ServicesConfig> & {
+        ttsApiKeyEncrypted?: string
+        sttApiKeyEncrypted?: string
+      }
+      let ttsApiKey = typeof raw.ttsApiKey === 'string' ? raw.ttsApiKey : ''
+      if (!ttsApiKey && typeof raw.ttsApiKeyEncrypted === 'string' && raw.ttsApiKeyEncrypted) {
+        try {
+          if (typeof safeStorage?.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable()) {
+            ttsApiKey = safeStorage.decryptString(Buffer.from(raw.ttsApiKeyEncrypted, 'base64'))
+          }
+        } catch {
+          ttsApiKey = ''
+        }
+      }
+      let sttApiKey = typeof raw.sttApiKey === 'string' ? raw.sttApiKey : ''
+      if (!sttApiKey && typeof raw.sttApiKeyEncrypted === 'string' && raw.sttApiKeyEncrypted) {
+        try {
+          if (typeof safeStorage?.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable()) {
+            sttApiKey = safeStorage.decryptString(Buffer.from(raw.sttApiKeyEncrypted, 'base64'))
+          }
+        } catch {
+          sttApiKey = ''
+        }
+      }
       return {
         pythonPath: typeof raw.pythonPath === 'string' ? raw.pythonPath : '',
         gsvDir: typeof raw.gsvDir === 'string' ? raw.gsvDir : '',
         ttsRefAudio: typeof raw.ttsRefAudio === 'string' ? raw.ttsRefAudio : '',
         ttsPromptText: typeof raw.ttsPromptText === 'string' ? raw.ttsPromptText : '',
         pttKey: typeof raw.pttKey === 'string' ? raw.pttKey : 'f9',
+        sttBackend: typeof raw.sttBackend === 'string' ? raw.sttBackend : '',
+        sttApiKey,
+        sttModel: typeof raw.sttModel === 'string' ? raw.sttModel : '',
+        sttEndpoint: typeof raw.sttEndpoint === 'string' ? raw.sttEndpoint : '',
         ttsBackend: typeof raw.ttsBackend === 'string' ? raw.ttsBackend : '',
-        ttsApiKey: typeof raw.ttsApiKey === 'string' ? raw.ttsApiKey : '',
+        ttsApiKey,
         ttsVoice: typeof raw.ttsVoice === 'string' ? raw.ttsVoice : '',
+        ttsModel: typeof raw.ttsModel === 'string' ? raw.ttsModel : '',
+        ttsEndpoint: typeof raw.ttsEndpoint === 'string' ? raw.ttsEndpoint : '',
         autoStart: { ...DEFAULT_CONFIG.autoStart, ...(raw.autoStart ?? {}) },
         showTerminal: { ...DEFAULT_CONFIG.showTerminal, ...(raw.showTerminal ?? {}), hotkey: false },
       }
@@ -144,7 +284,30 @@ export class ServiceManager {
   }
 
   getConfig(): ServicesConfig {
-    return JSON.parse(JSON.stringify(this.config))
+    const copy: ServicesConfig = JSON.parse(JSON.stringify(this.config))
+    if (copy.ttsApiKey) {
+      copy.ttsApiKey = API_KEY_MASK
+    }
+    if (copy.sttApiKey) {
+      copy.sttApiKey = API_KEY_MASK
+    }
+    return copy
+  }
+
+  /** 仅供主进程内部 stt-transcribe 使用，向主进程返回未脱敏的云端 STT 凭证 */
+  getSttRuntimeConfig(): { backend: string; apiKey: string; model: string; endpoint: string } {
+    const backend = (this.config.sttBackend || '').trim().toLowerCase()
+    let apiKey = (this.config.sttApiKey || '').trim()
+    // 若选择了阿里云百炼 STT 且未单独填 Key，自动复用云 TTS 中的百炼 CosyVoice Key
+    if (!apiKey && backend === 'dashscope' && this.config.ttsBackend === 'cosyvoice') {
+      apiKey = (this.config.ttsApiKey || '').trim()
+    }
+    return {
+      backend,
+      apiKey,
+      model: (this.config.sttModel || '').trim(),
+      endpoint: (this.config.sttEndpoint || '').trim(),
+    }
   }
 
   setConfig(patch: Partial<ServicesConfig>): ServicesConfig {
@@ -153,16 +316,43 @@ export class ServiceManager {
     if (typeof patch.ttsRefAudio === 'string') this.config.ttsRefAudio = patch.ttsRefAudio
     if (typeof patch.ttsPromptText === 'string') this.config.ttsPromptText = patch.ttsPromptText
     if (typeof patch.pttKey === 'string') this.config.pttKey = patch.pttKey
+    if (typeof patch.sttBackend === 'string') this.config.sttBackend = patch.sttBackend
+    if (typeof patch.sttApiKey === 'string' && patch.sttApiKey !== API_KEY_MASK) {
+      this.config.sttApiKey = patch.sttApiKey
+    }
+    if (typeof patch.sttModel === 'string') this.config.sttModel = patch.sttModel
+    if (typeof patch.sttEndpoint === 'string') this.config.sttEndpoint = patch.sttEndpoint
     if (typeof patch.ttsBackend === 'string') this.config.ttsBackend = patch.ttsBackend
-    if (typeof patch.ttsApiKey === 'string') this.config.ttsApiKey = patch.ttsApiKey
+    if (typeof patch.ttsApiKey === 'string' && patch.ttsApiKey !== API_KEY_MASK) {
+      this.config.ttsApiKey = patch.ttsApiKey
+    }
     if (typeof patch.ttsVoice === 'string') this.config.ttsVoice = patch.ttsVoice
+    if (typeof patch.ttsModel === 'string') this.config.ttsModel = patch.ttsModel
+    if (typeof patch.ttsEndpoint === 'string') this.config.ttsEndpoint = patch.ttsEndpoint
     if (patch.autoStart) this.config.autoStart = { ...this.config.autoStart, ...patch.autoStart }
     if (patch.showTerminal) this.config.showTerminal = { ...this.config.showTerminal, ...patch.showTerminal }
     // 热键事件依赖 stdout；旧配置和直接 IPC 调用也不能启用会丢事件的终端模式。
     this.config.showTerminal.hotkey = false
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true })
-      fs.writeFileSync(this.configPath(), JSON.stringify(this.config, null, 2), 'utf-8')
+      const diskConfig: Record<string, unknown> = JSON.parse(JSON.stringify(this.config))
+      if (
+        this.config.ttsApiKey &&
+        typeof safeStorage?.isEncryptionAvailable === 'function' &&
+        safeStorage.isEncryptionAvailable()
+      ) {
+        diskConfig.ttsApiKey = ''
+        diskConfig.ttsApiKeyEncrypted = safeStorage.encryptString(this.config.ttsApiKey).toString('base64')
+      }
+      if (
+        this.config.sttApiKey &&
+        typeof safeStorage?.isEncryptionAvailable === 'function' &&
+        safeStorage.isEncryptionAvailable()
+      ) {
+        diskConfig.sttApiKey = ''
+        diskConfig.sttApiKeyEncrypted = safeStorage.encryptString(this.config.sttApiKey).toString('base64')
+      }
+      fs.writeFileSync(this.configPath(), JSON.stringify(diskConfig, null, 2), 'utf-8')
     } catch (err) {
       console.warn('[services] failed to persist config:', err)
     }
@@ -248,7 +438,7 @@ export class ServiceManager {
     // 显式指定优先；只对确定的环境类失败补一次，不重启已运行或用户停止的服务。
     if (!this.config.pythonPath.trim()) {
       for (const def of this.defs()) {
-        if (def.id === 'gpt-sovits' || !this.config.autoStart[def.id] || this.processes.has(def.id)) continue
+        if (def.id === 'gpt-sovits' || def.id === 'hotkey' || !this.config.autoStart[def.id] || this.processes.has(def.id)) continue
         if (this.status.get(def.id) !== 'error') continue
         const missingRuntime = /ENOENT|找不到可执行文件/.test(this.detail.get(def.id) ?? '')
         if (missingRuntime || this.runtimeFailures.get(def.id) === 'missing-dependency') {
@@ -269,7 +459,7 @@ export class ServiceManager {
     this.candidateSequence++
     if (hadRuntime && !this.config.pythonPath.trim()) {
       for (const id of this.starts.keys()) {
-        if (id === 'gpt-sovits' || this.processes.has(id)) continue
+        if (id === 'gpt-sovits' || id === 'hotkey' || this.processes.has(id)) continue
         this.nextGeneration(id)
         this.starts.delete(id)
         this.setStatus(id, 'stopped', '连接已失效，取消使用自动发现解释器的待启动任务')
@@ -292,8 +482,11 @@ export class ServiceManager {
         resolve: () => {
           const root = this.bridgesRoot()
           if (!root) return { unavailable: '未找到 stt-bridge.py（插件目录缺失）' }
-          const env: Record<string, string> = { ...this.pythonEnv() }
-          // 打包模式下 SenseVoice 模型跟着 bridges 走，通过 env 告诉脚本
+          const env: Record<string, string> = {
+            ...this.pythonEnv(),
+            DESKPET_USER_SENSEVOICE_DIR: path.join(app.getPath('userData'), 'sensevoice'),
+          }
+          // 若旧版安装包目录中仍存在随包 sensevoice，也一并作为候选目录透传
           const packagedModel = path.join(root, 'sensevoice')
           if (app.isPackaged && fs.existsSync(packagedModel)) env.DESKPET_SENSEVOICE_DIR = packagedModel
           return { command: this.python(), args: ['-u', path.join(root, 'stt-bridge.py')], cwd: root, env }
@@ -322,19 +515,43 @@ export class ServiceManager {
         resolve: () => {
           const root = this.bridgesRoot()
           if (!root) return { unavailable: '未找到 cloud-tts-bridge.py（插件目录缺失）' }
-          const backend = this.config.ttsBackend.trim()
-          if (!backend) return { unavailable: '未配置云 TTS 后端（在下方选择 mimo / cosyvoice / gsv2p）' }
+          const backend = this.config.ttsBackend.trim().toLowerCase()
+          const validCloud = ['siliconflow', 'cosyvoice', 'mimo', 'fishaudio', 'gsv2p', 'openai']
+          if (!validCloud.includes(backend)) {
+            return { unavailable: '未配置云 TTS 后端' }
+          }
           const apiKey = this.config.ttsApiKey.trim()
-          if (!apiKey) return { unavailable: '未配置云 TTS API Key（在下方的云 TTS 配置里填写）' }
-          const env: Record<string, string> = { ...this.pythonEnv(), DESKPET_TTS_BACKEND: backend }
-          if (backend === 'mimo') env.DESKPET_MIMO_API_KEY = apiKey
-          else if (backend === 'cosyvoice') env.DESKPET_COSYVOICE_API_KEY = apiKey
-          else if (backend === 'gsv2p') env.DESKPET_GSV2P_TOKEN = apiKey
-          const voice = this.config.ttsVoice.trim()
+          if (!apiKey && backend !== 'openai') {
+            return { unavailable: '未配置云 TTS API Key（在下方填写后启动）' }
+          }
+          const env: Record<string, string> = {
+            ...this.pythonEnv(),
+            DESKPET_TTS_BACKEND: backend,
+          }
+          if (apiKey) {
+            env.DESKPET_TTS_API_KEY = apiKey
+            if (backend === 'mimo') env.DESKPET_MIMO_API_KEY = apiKey
+            else if (backend === 'cosyvoice') env.DESKPET_COSYVOICE_API_KEY = apiKey
+            else if (backend === 'gsv2p') env.DESKPET_GSV2P_TOKEN = apiKey
+            else if (backend === 'siliconflow') env.DESKPET_SILICONFLOW_API_KEY = apiKey
+            else if (backend === 'fishaudio') env.DESKPET_FISHAUDIO_API_KEY = apiKey
+          }
+          const voice = (this.config.ttsVoice || '').trim()
           if (voice) {
+            env.DESKPET_TTS_VOICE = voice
             if (backend === 'mimo') env.DESKPET_MIMO_VOICE = voice
             else if (backend === 'cosyvoice') env.DESKPET_COSYVOICE_VOICE = voice
             else if (backend === 'gsv2p') env.DESKPET_GSV2P_VOICE = voice
+          }
+          const model = (this.config.ttsModel || '').trim()
+          if (model) {
+            env.DESKPET_TTS_MODEL = model
+            if (backend === 'cosyvoice') env.DESKPET_COSYVOICE_MODEL = model
+          }
+          const endpoint = (this.config.ttsEndpoint || '').trim()
+          if (endpoint) {
+            env.DESKPET_TTS_ENDPOINT = endpoint
+            if (backend === 'cosyvoice') env.DESKPET_COSYVOICE_ENDPOINT = endpoint
           }
           return { command: this.python(), args: ['-u', path.join(root, 'cloud-tts-bridge.py')], cwd: root, env }
         },
@@ -351,18 +568,29 @@ export class ServiceManager {
       },
       {
         id: 'hotkey',
-        name: 'PTT 热键桥',
-        port: 0, // 无端口服务：stdout 即事件通道
+        name: 'PTT 热键监听',
+        port: 0, // 无端口本地服务：基于 Win32 GetAsyncKeyState 只读监听，stdout 即事件通道
         resolve: () => {
-          const root = this.bridgesRoot()
-          if (!root) return { unavailable: '未找到 hotkey-bridge.py（插件目录缺失）' }
           const key = this.config.pttKey.trim()
           if (!key) return { unavailable: '未配置 PTT 热键（设置面板 → 麦克风里设置）' }
+          const vk = resolveHotkeyVirtualKey(key)
+          if (vk === null) {
+            return {
+              unavailable: `不支持的 PTT 热键: ${key}（支持 f1..f24、mouse4/mouse5/mouse3、scroll_lock、pause、caps_lock、print_screen、insert、单字符）`,
+            }
+          }
           return {
-            command: this.python(),
-            args: ['-u', path.join(root, 'hotkey-bridge.py')],
-            cwd: root,
-            env: { ...this.pythonEnv(), DESKPET_PTT_KEY: key },
+            command: 'powershell.exe',
+            args: [
+              '-NoLogo',
+              '-NoProfile',
+              '-NonInteractive',
+              '-ExecutionPolicy',
+              'Bypass',
+              '-Command',
+              buildWin32HotkeyScript(vk, key),
+            ],
+            cwd: app.getAppPath(),
           }
         },
       },
@@ -710,15 +938,18 @@ export class ServiceManager {
         this.probeTimer = null
         return
       }
+      let hasStarting = false
       for (const def of this.defs()) {
         const proc = this.processes.get(def.id)
         if (!proc || this.stopping.has(proc)) continue
+        if (this.status.get(def.id) !== 'starting') continue
         const generation = this.generations.get(def.id)
         if (def.port === 0) {
           // 无端口服务（hotkey 桥）：进程在跑且没退出就算 running
-          if (this.status.get(def.id) === 'starting') this.setStatus(def.id, 'running')
+          this.setStatus(def.id, 'running')
           continue
         }
+        hasStarting = true
         this.probePort(def.port).then((open) => {
           if (this.quitting || this.processes.get(def.id) !== proc ||
               this.generations.get(def.id) !== generation || this.stopping.has(proc)) return
@@ -726,6 +957,10 @@ export class ServiceManager {
           if (open && current === 'starting') this.setStatus(def.id, 'running')
           // 端口关了但进程还在：保留所有权，交给 exit 事件定性。
         }).catch(() => { /* 不确定的探测不能确认运行健康。 */ })
+      }
+      if (!hasStarting && this.probeTimer) {
+        clearInterval(this.probeTimer)
+        this.probeTimer = null
       }
     }, PROBE_INTERVAL_MS)
   }

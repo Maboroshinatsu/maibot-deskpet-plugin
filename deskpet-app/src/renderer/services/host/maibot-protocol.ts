@@ -5,10 +5,37 @@
  * Electron / DOM：只做纯函数转换，便于单测，也便于将来把 MaiBot 换成别的宿主。
  */
 import type { ServerMessage } from '../protocol'
-import type { DeskpetHostEvent } from './contracts'
+import type { DeskpetControlAction, DeskpetHostEvent } from './contracts'
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function asControlAction(value: unknown): DeskpetControlAction {
+  if (
+    value === 'on' ||
+    value === 'off' ||
+    value === 'toggle' ||
+    value === 'reset' ||
+    value === 'reset_transient' ||
+    value === 'set' ||
+    value === 'preset'
+  ) {
+    return value
+  }
+  return 'toggle'
+}
+
+function asControlsString(control: unknown, controls: unknown): string {
+  if (typeof control === 'string' && control.trim()) return control.trim()
+  if (Array.isArray(controls)) {
+    return controls
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .map((s) => s.trim())
+      .join(', ')
+  }
+  if (typeof controls === 'string' && controls.trim()) return controls.trim()
+  return typeof control === 'string' ? control : ''
 }
 
 function pickRequestId(msg: ServerMessage, data: Record<string, unknown>): string {
@@ -41,11 +68,27 @@ export function normalizeServerMessage(msg: ServerMessage): DeskpetHostEvent | n
     case 'output:text':
       return { kind: 'reply-text', text: asString(data.text) }
 
-    case 'state:emotion':
-      return { kind: 'emotion', emotion: asString(data.emotion) }
+    case 'state:emotion': {
+      const controls = asControlsString(undefined, data.controls)
+      return {
+        kind: 'emotion',
+        emotion: asString(data.emotion),
+        ...(controls ? { controls } : {}),
+      }
+    }
 
     case 'state:animation':
       return { kind: 'animation', name: asString(data.name), loop: !!data.loop }
+
+    case 'state:control': {
+      const emotion = asString(data.emotion)
+      return {
+        kind: 'control',
+        control: asControlsString(data.control, data.controls),
+        action: asControlAction(data.action),
+        ...(emotion ? { emotion } : {}),
+      }
+    }
 
     case 'output:audio':
       return { kind: 'audio', base64: asString(data.base64) }

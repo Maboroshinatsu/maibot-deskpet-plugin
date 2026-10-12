@@ -34,6 +34,26 @@ export const NO_CAPABILITIES: HostCapabilities = {
   sessionSelection: false,
 }
 
+export type DeskpetControlAction = 'on' | 'off' | 'toggle' | 'reset' | 'reset_transient' | 'set' | 'preset'
+
+export interface ModelControlSummary {
+  id: string
+  label: string
+  category: string
+  active: boolean
+}
+
+export interface ModelControlPresetSummary {
+  id: string
+  label: string
+  controls: string[]
+  emotion: string
+  group?: string
+  description: string
+  parameters?: Record<string, number>
+  custom?: boolean
+}
+
 /**
  * 归一化事件：所有宿主都必须翻译成这组事件，UI 只消费它们。
  * 这是 DP-017 要求的“宿主事件归一化”落点。
@@ -46,8 +66,9 @@ export type DeskpetHostEvent =
   | { kind: 'reply-done'; requestId: string; error?: string }
   /** 一次性完整文本（非流式） */
   | { kind: 'reply-text'; text: string }
-  | { kind: 'emotion'; emotion: string }
+  | { kind: 'emotion'; emotion: string; controls?: string }
   | { kind: 'animation'; name: string; loop: boolean }
+  | { kind: 'control'; control: string; action: DeskpetControlAction; emotion?: string }
   | { kind: 'audio'; base64: string }
   | { kind: 'thinking'; active: boolean }
   | { kind: 'emoji'; base64: string; description: string }
@@ -77,5 +98,6 @@ export interface HostAdapter {
   sendUserText(text: string): boolean
   sendScreenshot(base64: string): boolean
   sendModelEmotions(emotions: string[]): boolean
+  sendModelControls?(controls: ModelControlSummary[], presets?: ModelControlPresetSummary[]): boolean
   dispose(): void
 }

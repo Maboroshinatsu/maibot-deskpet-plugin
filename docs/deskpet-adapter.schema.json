@@ -48,18 +48,30 @@
         }
       }
     },
+    "baseParameters": {
+      "type": "object",
+      "description": "底层常驻参数（如去除作者水印、修正默认姿态），不受情绪切换或控件重置影响",
+      "additionalProperties": { "type": "number" }
+    },
+    "hiddenParts": {
+      "type": "array",
+      "description": "底层常驻隐藏的部件 ID 列表（opacity 固定置 0）",
+      "items": { "type": "string", "minLength": 1 }
+    },
     "emotions": {
       "type": "object",
-      "description": "情绪映射，键为固定的 9 种情绪，可只写一部分",
-      "additionalProperties": false,
+      "description": "情绪映射，支持内置情绪键与模型自定义情绪键",
+      "additionalProperties": { "$ref": "#/definitions/emotionTarget" },
       "properties": {
         "happy": { "$ref": "#/definitions/emotionTarget" },
         "sad": { "$ref": "#/definitions/emotionTarget" },
         "angry": { "$ref": "#/definitions/emotionTarget" },
         "surprise": { "$ref": "#/definitions/emotionTarget" },
+        "embarrassed": { "$ref": "#/definitions/emotionTarget" },
         "thinking": { "$ref": "#/definitions/emotionTarget" },
         "shy": { "$ref": "#/definitions/emotionTarget" },
         "curious": { "$ref": "#/definitions/emotionTarget" },
+        "confused": { "$ref": "#/definitions/emotionTarget" },
         "neutral": { "$ref": "#/definitions/emotionTarget" },
         "idle": { "$ref": "#/definitions/emotionTarget" }
       }
@@ -78,6 +90,11 @@
         "dance": { "$ref": "#/definitions/animationTarget" },
         "cheer": { "$ref": "#/definitions/animationTarget" }
       }
+    },
+    "controls": {
+      "type": "object",
+      "description": "持久模型控件开关（服饰、发型、道具、姿势、脸部特效），可由 AI 通过 set_deskpet_control 或设置面板切换",
+      "additionalProperties": { "$ref": "#/definitions/controlTarget" }
     }
   },
   "definitions": {
@@ -108,7 +125,7 @@
         "expression": {
           "type": "string",
           "minLength": 1,
-          "description": "表情名，必须已注册进 .model3.json 的 Expressions 段"
+          "description": "表情名（已注册进 .model3.json 的 Expressions，或同目录下的 .exp3.json 文件名）"
         },
         "motion": { "$ref": "#/definitions/motionRef" },
         "parameters": {
@@ -125,6 +142,45 @@
       "additionalProperties": false,
       "properties": {
         "motion": { "$ref": "#/definitions/motionRef" }
+      }
+    },
+    "controlTarget": {
+      "type": "object",
+      "description": "持久控件开关定义",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "人类与 AI 可读的显示名称"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["outfit", "hair", "pose_prop", "face_effect", "toggle"],
+          "description": "控件分类"
+        },
+        "defaultActive": {
+          "type": "boolean",
+          "default": false,
+          "description": "加载模型时是否默认开启"
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "description": "关联的 .exp3.json 表情名（即使未在 model3.json 注册也会自动提取参数）"
+        },
+        "parameters": {
+          "type": "object",
+          "description": "开启该控件时写入的参数 ID → 目标值",
+          "minProperties": 1,
+          "additionalProperties": { "type": "number" }
+        },
+        "hiddenParts": {
+          "type": "array",
+          "description": "开启该控件时隐藏的部件 ID 列表",
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     }
   }

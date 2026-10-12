@@ -232,6 +232,10 @@ class DeskpetPlugin(MaiBotPlugin):
         self._ws_server: Optional[DeskpetWSServer] = None
         # 当前模型声明的自定义情绪（桌宠经 sys:emotions 上报，与内置词表取并集）
         self._model_emotions: Set[str] = set()
+        # 当前模型可用的持久控件清单（桌宠经 sys:controls 上报，含 id/label/category/active）
+        self._model_controls: list[Dict[str, Any]] = []
+        # 当前模型可用的状态组合预设（含用户自定义命名组合与内置组合）
+        self._model_presets: list[Dict[str, Any]] = []
         # 事件循环只持任务的弱引用，fire-and-forget 的 TTS 任务必须自己留强引用
         self._bg_tasks: Set[asyncio.Task] = set()
         # 卸载开始后置位：拒绝新的出站/TTS 任务，并让分块发送提前收手
@@ -409,11 +413,21 @@ class DeskpetPlugin(MaiBotPlugin):
         return {"success": True}
 
     async def _send_tts_audio(self, text: str, req_id: str) -> None:
-        """后台获取 TTS 音频并推送到前端。"""
+        """后台获取 TTS 音频并严格按回复顺序推送到前端。"""
         # 已排队/直接调用的任务在卸载开始后不得再发起 TTS 请求
         if self._closing:
             return
+        prev_task = getattr(self, "_last_tts_task", None)
+        if prev_task is not None and prev_task.done():
+            prev_task = None
+        current_task = asyncio.current_task()
+        if current_task is not None and current_task is not prev_task:
+            self._last_tts_task = current_task
+
         b64 = await self._fetch_tts_audio(text)
+        # 在判断 b64 之前先等待前一条 TTS 任务结束，保证即使本条合成失败也不会破坏后续任务的先后链条
+        if prev_task is not None and not prev_task.done():
+            await asyncio.wait({prev_task})
         if not b64:
             return
         # 取 TTS 期间插件可能已被卸载，这里要重新确认服务器还在且未开始卸载
@@ -462,6 +476,14 @@ class DeskpetPlugin(MaiBotPlugin):
         if not normalized:
             return "neutral"
 
+        for p in getattr(self, "_model_presets", []) or []:
+            pid = str(p.get("id") or "").strip().lower()
+            label = str(p.get("label") or "").strip()
+            if pid == "neutral" or label == "日常待机" or len(label) < 2:
+                continue
+            if label.lower() in normalized:
+                return label
+
         for emotion, keywords in EMOTION_KEYWORDS.items():
             if any(keyword in normalized for keyword in keywords):
                 return emotion
@@ -483,6 +505,61 @@ class DeskpetPlugin(MaiBotPlugin):
             if isinstance(emotions, list):
                 self._model_emotions = {str(e) for e in emotions if isinstance(e, str) and e}
                 self.ctx.logger.debug(f"[Deskpet] Model declared emotions: {sorted(self._model_emotions)}")
+        elif msg.type == "sys:controls":
+            # 模型声明或自动发现的控件开关清单（服饰/发型/道具/特效）+ 命名组合预设
+            raw_controls = msg.data.get("controls", [])
+            if isinstance(raw_controls, list):
+                parsed: list[Dict[str, Any]] = []
+                for item in raw_controls:
+                    if not isinstance(item, dict):
+                        continue
+                    cid = str(item.get("id") or "").strip()
+                    if not cid:
+                        continue
+                    parsed.append({
+                        "id": cid,
+                        "label": str(item.get("label") or cid).strip(),
+                        "category": str(item.get("category") or "toggle").strip(),
+                        "active": bool(item.get("active", False)),
+                    })
+                self._model_controls = parsed
+                self.ctx.logger.debug(
+                    f"[Deskpet] Model declared controls ({len(parsed)}): "
+                    f"{[c['label'] for c in parsed]}"
+                )
+            raw_presets = msg.data.get("presets", [])
+            if isinstance(raw_presets, list):
+                parsed_presets: list[Dict[str, Any]] = []
+                for item in raw_presets:
+                    if not isinstance(item, dict):
+                        continue
+                    pid = str(item.get("id") or "").strip()
+                    plabel = str(item.get("label") or pid).strip()
+                    if not pid or not plabel:
+                        continue
+                    pcontrols = [
+                        str(c).strip()
+                        for c in (item.get("controls") or [])
+                        if isinstance(c, str) and str(c).strip()
+                    ]
+                    raw_params = item.get("parameters")
+                    pparams = raw_params if isinstance(raw_params, dict) else {}
+                    pgroup = str(item.get("group") or "").strip()
+                    parsed_presets.append({
+                        "id": pid,
+                        "label": plabel,
+                        "group": pgroup,
+                        "description": str(item.get("description") or "").strip(),
+                        "emotion": str(item.get("emotion") or "neutral").strip() or "neutral",
+                        "controls": pcontrols,
+                        "parameters": pparams,
+                        "custom": bool(item.get("custom", True)),
+                    })
+                self._model_presets = parsed_presets
+                self.ctx.logger.debug(
+                    f"[Deskpet] Model declared presets ({len(parsed_presets)}): "
+                    f"{[p['label'] for p in parsed_presets]}"
+                )
         elif msg.type == "heartbeat":
             # 回显心跳：前端靠“有没有入站消息”检测半开 TCP 连接
             if ws is not None:
@@ -572,34 +649,369 @@ class DeskpetPlugin(MaiBotPlugin):
             },
         )
 
-    # ── Tool: 表情 ──
+    def _format_controls_summary(self) -> list[str]:
+        controls = getattr(self, "_model_controls", []) or []
+        return [
+            f"{c['label']}({'on' if c.get('active') else 'off'})"
+            for c in controls
+        ]
+
+    @staticmethod
+    def _resolve_preset_group(preset: Dict[str, Any]) -> str:
+        explicit = str(preset.get("group") or "").strip()
+        if explicit:
+            return explicit
+        pid = str(preset.get("id") or "").strip().lower()
+        label = str(preset.get("label") or "").strip()
+        emo = str(preset.get("emotion") or "").strip().lower()
+        prefix = label.split("·", 1)[0].strip() if "·" in label else ""
+
+        if pid in ("neutral", "idle") or label == "日常待机":
+            return "日常待机"
+        if pid.startswith("annoyed") or prefix == "厌烦" or "厌烦" in label:
+            return "厌烦"
+        if pid.startswith("weary") or prefix == "倦怠" or "倦怠" in label:
+            return "倦怠"
+        if emo == "happy" or pid.startswith("happy") or prefix == "开心":
+            return "开心"
+        if emo == "shy" or pid.startswith("shy") or prefix == "害羞":
+            return "害羞"
+        if emo == "sad" or pid.startswith("sad") or prefix in ("委屈", "委屈难过"):
+            return "委屈难过"
+        if emo == "angry" or pid.startswith("angry") or prefix in ("生气", "生气不满"):
+            return "生气不满"
+        if emo == "embarrassed" or pid.startswith("embarrassed") or prefix == "尴尬":
+            return "尴尬"
+        if prefix:
+            return prefix
+        if emo and emo != "neutral":
+            return emo
+        return "日常待机"
+
+    def _choose_random_group_preset(
+        self, group_key: str, candidates: list[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        last_map = getattr(self, "_last_picked_preset_by_group", None)
+        if not isinstance(last_map, dict):
+            last_map = {}
+            self._last_picked_preset_by_group = last_map
+        last_id = last_map.get(group_key)
+        pool = [p for p in candidates if p.get("id") != last_id] if last_id else candidates
+        picked = random.choice(pool or candidates)
+        last_map[group_key] = picked.get("id")
+        return picked
+
+    def _format_presets_summary(self) -> list[str]:
+        presets = getattr(self, "_model_presets", []) or []
+        summary: list[str] = []
+        for p in presets:
+            tag = "[自定义]" if p.get("custom") else ""
+            grp = self._resolve_preset_group(p)
+            desc = p.get("description") or (", ".join(p.get("controls") or []) or "默认")
+            emo = p.get("emotion") or "neutral"
+            summary.append(f"{p['label']}{tag}(分组:{grp}, {desc}, 情绪:{emo})")
+        return summary
+
+    def _match_model_preset(self, query: str) -> Optional[Dict[str, Any]]:
+        presets = getattr(self, "_model_presets", []) or []
+        q = (query or "").strip().lower()
+        if not q:
+            return None
+
+        # 1) 当查询词对应某个拥有多个变体的情绪分组或基础情绪名时，在组内随机抽取一个变体（防连续重复）
+        group_matches = [
+            p
+            for p in presets
+            if self._resolve_preset_group(p).lower() == q
+            or (q != "neutral" and str(p.get("emotion") or "").strip().lower() == q)
+        ]
+        if len(group_matches) > 1:
+            return self._choose_random_group_preset(q, group_matches)
+
+        # 2) 精确匹配单个预设的 id 或 label（如具体变体名 '开心·歪头笑'）
+        for p in presets:
+            if p["id"].lower() == q or p["label"].lower() == q:
+                return p
+
+        # 3) 单预设分组命中
+        if len(group_matches) == 1:
+            return group_matches[0]
+
+        # 4) 模糊包含匹配（若命中同组多个变体同样随机抽取）
+        fuzzy_matches = [
+            p
+            for p in presets
+            if q in p["label"].lower()
+            or p["label"].lower() in q
+            or q == p["id"].lower()
+            or q in self._resolve_preset_group(p).lower()
+            or self._resolve_preset_group(p).lower() in q
+        ]
+        if len(fuzzy_matches) > 1:
+            return self._choose_random_group_preset(q, fuzzy_matches)
+        if len(fuzzy_matches) == 1:
+            return fuzzy_matches[0]
+        return None
+
+    def _match_model_control(self, query: str) -> Optional[Dict[str, Any]]:
+        controls = getattr(self, "_model_controls", []) or []
+        q = (query or "").strip().lower()
+        if not q:
+            return None
+        for c in controls:
+            if c["id"].lower() == q or c["label"].lower() == q:
+                return c
+        for c in controls:
+            cid = c["id"].lower()
+            clabel = c["label"].lower()
+            if q in cid or q in clabel or cid in q:
+                return c
+        return None
+
+    # ── Tool: 表情与自定义状态预设 ──
 
     @Tool(
         "set_deskpet_emotion",
-        brief_description="设置桌面宠物的情绪/表情",
+        brief_description="切换桌面宠物的情绪分组或用户在前端自定义的命名状态预设",
         detailed_description=(
-            f"控制桌面宠物 Live2D 角色表现的情绪。基础可选值: {', '.join(EMOTION_LIST)}。"
-            "此外，当前模型（立绘包清单/Live2D adapter）声明的自定义情绪也可以使用；"
-            "拿不准时随便试一个，报错信息会列出当前全部可用值。"
+            "切换桌面宠物当前的情绪分组或具体状态预设。可传入情绪分组名"
+            "（如 '日常待机'、'开心'、'委屈难过'、'生气不满'、'厌烦'、'倦怠'、'尴尬'、'害羞' 等，同组有多个变体时会自动随机抽取一个）"
+            "或具体变体名（如 '开心·歪头笑'），"
+            f"或基础情绪词（{', '.join(EMOTION_LIST)}）。无需模型手动拼接底层控件，前端会自动还原预设对应的外观、配饰与面捕参数。"
         ),
         parameters=[
             ToolParameterInfo(
                 name="emotion", param_type=ToolParamType.STRING,
-                description=f"情绪: {', '.join(EMOTION_LIST)}，或模型自定义情绪", required=True,
+                description="情绪分组名（如 '开心'、'害羞'、'生气不满'）、具体预设名或基础情绪名",
+                required=True,
             ),
         ],
     )
-    async def handle_set_emotion(self, emotion: str, **kwargs) -> dict:
-        # 校验范围 = 内置词表 ∪ 当前模型声明的情绪（立绘包/adapter 的自定义键）
-        valid = set(EMOTION_LIST) | self._model_emotions
-        if emotion not in valid:
-            return {"success": False, "error": f"未知情绪: {emotion}（当前可用: {', '.join(sorted(valid))}）"}
-        # 无客户端时如实上报失败，否则 AI 会以为表情已生效并据此继续编排
+    async def handle_set_emotion(self, emotion: str, controls: str = "", **kwargs) -> dict:
+        valid = set(EMOTION_LIST) | getattr(self, "_model_emotions", set())
+        matched_preset = self._match_model_preset(emotion)
+        if emotion not in valid and not matched_preset:
+            return {
+                "success": False,
+                "error": f"未知情绪或预设: {emotion}（当前可用: {', '.join(sorted(valid))}）",
+                **({"available_presets": self._format_presets_summary()} if self._format_presets_summary() else {}),
+            }
         if not self._ws_server or not self._ws_server.has_clients:
             return {"success": False, "error": "桌宠未连接，表情未生效"}
-        await self._ws_server.broadcast("state:emotion", {"emotion": emotion})
+
+        resolved_emotion = matched_preset["label"] if matched_preset else emotion
+        payload: Dict[str, Any] = {"emotion": resolved_emotion}
+        matched_ids: list[str] = []
+
+        if matched_preset and not (controls and controls.strip()):
+            matched_ids = list(matched_preset.get("controls") or [])
+            for c in getattr(self, "_model_controls", []) or []:
+                c["active"] = c["id"] in matched_ids
+        elif controls and controls.strip():
+            preset_from_ctrl = self._match_model_preset(controls.strip())
+            if preset_from_ctrl and "," not in controls and "，" not in controls:
+                matched_ids = list(preset_from_ctrl.get("controls") or [])
+                payload["controls"] = matched_ids
+            else:
+                parts = [p.strip() for p in controls.replace("，", ",").replace("；", ",").replace(";", ",").split(",") if p.strip()]
+                for q in parts:
+                    m = self._match_model_control(q)
+                    if m and m["id"] not in matched_ids:
+                        matched_ids.append(m["id"])
+                if matched_ids:
+                    payload["controls"] = matched_ids
+
+        await self._ws_server.broadcast("state:emotion", payload)
         self._last_tool_emotion_at = time.time()
-        return {"success": True, "emotion": emotion}
+        res: Dict[str, Any] = {"success": True, "emotion": resolved_emotion}
+        if matched_preset:
+            res["applied_preset"] = matched_preset["label"]
+        if matched_ids:
+            res["applied_controls"] = matched_ids
+        presets_summary = self._format_presets_summary()
+        if presets_summary:
+            res["available_presets"] = presets_summary
+        controls_summary = self._format_controls_summary()
+        if controls_summary:
+            res["available_controls"] = controls_summary
+        return res
+
+    # ── Tool: 模型状态预设调用 ──
+
+    @Tool(
+        "set_deskpet_control",
+        brief_description="查询或直接调用桌面宠物的命名状态/情绪预设",
+        detailed_description=(
+            "调用用户在桌面宠物前端配置好的『状态与情绪预设』（每个预设已打包好对应的服装发型、动作手势与面捕五官滑块参数）：\n"
+            "1. 切换预设：传 action='preset'，control 填入预设名称（如 '厌烦'、'倦怠'、'尴尬'、'开心'、'日常待机' 或用户自定义的其它名称）。\n"
+            "2. 查看可用预设：传 action='list' 获取当前模型的 available_presets 列表。\n"
+            "3. 恢复默认：传 action='reset' 将所有状态恢复初始值。"
+        ),
+        parameters=[
+            ToolParameterInfo(
+                name="action", param_type=ToolParamType.STRING,
+                description="操作类型: 'preset'（调用已命名的状态/情绪预设）、'list'（列出当前所有可用预设）、'reset'（恢复默认状态）",
+                required=True,
+            ),
+            ToolParameterInfo(
+                name="control", param_type=ToolParamType.STRING,
+                description="状态/情绪预设名称（如 '厌烦'、'倦怠'、'尴尬'、'开心'）；action 为 'list' 或 'reset' 时留空",
+                required=False,
+            ),
+        ],
+    )
+    async def handle_set_control(self, action: str = "toggle", control: str = "", emotion: str = "", **kwargs) -> dict:
+        act = (action or "toggle").strip().lower()
+        if act not in ("preset", "set", "on", "off", "toggle", "reset", "reset_transient", "list"):
+            return {
+                "success": False,
+                "error": f"未知操作类型: {action}（可选: preset, set, on, off, toggle, reset, list）",
+            }
+
+        controls = getattr(self, "_model_controls", []) or []
+        presets = getattr(self, "_model_presets", []) or []
+        if act == "list":
+            return {
+                "success": True,
+                "presets": presets,
+                "available_presets": self._format_presets_summary(),
+                "controls": controls,
+                "available_controls": self._format_controls_summary(),
+            }
+
+        if not self._ws_server or not self._ws_server.has_clients:
+            return {"success": False, "error": "桌宠未连接，控件未生效"}
+
+        emo = (emotion or "").strip()
+        if act in ("reset", "reset_transient"):
+            payload: Dict[str, Any] = {"action": act, "control": ""}
+            if emo:
+                payload["emotion"] = emo
+            await self._ws_server.broadcast("state:control", payload)
+            for c in controls:
+                if act == "reset" or c.get("category") not in ("outfit", "hair"):
+                    c["active"] = False
+            return {
+                "success": True,
+                "action": act,
+                "available_presets": self._format_presets_summary(),
+                "available_controls": self._format_controls_summary(),
+            }
+
+        raw_queries = [
+            p.strip()
+            for p in (control or "").replace("，", ",").replace("；", ",").replace(";", ",").split(",")
+            if p.strip()
+        ]
+
+        # 优先检查是否匹配已命名的状态组合预设（action='preset' 或单个查询名命中预设）
+        if len(raw_queries) == 1:
+            preset_hit = self._match_model_preset(raw_queries[0])
+            direct_control_hit = self._match_model_control(raw_queries[0])
+            if preset_hit and (act == "preset" or act == "set" or not direct_control_hit):
+                preset_controls = list(preset_hit.get("controls") or [])
+                preset_emo = emo or str(preset_hit.get("emotion") or "neutral")
+                ws_payload: Dict[str, Any] = {
+                    "action": "preset",
+                    "control": preset_hit["label"],
+                    "controls": preset_controls,
+                }
+                if preset_emo:
+                    ws_payload["emotion"] = preset_emo
+                await self._ws_server.broadcast("state:control", ws_payload)
+                self._last_tool_emotion_at = time.time()
+                for c in controls:
+                    c["active"] = c["id"] in preset_controls
+                return {
+                    "success": True,
+                    "preset": preset_hit["label"],
+                    "preset_id": preset_hit["id"],
+                    "control": preset_hit["label"],
+                    "controls": preset_controls,
+                    "emotion": preset_emo,
+                    "action": "preset",
+                    "active": True,
+                    "available_presets": self._format_presets_summary(),
+                    "available_controls": self._format_controls_summary(),
+                }
+
+        if act == "preset":
+            return {
+                "success": False,
+                "error": f"当前模型未找到名为 '{control}' 的状态组合预设",
+                "available_presets": self._format_presets_summary(),
+                "available_controls": self._format_controls_summary(),
+            }
+
+        if not raw_queries and act != "set":
+            return {
+                "success": False,
+                "error": "请指定要操作的组合预设名或控件名，或使用 action='list' 查看可用预设与控件",
+                "available_presets": self._format_presets_summary(),
+                "available_controls": self._format_controls_summary(),
+            }
+
+        matched_list: list[Dict[str, Any]] = []
+        unmatched_list: list[str] = []
+        for q in raw_queries:
+            m = self._match_model_control(q)
+            if m:
+                if m not in matched_list:
+                    matched_list.append(m)
+            else:
+                unmatched_list.append(q)
+
+        if raw_queries and not matched_list:
+            return {
+                "success": False,
+                "error": f"当前模型未找到匹配 '{control}' 的预设或控件",
+                "available_presets": self._format_presets_summary(),
+                "available_controls": self._format_controls_summary(),
+            }
+
+        matched_ids = [m["id"] for m in matched_list]
+        ws_payload = {
+            "action": act,
+            "control": ", ".join(matched_ids),
+        }
+        if len(matched_ids) > 1 or act == "set":
+            ws_payload["controls"] = matched_ids
+        if emo:
+            ws_payload["emotion"] = emo
+
+        await self._ws_server.broadcast("state:control", ws_payload)
+
+        if act == "set":
+            for c in controls:
+                if c.get("category") not in ("outfit", "hair"):
+                    c["active"] = False
+            for m in matched_list:
+                m["active"] = True
+        else:
+            for m in matched_list:
+                if act == "on":
+                    m["active"] = True
+                elif act == "off":
+                    m["active"] = False
+                else:
+                    m["active"] = not bool(m.get("active"))
+
+        return {
+            "success": True,
+            "control": matched_ids[0] if len(matched_ids) == 1 else matched_ids,
+            "controls": matched_ids,
+            "label": ", ".join(m["label"] for m in matched_list),
+            "action": act,
+            "active": bool(matched_list[0].get("active")) if len(matched_list) == 1 else (act != "off"),
+            **({"emotion": emo} if emo else {}),
+            **({"unmatched": unmatched_list} if unmatched_list else {}),
+            "available_presets": self._format_presets_summary(),
+            "available_controls": self._format_controls_summary(),
+        }
 
     # ── Tool: 动作 ──
 

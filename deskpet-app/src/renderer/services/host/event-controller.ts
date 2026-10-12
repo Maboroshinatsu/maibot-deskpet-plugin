@@ -5,13 +5,14 @@
  * 所有副作用通过注入的 deps 完成，因此本文件不 import Vue / Pinia / Electron / DOM，
  * 可以用纯对象替身直接测试（见 tests/host-controller.test.cjs）。
  */
-import type { DeskpetHostEvent } from './contracts'
+import type { DeskpetControlAction, DeskpetHostEvent } from './contracts'
 
 export interface DeskpetEventDeps {
   /** 是否认识这个情绪：内置词表 ∪ 当前模型声明 */
   isKnownEmotion(emotion: string): boolean
   setEmotion(emotion: string): void
   playAnimation(name: string, loop: boolean): void
+  setControl?(control: string, action: DeskpetControlAction): void
   appendReplyDelta(delta: string, requestId: string): void
   finishReply(requestId: string, error?: string): void
   showReplyText(text: string): void
@@ -58,10 +59,20 @@ export function applyHostEvent(event: DeskpetHostEvent, deps: DeskpetEventDeps):
       } else {
         deps.debug('[Deskpet] Ignore unknown emotion:', event.emotion)
       }
+      if (event.controls) {
+        deps.setControl?.(event.controls, 'set')
+      }
       return true
 
     case 'animation':
       deps.playAnimation(event.name, event.loop)
+      return true
+
+    case 'control':
+      deps.setControl?.(event.control, event.action)
+      if (event.action !== 'preset' && event.emotion && deps.isKnownEmotion(event.emotion)) {
+        deps.setEmotion(event.emotion)
+      }
       return true
 
     case 'audio':

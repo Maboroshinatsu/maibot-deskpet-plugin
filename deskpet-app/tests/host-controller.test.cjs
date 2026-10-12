@@ -85,3 +85,44 @@ test('animation forwards name and loop', () => {
   applyHostEvent({ kind: 'animation', name: 'wave', loop: true }, h.deps)
   assert.deepEqual(h.calls, [['playAnimation', 'wave', true]])
 })
+
+test('control event forwards control name and action when setControl is provided', () => {
+  const calls = []
+  const h = deps({ setControl: (c, a) => calls.push([c, a]) })
+  assert.equal(applyHostEvent({ kind: 'control', control: '戴帽子', action: 'on' }, h.deps), true)
+  assert.deepEqual(calls, [['戴帽子', 'on']])
+})
+
+test('control event with action=set and emotion applies multi-control combination and emotion in one request', () => {
+  const controlCalls = []
+  const h = deps({ setControl: (c, a) => controlCalls.push([c, a]) })
+  assert.equal(
+    applyHostEvent({ kind: 'control', control: '脸红,爱心眼', action: 'set', emotion: 'shy' }, h.deps),
+    true,
+  )
+  assert.deepEqual(controlCalls, [['脸红,爱心眼', 'set']])
+  assert.deepEqual(h.calls, [['setEmotion', 'shy']])
+})
+
+test('emotion event with controls applies emotion and transient control combination together', () => {
+  const controlCalls = []
+  const h = deps({ setControl: (c, a) => controlCalls.push([c, a]) })
+  assert.equal(
+    applyHostEvent({ kind: 'emotion', emotion: 'happy', controls: '星星眼,棒棒糖' }, h.deps),
+    true,
+  )
+  assert.deepEqual(h.calls, [['setEmotion', 'happy']])
+  assert.deepEqual(controlCalls, [['星星眼,棒棒糖', 'set']])
+})
+
+test('control event with action=preset does not call setEmotion to overwrite preset with neutral', () => {
+  const controlCalls = []
+  const h = deps({ setControl: (c, a) => controlCalls.push([c, a]) })
+  assert.equal(
+    applyHostEvent({ kind: 'control', control: '厌烦', action: 'preset', emotion: 'neutral' }, h.deps),
+    true,
+  )
+  assert.deepEqual(controlCalls, [['厌烦', 'preset']])
+  assert.deepEqual(h.calls, [])
+})
+
