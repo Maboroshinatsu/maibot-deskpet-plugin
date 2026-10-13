@@ -49,6 +49,19 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 
 ---
 
+## 💡 v1.0.1 最新改进与修复
+
+本版本着重强化了通信安全、修复了云端语音合成链路，并大幅提升了桌面端的运行稳定性：
+
+- 🛡️ **安全性强化**：新增 WebSocket 来源白名单校验机制，自动拦截未授权网页的跨域请求，全面保障桌宠与 MaiBot 间的通信安全。
+- 🔊 **语音合成修复**：修复使用阿里云百炼（CosyVoice）云端语音时，因接口返回音频下载链接导致声音无法正常解析和播放的 bug。
+- ⚡ **录音识别防卡死**：为云端语音识别（STT）增加 30 秒超时自动保护，彻底解决因网络波动或服务无响应导致应用一直卡在录音转写状态的问题。
+- 📁 **模型路径兼容性**：支持导入文件夹名包含 `#` 或 `%` 等特殊符号的 Live2D 模型；同时增加模型预设文件的落盘回退保护，即便软件安装在受权限保护的只读目录，自定义动作预设也会自动安全保存至用户数据目录。
+- ⚙️ **配置即时热生效**：在 MaiBot 中修改桌宠插件的启用状态或监听端口时，插件会自动平滑重启并应用新配置，无需重启整个 MaiBot 主程序。
+- 📦 **发版构建优化**：重构自动化构建与多语言单元测试流程，提升多环境下的打包稳定性与安装包签名可靠性。
+
+---
+
 ## 文档导航
 
 | 文档 | 说明 |
@@ -82,6 +95,9 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 ## Code Signing & Privacy Policy
 
 ### Code Signing Policy
+
+> **（小声说明）**：……虽然这一栏写得有模有样的，但其实免费开源签名还在 SignPath 的审核队列里排队中（还没正式批下来！）。所以在证书正式发下来之前，运行安装包时 Windows SmartScreen 弹出的“未知发布者”是完全正常的现象……请大家暂时包容一下，先点击「更多信息 → 仍要运行」（心虚地移开视线并卑微鞠躬）。
+
 Free code signing is provided by [SignPath.io](https://signpath.io/), and the code signing certificate is provided by the [SignPath Foundation](https://signpath.org/).
 
 - **Committers and Reviewers**: [Maboroshinatsu](https://github.com/Maboroshinatsu)

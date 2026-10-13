@@ -723,5 +723,24 @@ class ModelControlsToolTest(unittest.IsolatedAsyncioTestCase):
         )
 
 
+class OriginValidationTest(unittest.TestCase):
+    def test_trusted_origins(self):
+        # 允许原生应用、本地文件、开发环境和自定义协议
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin(None))
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin(""))
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("null"))
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("deskpet://"))
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("deskpet://models"))
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("vscode-webview://abc"))
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("http://localhost:5173"))
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("http://127.0.0.1:8523"))
+
+    def test_untrusted_origins(self):
+        # 拒绝任意外部网站
+        self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("https://untrusted.example"))
+        self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("http://evil.com"))
+        self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("http://attacker.local:8080"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

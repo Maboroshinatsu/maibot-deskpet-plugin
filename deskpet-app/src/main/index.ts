@@ -155,10 +155,15 @@ function scanModelFiles(root: ModelRoot): ModelEntry[] {
   const MAX_DEPTH = 5
 
   const makeUrl = (relative: string): string => {
+    // 逐段 encodeURIComponent 编码，保留 '/' 分隔符，避免 '#' 截断或 '%' 引起 URIError
+    const encoded = relative
+      .split('/')
+      .map((seg) => encodeURIComponent(seg))
+      .join('/')
     // userData 的模型 dev/打包都走 deskpet://（vite 管不到那里）；
     // bundled 模型 dev 走 vite 相对路径，打包走 deskpet://
-    if (root.kind === 'user' || app.isPackaged) return `deskpet://models/${relative}`
-    return `./models/${relative}`
+    if (root.kind === 'user' || app.isPackaged) return `deskpet://models/${encoded}`
+    return `./models/${encoded}`
   }
 
   const walk = (dir: string, depth: number): void => {
@@ -387,25 +392,31 @@ function saveModelPresetsToDisk(modelUrl: string, presets: unknown): boolean {
   if (!modelFile) return false
   const sanitized = sanitizeModelPresets(presets)
   if (!sanitized) return false
-  const targetFile = path.join(path.dirname(modelFile), MODEL_PRESETS_FILENAME)
+  const modelDir = path.dirname(modelFile)
+  const targetFile = path.join(modelDir, MODEL_PRESETS_FILENAME)
+  const payload = JSON.stringify(
+    {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      presets: sanitized,
+    },
+    null,
+    2,
+  )
   try {
-    fs.writeFileSync(
-      targetFile,
-      JSON.stringify(
-        {
-          version: 1,
-          updatedAt: new Date().toISOString(),
-          presets: sanitized,
-        },
-        null,
-        2,
-      ),
-      'utf-8',
-    )
+    fs.writeFileSync(targetFile, payload, 'utf-8')
     return true
   } catch (err) {
-    console.warn('[deskpet] Failed to write deskpet-presets.json:', err)
-    return false
+    console.warn('[deskpet] Failed to write deskpet-presets.json to model dir, falling back to userData:', err)
+    try {
+      const fallbackDir = path.join(app.getPath('userData'), 'model-presets', path.basename(modelDir))
+      fs.mkdirSync(fallbackDir, { recursive: true })
+      fs.writeFileSync(path.join(fallbackDir, MODEL_PRESETS_FILENAME), payload, 'utf-8')
+      return true
+    } catch (fbErr) {
+      console.warn('[deskpet] Failed to write fallback presets to userData:', fbErr)
+      return false
+    }
   }
 }
 
@@ -566,7 +577,13 @@ function inspectModelAssets(modelUrl: string): ModelDiskAssets | null {
   }
 
   let savedPresets: ModelDiskPreset[] | null = null
-  const presetsPath = path.join(modelDir, MODEL_PRESETS_FILENAME)
+  let presetsPath = path.join(modelDir, MODEL_PRESETS_FILENAME)
+  if (!fs.existsSync(presetsPath)) {
+    const fallbackPath = path.join(app.getPath('userData'), 'model-presets', path.basename(modelDir), MODEL_PRESETS_FILENAME)
+    if (fs.existsSync(fallbackPath)) {
+      presetsPath = fallbackPath
+    }
+  }
   try {
     if (fs.existsSync(presetsPath) && fs.statSync(presetsPath).isFile()) {
       const rawPresets = JSON.parse(fs.readFileSync(presetsPath, 'utf-8'))
@@ -966,7 +983,12 @@ app.whenReady().then(() => {
   protocol.handle('deskpet', async (request) => {
     const url = new URL(request.url)
     if (url.host !== 'models') return new Response('Not Found', { status: 404 })
-    const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '')
+    let rel = ''
+    try {
+      rel = decodeURIComponent(url.pathname).replace(/^\/+/, '')
+    } catch {
+      rel = url.pathname.replace(/^\/+/, '')
+    }
     // 用户目录优先，随包目录兜底：同名相对路径用户的赢
     let full: string | null = null
     for (const root of getModelsRoots()) {
@@ -1057,6 +1079,7 @@ app.whenReady().then(() => {
               ],
             },
           }),
+          signal: AbortSignal.timeout(30_000),
         })
         if (!resp.ok) {
           throw new Error(`DashScope STT HTTP ${resp.status}`)
@@ -1105,6 +1128,7 @@ app.whenReady().then(() => {
         method: 'POST',
         headers,
         body: form,
+        signal: AbortSignal.timeout(30_000),
       })
       if (!resp.ok) {
         throw new Error(`Cloud STT (${cloudStt.backend}) HTTP ${resp.status}`)

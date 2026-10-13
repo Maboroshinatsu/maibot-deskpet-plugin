@@ -138,6 +138,21 @@ class DeskpetWSServer:
         self._server = None
         self._clients: Set[websockets.WebSocketServerProtocol] = set()
 
+    @staticmethod
+    def _is_trusted_origin(origin: Optional[str]) -> bool:
+        if not origin:
+            return True  # 桌面端原生/IPC（无 Origin 头）、脚本或本地进程
+        norm = origin.strip().lower()
+        if norm in ("null", "deskpet://"):
+            return True
+        if norm.startswith(("deskpet://", "vscode-webview://")):
+            return True
+        if norm.startswith(("http://localhost:", "http://127.0.0.1:", "http://[::1]:", "https://localhost:", "https://127.0.0.1:")):
+            return True
+        if norm in ("http://localhost", "http://127.0.0.1", "http://[::1]"):
+            return True
+        return False
+
     async def start(self):
         self._server = await websockets.serve(
             self._handle_client, self.host, self.port, ping_interval=30, ping_timeout=10,
@@ -148,7 +163,16 @@ class DeskpetWSServer:
     async def stop(self):
         if self._server:
             self._server.close()
-            await self._server.wait_closed()
+            try:
+                await asyncio.wait_for(self._server.wait_closed(), timeout=2.0)
+            except asyncio.TimeoutError:
+                self.logger.warning("[Deskpet] WebSocket wait_closed timed out, forcing client teardown")
+            for client in list(self._clients):
+                try:
+                    await client.close(1001, "Server shutting down")
+                except Exception:
+                    pass
+            self._clients.clear()
             self.logger.info("[Deskpet] WebSocket server stopped")
 
     async def broadcast(self, msg_type: str, data: dict, request_id: str = None):
@@ -168,6 +192,16 @@ class DeskpetWSServer:
         return len(self._clients) > 0
 
     async def _handle_client(self, ws: websockets.WebSocketServerProtocol):
+        origin = getattr(ws, "origin", None)
+        if origin is None and hasattr(ws, "request_headers"):
+            origin = ws.request_headers.get("Origin")
+
+        # 检查网页 Origin：若来源于外部不可信网页且未配置鉴权令牌，拒绝握手
+        if not self._is_trusted_origin(origin) and not self.auth_token:
+            self.logger.warning(f"[Deskpet] Rejected untrusted Origin without token: {origin} from {ws.remote_address}")
+            await ws.close(4003, "Forbidden origin")
+            return
+
         if self.auth_token:
             authorized = False
             try:
@@ -336,6 +370,62 @@ class DeskpetPlugin(MaiBotPlugin):
 
     async def on_config_update(self, scope: str, config_data: dict, version: str) -> None:
         self.ctx.logger.info(f"[Deskpet] Config updated: scope={scope}, version={version}")
+        if self._closing:
+            return
+
+        enabled = getattr(self.config.plugin, "enabled", True)
+        if not enabled:
+            if self._ws_server:
+                self.ctx.logger.info("[Deskpet] 插件已通过配置禁用，停止 WebSocket 服务与网关路由")
+                await self._stop_ws_server()
+                await self._notify_gateway_unready()
+            return
+
+        # 插件处于启用状态
+        ws_cfg = self.config.ws_server
+        if self._ws_server is None:
+            self.ctx.logger.info("[Deskpet] 插件已通过配置启用，启动 WebSocket 服务")
+            self._ws_server = DeskpetWSServer(
+                host=ws_cfg.host,
+                port=ws_cfg.port,
+                plugin=self,
+                logger=self.ctx.logger,
+                auth_token=ws_cfg.auth_token,
+            )
+            try:
+                await self._ws_server.start()
+                await self.ctx.gateway.update_state(
+                    gateway_name=self.GATEWAY_NAME,
+                    ready=True,
+                    platform=self.DESKPET_PLATFORM,
+                    account_id=self.DESKPET_ACCOUNT_ID,
+                    scope=self.DESKPET_SCOPE,
+                )
+            except Exception as e:
+                self.ctx.logger.error(f"[Deskpet] WebSocket 服务启动失败: {e}")
+            return
+
+        # 服务器正在运行，检查 host / port / auth_token 变更
+        need_rebind = self._ws_server.host != ws_cfg.host or self._ws_server.port != ws_cfg.port
+        if need_rebind:
+            self.ctx.logger.info(
+                f"[Deskpet] WebSocket 监听地址/端口变更 ({self._ws_server.host}:{self._ws_server.port} -> {ws_cfg.host}:{ws_cfg.port})，重启服务"
+            )
+            await self._stop_ws_server()
+            self._ws_server = DeskpetWSServer(
+                host=ws_cfg.host,
+                port=ws_cfg.port,
+                plugin=self,
+                logger=self.ctx.logger,
+                auth_token=ws_cfg.auth_token,
+            )
+            try:
+                await self._ws_server.start()
+            except Exception as e:
+                self.ctx.logger.error(f"[Deskpet] WebSocket 服务重启失败: {e}")
+        elif self._ws_server.auth_token != ws_cfg.auth_token:
+            self.ctx.logger.info("[Deskpet] WebSocket 鉴权令牌已更新")
+            self._ws_server.auth_token = ws_cfg.auth_token
 
     async def _fetch_tts_audio(self, text: str) -> Optional[str]:
         """调用 TTS 桥获取音频 base64。"""

@@ -189,7 +189,48 @@ def _synthesize_cosyvoice(text: str, cfg: dict) -> bytes:
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        return resp.read()
+        raw = resp.read()
+
+    # 如果直接返回了 WAV 或其他二进制音频格式，直接返回
+    if raw.startswith((b"RIFF", b"ID3", b"\xff\xfb", b"OggS")):
+        return raw
+
+    # 尝试解析 JSON 响应
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except Exception:
+        return raw
+
+    # 检查 DashScope 错误响应
+    if isinstance(data, dict):
+        if "code" in data or ("output" not in data and "message" in data):
+            code = data.get("code", "Error")
+            msg = data.get("message", "Unknown error")
+            raise RuntimeError(f"百炼/CosyVoice 错误: {code} — {msg}")
+
+        # 尝试提取音频下载链接 output.audio.url 或 output.url
+        audio_url = None
+        output = data.get("output")
+        if isinstance(output, dict):
+            audio_obj = output.get("audio")
+            if isinstance(audio_obj, dict):
+                audio_url = audio_obj.get("url")
+                if not audio_url and "data" in audio_obj:
+                    return base64.b64decode(audio_obj["data"])
+            elif isinstance(audio_obj, str) and audio_obj.startswith("http"):
+                audio_url = audio_obj
+            if not audio_url and "url" in output:
+                audio_url = output.get("url")
+
+        if audio_url:
+            dl_req = urllib.request.Request(audio_url, method="GET")
+            with urllib.request.urlopen(dl_req, timeout=TIMEOUT) as dl_resp:
+                audio_bytes = dl_resp.read()
+            if not audio_bytes:
+                raise RuntimeError("百炼音频下载结果为空")
+            return audio_bytes
+
+    raise RuntimeError(f"百炼/CosyVoice 响应格式异常: 未找到音频下载链接 — {str(raw[:200])}")
 
 
 def _synthesize_gsv2p(text: str, cfg: dict) -> bytes:

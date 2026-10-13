@@ -29,11 +29,21 @@ jobs:
         working-directory: deskpet-app
         run: npm ci
 
-      - name: Run unit tests & typecheck
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Python unit tests
+        run: python -B -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Run Electron unit tests
         working-directory: deskpet-app
-        run: |
-          npm test
-          npm run typecheck
+        run: npm test
+
+      - name: Run TypeScript typecheck
+        working-directory: deskpet-app
+        run: npm run typecheck
 
       - name: Build Electron bundle & Windows packages
         working-directory: deskpet-app
@@ -45,6 +55,7 @@ jobs:
           Compress-Archive -Path "release/win-unpacked/*" -DestinationPath "release/MaiBot-Deskpet-Portable-$ver-win-x64.zip" -Force
 
       - name: Upload unsigned build artifacts (for SignPath verification)
+        id: upload-unsigned
         uses: actions/upload-artifact@v4
         with:
           name: unsigned-installer
@@ -62,7 +73,7 @@ jobs:
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
           project-slug: 'maibot-deskpet-plugin'
           signing-policy-slug: 'release-signing'
-          github-artifact-id: 'unsigned-installer'
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
           wait-for-completion: true
           output-artifact-directory: 'deskpet-app/release-signed'
 

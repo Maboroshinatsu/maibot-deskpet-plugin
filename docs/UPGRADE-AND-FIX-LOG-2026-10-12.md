@@ -168,13 +168,40 @@
 3. **本地离线 STT 按需下载 INT8 量化模型（~226MB）**：
    - 当用户选择本地离线 STT 模式时，[stt-bridge.py](file:///d:/Frankenstein/maibot-deskpet-plugin/stt-bridge.py) 优先加载 `model.int8.onnx`（体积缩减 75%，解码更快、内存减半），若用户目录 `%APPDATA%\maibot-deskpet\sensevoice` 尚未缓存，则在首次语音识别时自动从国内镜像（`hf-mirror.com`）按需下载并输出实时百分比日志，后续客户端升级无需重复下载。
 
+### 8. v1.0.1 强化通信安全、修复百炼语音合成与系统稳定性（2026-10-13）
+
+相关文件：
+- [plugin.py](file:///d:/Frankenstein/maibot-deskpet-plugin/plugin.py)
+- [cloud-tts-bridge.py](file:///d:/Frankenstein/maibot-deskpet-plugin/cloud-tts-bridge.py)
+- [deskpet-app/src/main/index.ts](file:///d:/Frankenstein/maibot-deskpet-plugin/deskpet-app/src/main/index.ts)
+- [.github/workflows/release.yml](file:///d:/Frankenstein/maibot-deskpet-plugin/.github/workflows/release.yml)
+
+1. **🛡️ 通信安全加固（Origin 来源白名单校验）**：
+   - 增加 `_is_trusted_origin()` 校验，默认仅信任桌面客户端、本地回环或设置了安全 Token 的合法连接，自动拦截来自外部网页未授权的跨域 WebSocket 嗅探与连接。
+   - 插件在卸载停用时增加 2 秒有界超时保护，超时强制断开客户端，防止网关任务阻塞导致整个插件卸载卡死。
+
+2. **🔊 阿里云百炼 / CosyVoice TTS 音频解析与下载修复**：
+   - 修复 DashScope 同步非流式接口返回 JSON 响应（含 `output.audio.url`）时，原程序未能正确下载音频而是误将 JSON 当作音频数据的 Bug。现在会自动提取链接并完成音频流下载，并能在接口返回错误码时提供清晰的错误提示。
+
+3. **⚡ 云端语音识别（STT）防卡死保护**：
+   - 为阿里云百炼与 OpenAI 兼容云端 STT 的主进程网络请求统一挂载 30 秒超时（`AbortSignal.timeout(30_000)`）。彻底解决因网络断连或云端 API 无响应时，录音状态机一直卡在“正在转写”而无法发起下一次录音的问题。
+
+4. **📁 模型路径容错与动作预设安全落盘**：
+   - 导入名称包含 `#`（原本会被浏览器内核当成 URL 锚点截断）或 `%`（原本会导致 URI 解码错误）的模型文件夹时，现已完成路径分段编码，确保能正常被桌宠加载渲染。
+   - 自定义动作预设在模型安装目录不可写（如权限受限或便携目录只读）时，自动降级安全保存至应用的用户数据目录（`userData`），彻底杜绝用户配置静默丢失。
+
+5. **⚙️ 插件配置即时热生效**：
+   - 在 MaiBot 插件管理中开启/禁用桌宠插件、修改端口或更新安全 Token 时，插件会自动平滑重启并应用新配置，无需重启整个 MaiBot 主程序。
+
 ---
 
 ## 三、自动化测试验证状态
 
-1. **Python 插件生命周期与预设分组测试**：
-   - [tests/test_plugin_lifecycle.py](file:///d:/Frankenstein/maibot-deskpet-plugin/tests/test_plugin_lifecycle.py)：**16 / 16 全部通过**（涵盖卸载收敛、网关断连、多步分镜解析、情绪分组识别、防连重随机变体抽取、TTS 块级口型包络等）。
+1. **Python 插件单测与语音管线测试**：
+   - [tests/test_plugin_lifecycle.py](file:///d:/Frankenstein/maibot-deskpet-plugin/tests/test_plugin_lifecycle.py) 与 [tests/test_cloud_tts_bridge.py](file:///d:/Frankenstein/maibot-deskpet-plugin/tests/test_cloud_tts_bridge.py)：**22 / 22 全部通过**（涵盖 Origin 信任域校验、有界停机收敛、多步分镜解析、情绪分组抽取、百炼音频下载等）。
 2. **Node 端无麦克风全量回归测试**：
-   - [deskpet-app/tests/](file:///d:/Frankenstein/maibot-deskpet-plugin/deskpet-app/tests)：`host-controller.test.cjs`、`live2d-loader.test.cjs`、`maibot-protocol.test.cjs`、`runtime-policy.test.cjs` 等全部通过。
-3. **生产构建**：
-   - `npm run build`（`electron-vite build`）主进程、预加载脚本、渲染进程全部零报错编译通过。
+   - [deskpet-app/tests/](file:///d:/Frankenstein/maibot-deskpet-plugin/deskpet-app/tests)：**84 / 84 全部通过**（涵盖 `services.test.cjs`、`ptt.test.cjs`、`voice-input.test.cjs`、`imageset.test.cjs` 等）。
+3. **主进程服务与看门狗自检**：
+   - [deskpet-app/watchdog_selftest.py](file:///d:/Frankenstein/maibot-deskpet-plugin/deskpet-app/watchdog_selftest.py) 14 项自检通过；[deskpet-app/tests/runtime-services.cjs](file:///d:/Frankenstein/maibot-deskpet-plugin/deskpet-app/tests/runtime-services.cjs) 7 项集成测试通过。
+4. **双端类型检查**：
+   - `npm run typecheck`（包含主进程 node 与渲染层 web）0 报错通过。
