@@ -10,6 +10,7 @@
 
 [![Release](https://img.shields.io/badge/Release-v1.0.1-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.1)
 [![Installer](https://img.shields.io/badge/Setup.exe-112.4_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.1/MaiBot-Deskpet-Setup-1.0.1.exe)
+[![Portable](https://img.shields.io/badge/Portable.zip-144.9_MB-3b82f6?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.1/MaiBot-Deskpet-Portable-1.0.1-win-x64.zip)
 [![Electron](https://img.shields.io/badge/Electron_34-Vue_3_+_TS-5c7cfa?style=flat-square&labelColor=231d19)](https://www.electronjs.org/)
 [![Live2D](https://img.shields.io/badge/Live2D-Cubism_2_/_4-d66853?style=flat-square&labelColor=231d19)](https://www.live2d.com/)
 [![MaiBot](https://img.shields.io/badge/MaiBot-Plugin_SDK_v2-8b6fd4?style=flat-square&labelColor=231d19)](https://github.com/MaiM-with-u/MaiBot)
@@ -32,7 +33,7 @@
 ## 快速开始
 
 **1. 安装桌面端**  
-前往 [**Releases**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.1) 下载并运行 **`MaiBot-Deskpet-Setup-1.0.1.exe`**（内置 Python 运行时，无需额外部署环境）。
+前往 [**Releases**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.1) 下载并运行安装版 **`MaiBot-Deskpet-Setup-1.0.1.exe`**，或下载免安装便携版 **`MaiBot-Deskpet-Portable-1.0.1-win-x64.zip`** 解压即用。
 
 **2. 接入 MaiBot 插件**  
 将本仓库克隆至 MaiBot 的 `plugins/` 目录，重启 MaiBot 即可自动监听 `127.0.0.1:8523`：
@@ -73,5 +74,23 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 
 ## 开源协议与素材声明
 
-- **项目源码**：基于 [MIT License](LICENSE) 开源。
-- **示例模型**：演示截图及默认内置的示例模型 **「桃濑日和 (Hiyori Momose / 桃瀬ひより)」** 版权归 **Live2D Inc.** 所有，依据 [Live2D Free Material License Agreement（免费素材使用许可协议）](https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html) 提供，仅用于功能演示，不包含在 MIT 源码协议授权范围内。
+- **项目源码**：本仓库所有自研代码与静态立绘示例包（`sample_static`）均基于 [MIT License](LICENSE) 开源。
+- **Live2D Web 运行时与示例模型**：`live2dcubismcore.min.js`（Live2D Cubism SDK for Web 核心脚本）及默认内置示例模型 **「桃濑日和 (Hiyori Momose / 桃瀬ひより)」** 版权归 **Live2D Inc.** 所有，依据 [Live2D Proprietary Software License Agreement](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html) 与 [Live2D Free Material License Agreement](https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html) 随开源项目分发演示，不包含在 MIT 源码协议授权范围内。
+
+---
+
+## Code Signing & Privacy Policy
+
+### Code Signing Policy
+Free code signing is provided by [SignPath.io](https://signpath.io/), and the code signing certificate is provided by the [SignPath Foundation](https://signpath.org/).
+
+- **Committers and Reviewers**: [Maboroshinatsu](https://github.com/Maboroshinatsu)
+- **Approvers**: [Maboroshinatsu](https://github.com/Maboroshinatsu)
+
+All official Windows release binaries are built reproducibly from source via [GitHub Actions](.github/workflows/release.yml).
+
+### Privacy Policy
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+- By default, the desktop companion connects only to the user's local MaiBot WebSocket endpoint (`ws://127.0.0.1:8523/ws`).
+- No telemetry, analytics, or background tracking is collected or transmitted. External network requests (such as cloud STT/TTS API calls or optional local ASR model downloads) occur strictly when explicitly configured and triggered by the user.
+
