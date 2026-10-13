@@ -5,17 +5,22 @@
       hovered: isHovered,
       'click-through-locked': store.clickThroughLocked,
       'hover-fade-enabled': store.hoverFadeEnabled,
+      'model-faded': shouldFadeModel,
     }"
     :style="{ '--stage-shift-x': `${stageShiftX}px` }"
     @dblclick="onDoubleClick"
     @mousedown.left="onModelMouseDown"
     @contextmenu.prevent="onStageRightClick"
     @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
+    @mouseleave="onMouseLeave"
   >
     <div class="stage-actor-layer">
       <div v-show="modelKind === 'live2d'" ref="stageRef" class="live2d-stage" />
-      <StaticStage v-if="modelKind === 'image-set'" :hovered="isHovered && !store.clickThroughLocked" />
+      <StaticStage
+        ref="staticStageRef"
+        v-if="modelKind === 'image-set'"
+        :hovered="shouldFadeModel"
+      />
     </div>
     <div
       v-show="!store.clickThroughLocked"
@@ -23,12 +28,16 @@
       title="拖动窗口；双击重置模型位置和缩放；右键循环切换情绪"
       @mousedown.stop="onNavMouseDown"
       @dblclick.stop="resetModelView"
+      @mouseenter="isUiHovered = true"
+      @mouseleave="isUiHovered = false"
     />
 
     <!-- 侧边悬浮工具栏：悬停窗口才浮现（录音/VAD/伴随浮窗打开时常驻） -->
     <div
       class="btn-bar"
       :class="[{ visible: controlsVisible }, `dock-${popDirectionX}`]"
+      @mouseenter="isUiHovered = true"
+      @mouseleave="isUiHovered = false"
     >
       <button
         class="btn-bar-item"
@@ -157,9 +166,12 @@ const { start: startAnim, stop: stopAnim } = useLive2DAnimation()
 const { onNavMouseDown } = useWindowDrag()
 
 const stageRef = ref<HTMLDivElement>()
+const staticStageRef = ref<{ isCursorOverFigure?: (x: number, y: number) => boolean } | null>(null)
 const inputText = ref('')
 const showInput = ref(false)
 const isHovered = ref(false)
+const isModelHovered = ref(false)
+const isUiHovered = ref(false)
 const chatPanelOpen = ref(false)
 const showSettings = ref(false)
 const modelError = ref('')
@@ -963,9 +975,22 @@ onMounted(async () => {
     }
   }
 
+  window.addEventListener('blur', onWindowBlur)
   unsubscribeGlobalCursor = window.electronAPI?.onGlobalCursorPosition?.((position) => {
     mouseX = position.x
     mouseY = position.y
+    if (
+      position.x < 0 ||
+      position.x > window.innerWidth ||
+      position.y < 0 ||
+      position.y > window.innerHeight
+    ) {
+      isHovered.value = false
+      isModelHovered.value = false
+      isUiHovered.value = false
+    } else {
+      updateModelHover(position.x, position.y)
+    }
   }) ?? null
   unsubscribeWindowPlacement = window.electronAPI?.onWindowPlacement?.((placement) => {
     applyWindowPlacement(placement)
@@ -1029,7 +1054,86 @@ const { onWheel } = useModelZoom(
   () => ({ width: window.innerWidth, height: window.innerHeight }),
   (zoom) => { lastZoom = zoom },
 )
-const { onModelMouseDown, consumeDragOffsets } = useModelDrag()
+const { onModelMouseDown, consumeDragOffsets, isDragging } = useModelDrag()
+
+function isCursorOverLive2dModel(canvasCssX: number, canvasCssY: number): boolean {
+  const m = store.live2dModel
+  if (!m || !store.modelLoaded) return false
+
+  let minX = NaN
+  let maxX = NaN
+  let minY = NaN
+  let maxY = NaN
+  try {
+    const bounds = m.getBounds()
+    if (bounds && bounds.width > 0 && bounds.height > 0) {
+      minX = bounds.x / RESOLUTION
+      maxX = (bounds.x + bounds.width) / RESOLUTION
+      minY = bounds.y / RESOLUTION
+      maxY = (bounds.y + bounds.height) / RESOLUTION
+    }
+  } catch {
+    // 降级由 metrics 计算
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX)) {
+    const metrics = getModelMetrics(m)
+    const halfW = (metrics.refW * m.scale.x) / 2
+    const halfH = (metrics.refH * m.scale.y) / 2
+    minX = m.position.x - halfW
+    maxX = m.position.x + halfW
+    minY = m.position.y - halfH
+    maxY = m.position.y + halfH
+  }
+
+  return canvasCssX >= minX && canvasCssX <= maxX && canvasCssY >= minY && canvasCssY <= maxY
+}
+
+function updateModelHover(clientX: number, clientY: number): void {
+  if (
+    clientX < 0 ||
+    clientX > window.innerWidth ||
+    clientY < 0 ||
+    clientY > window.innerHeight
+  ) {
+    isHovered.value = false
+    isModelHovered.value = false
+    isUiHovered.value = false
+    return
+  }
+
+  isHovered.value = true
+
+  if (modelKind.value === 'live2d') {
+    const localX = clientX - stageShiftX.value
+    const localY = clientY
+    isModelHovered.value = isCursorOverLive2dModel(localX, localY)
+  } else if (modelKind.value === 'image-set') {
+    isModelHovered.value = staticStageRef.value?.isCursorOverFigure?.(clientX, clientY) ?? false
+  } else {
+    isModelHovered.value = false
+  }
+}
+
+const shouldFadeModel = computed(() => {
+  if (!store.hoverFadeEnabled) return false
+  if (store.clickThroughLocked) return false
+  if (showSettings.value || chatPanelOpen.value || showInput.value) return false
+  if (isUiHovered.value || isDragging.value) return false
+  return isModelHovered.value
+})
+
+function onMouseLeave() {
+  isHovered.value = false
+  isModelHovered.value = false
+  isUiHovered.value = false
+}
+
+function onWindowBlur() {
+  isHovered.value = false
+  isModelHovered.value = false
+  isUiHovered.value = false
+}
 const { cleanup: cleanupExpression } = useExpressionState(store)
 const { playMotionWithPriority, reset: resetMotionPriority } = useMotionPriority(store)
 const idleScheduler = useIdleScheduler(playMotionWithPriority, () => idleGroups)
@@ -1201,6 +1305,9 @@ function startAnimationPoll() {
         )
       }
     }
+    if (isHovered.value) {
+      updateModelHover(mouseX, mouseY)
+    }
     animFrameId = requestAnimationFrame(tick)
   }
   animFrameId = requestAnimationFrame(tick)
@@ -1209,6 +1316,7 @@ function startAnimationPoll() {
 function onMouseMove(e: MouseEvent) {
   mouseX = e.clientX
   mouseY = e.clientY
+  updateModelHover(e.clientX, e.clientY)
 }
 
 window.addEventListener('mousemove', onMouseMove)
@@ -1234,6 +1342,7 @@ onUnmounted(() => {
   onPttCancel()
   cleanupVoice()
   idleScheduler.stop()
+  window.removeEventListener('blur', onWindowBlur)
   window.removeEventListener('mousemove', onMouseMove)
   if (store.pixiApp) {
     const canvas = store.pixiApp.view as HTMLCanvasElement
@@ -1337,7 +1446,7 @@ function resetModelView() {
   transition: opacity 0.18s ease;
 }
 
-.deskpet-stage.hover-fade-enabled.hovered .live2d-stage {
+.deskpet-stage.hover-fade-enabled.model-faded .live2d-stage {
   opacity: 0.15;
 }
 

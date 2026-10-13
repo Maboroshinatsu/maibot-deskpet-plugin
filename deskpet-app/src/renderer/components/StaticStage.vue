@@ -255,6 +255,21 @@ function onDragStart(e: MouseEvent) {
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }
+
+function isCursorOverFigure(clientX: number, clientY: number): boolean {
+  if (!figureRef.value) return false
+  const activeImg = figureRef.value.querySelector('img.active') as HTMLElement | null
+  if (!activeImg) return false
+  const rect = activeImg.getBoundingClientRect()
+  return (
+    clientX >= rect.left &&
+    clientX <= rect.right &&
+    clientY >= rect.top &&
+    clientY <= rect.bottom
+  )
+}
+
+defineExpose({ isCursorOverFigure })
 </script>
 
 <style scoped>

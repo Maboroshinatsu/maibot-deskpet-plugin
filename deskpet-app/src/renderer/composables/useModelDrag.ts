@@ -1,3 +1,5 @@
+import { ref } from 'vue'
+
 export function useModelDrag() {
   let dragOffsetX = 0
   let dragOffsetY = 0
@@ -5,12 +7,14 @@ export function useModelDrag() {
   let dragStartX = 0
   let dragStartY = 0
   let dragMoved = false
+  const isDragging = ref(false)
 
   function onModelMouseDown(e: MouseEvent) {
     dragStartX = e.clientX
     dragStartY = e.clientY
     dragMoved = false
     dragActive = true
+    isDragging.value = true
 
     const onMove = (ev: MouseEvent) => {
       if (!dragActive) return
@@ -26,6 +30,7 @@ export function useModelDrag() {
 
     const onUp = () => {
       dragActive = false
+      isDragging.value = false
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
     }
@@ -42,5 +47,5 @@ export function useModelDrag() {
     return offsets
   }
 
-  return { onModelMouseDown, consumeDragOffsets }
+  return { onModelMouseDown, consumeDragOffsets, isDragging }
 }
