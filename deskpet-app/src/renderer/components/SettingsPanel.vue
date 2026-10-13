@@ -1212,16 +1212,6 @@
                 />
               </div>
             </div>
-
-            <label class="bio-field-label">自动截图间隔 (秒)</label>
-            <input
-              class="bio-pill-input full"
-              type="number"
-              min="10"
-              max="600"
-              :value="autoSsInterval"
-              @change="setAutoSsInterval"
-            />
           </div>
         </div>
       </Transition>

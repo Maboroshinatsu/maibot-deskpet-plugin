@@ -35,3 +35,7 @@ docs/UPGRADE-ROADMAP.md
 deskpet-app/release/
 deskpet-app/sensevoice/
 deskpet-app/python-runtime/
+config.toml
+logs/
+
+

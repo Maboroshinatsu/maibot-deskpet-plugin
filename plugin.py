@@ -367,8 +367,8 @@ class DeskpetPlugin(MaiBotPlugin):
     async def send_to_deskpet(
         self,
         message: Dict[str, Any],
-        route: Dict[str, Any] | None = None,
-        metadata: Dict[str, Any] | None = None,
+        route: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """出站：将 MaiBot 生成的回复发送到桌宠前端。"""

@@ -37,9 +37,12 @@ jobs:
 
       - name: Build Electron bundle & Windows packages
         working-directory: deskpet-app
+        shell: pwsh
         run: |
           npx electron-vite build
-          npx electron-builder --win nsis zip --publish never
+          npx electron-builder --win nsis --publish never
+          $ver = (Get-Content package.json | ConvertFrom-Json).version
+          Compress-Archive -Path "release/win-unpacked/*" -DestinationPath "release/MaiBot-Deskpet-Portable-$ver-win-x64.zip" -Force
 
       - name: Upload unsigned build artifacts (for SignPath verification)
         uses: actions/upload-artifact@v4

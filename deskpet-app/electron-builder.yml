@@ -40,7 +40,6 @@ extraResources:
 win:
   target:
     - nsis
-    - zip
   icon: build/icon.png
 nsis:
   oneClick: false
@@ -49,6 +48,5 @@ nsis:
   shortcutName: MaiBot 桌宠
   artifactName: MaiBot-Deskpet-Setup-${version}.exe
   include: build/installer.nsh
-zip:
-  artifactName: MaiBot-Deskpet-Portable-${version}-win-${arch}.zip
+
 

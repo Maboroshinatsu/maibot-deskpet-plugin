@@ -110,9 +110,8 @@ npm run dist
 
 ```text
 maibot-deskpet-plugin/
-├── plugin.py                     # MaiBot 插件主入口（消息流拦截、情绪解析、按句并行 TTS 调度）
-├── _manifest.json                # MaiBot 插件元数据清单（v1.0.0 · MIT）
-├── config.toml                   # 插件默认配置文件（WS :8523 / TTS :9881）
+├── plugin.py                     # MaiBot 插件主入口（含 DeskpetPluginConfig 配置模板、消息流网关、按句并行 TTS 调度）
+├── _manifest.json                # MaiBot 插件元数据清单（MIT）
 ├── cloud-tts-bridge.py           # 多平台云端 TTS 桥接服务（百炼 / 硅基流动 / Fish / MiMo / OpenAI 兼容）
 ├── gpt-sovits-bridge.py          # TTS 统一归一化桥接服务（监听 :9881 转发至 :9880）
 ├── stt-bridge.py                 # 本地 SenseVoice INT8 语音识别服务（支持按需自动下载模型至 %APPDATA%）

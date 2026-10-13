@@ -14,6 +14,7 @@
     "homepage": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin",
     "issues": "https://github.com/Maboroshinatsu/maibot-deskpet-plugin/issues"
   },
+  "plugin_type": "adapter",
   "host_application": {
     "min_version": "1.0.0",
     "max_version": "999.999.999"
@@ -32,12 +33,26 @@
       "type": "python_package",
       "name": "aiohttp",
       "version_spec": ">=3.8"
+    },
+    {
+      "type": "python_package",
+      "name": "numpy",
+      "version_spec": ">=1.24"
+    },
+    {
+      "type": "python_package",
+      "name": "sherpa-onnx",
+      "version_spec": ">=1.10"
+    },
+    {
+      "type": "python_package",
+      "name": "pynput",
+      "version_spec": ">=1.7"
     }
   ],
   "capabilities": [
     "emoji.get_by_description",
-    "emoji.get_random",
-    "llm.generate"
+    "emoji.get_random"
   ],
   "i18n": {
     "default_locale": "zh-CN",

@@ -691,8 +691,8 @@ function saveWindowState(): void {
       alwaysOnTop,
       clickThroughLocked,
       hoverFadeEnabled,
-      autoScreenshotEnabled: autoScreenshotTimer !== null,
-      autoScreenshotInterval,
+      autoScreenshotEnabled: false,
+      autoScreenshotInterval: 60,
     }, null, 2), 'utf-8')
   } catch {
     // ignore window state persistence failures
@@ -710,7 +710,6 @@ let lastCursorY: number | null = null
 let alwaysOnTop = true
 let clickThroughLocked = false
 let hoverFadeEnabled = false
-let pendingAutoScreenshot = false
 let lastSavedBounds: WindowBoundsState = { width: 600, height: 800, x: 100, y: 100 }
 
 function setAlwaysOnTopState(flag: boolean): void {
@@ -819,8 +818,6 @@ function createWindow(): void {
   alwaysOnTop = state.alwaysOnTop
   clickThroughLocked = state.clickThroughLocked
   hoverFadeEnabled = state.hoverFadeEnabled
-  autoScreenshotInterval = state.autoScreenshotInterval
-  pendingAutoScreenshot = state.autoScreenshotEnabled
   // 自动化测试（tests/l0-e2e.cjs 等）设置 DESKPET_HEADLESS=1 时隐藏窗口，
   // 避免测试期间反复闪现打扰用户；渲染与 DOM 仍然正常。
   const headlessForTests = process.env.DESKPET_HEADLESS === '1'
@@ -905,19 +902,6 @@ function formatShortcut(accelerator: string): string {
   return accelerator.replace('CommandOrControl', 'Ctrl')
 }
 
-let autoScreenshotTimer: ReturnType<typeof setInterval> | null = null
-let autoScreenshotInterval = 60
-
-function setAutoScreenshot(flag: boolean, intervalSec?: number): void {
-  if (intervalSec && intervalSec > 0) autoScreenshotInterval = intervalSec
-  if (autoScreenshotTimer) { clearInterval(autoScreenshotTimer); autoScreenshotTimer = null }
-  if (flag) {
-    autoScreenshotTimer = setInterval(captureScreen, autoScreenshotInterval * 1000)
-  }
-  saveWindowState()
-  createTray()
-}
-
 function captureScreen(): void {
   // maxSize limits thumbnail to avoid WebSocket frame overflow
   desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1280, height: 720 } })
@@ -969,12 +953,6 @@ function createTray(): void {
     { label: lockLabel, type: 'checkbox', checked: clickThroughLocked, click: (mi) => { setClickThroughLocked(mi.checked) } },
     { label: `悬停淡化模型 (${formatShortcut(SHORTCUTS.toggleHoverFade)})`, type: 'checkbox', checked: hoverFadeEnabled, click: (mi) => { setHoverFadeEnabled(mi.checked) } },
     { label: '截图识图', click: () => { captureScreen() } },
-    {
-      label: `自动截图（每 ${autoScreenshotInterval} 秒）`,
-      type: 'checkbox',
-      checked: autoScreenshotTimer !== null,
-      click: (mi) => { setAutoScreenshot(mi.checked) },
-    },
     { label: '重置模型位置', click: () => { mainWindow?.webContents.send('reset-model-view') } },
     { label: '重置窗口位置', click: () => { resetWindowPosition() } },
     { label: '重置全部布局', click: () => { resetAllLayout() } },
@@ -1012,7 +990,6 @@ app.whenReady().then(() => {
   createWindow()
   createTray()
   registerGlobalShortcuts()
-  if (pendingAutoScreenshot) setAutoScreenshot(true)
 
   ipcMain.handle('drag-window', (event, { dx, dy }: { dx: number; dy: number }) => {
     const win = BrowserWindow.fromWebContents(event.sender)
@@ -1178,11 +1155,8 @@ app.whenReady().then(() => {
     })
   })
 
-  ipcMain.handle('set-auto-screenshot-interval', (_event, sec: number) => {
-    if (!Number.isFinite(sec) || sec < 10) return
-    autoScreenshotInterval = sec
-    // 定时器在跑就按新间隔重建；没跑也要落盘并刷新托盘上的间隔文字
-    setAutoScreenshot(autoScreenshotTimer !== null, sec)
+  ipcMain.handle('set-auto-screenshot-interval', () => {
+    // 自动截图定时器已停用，保留空 IPC 兼容旧预加载接口
   })
 
   ipcMain.handle('list-models', () => listModels())

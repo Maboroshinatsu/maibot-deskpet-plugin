@@ -62,14 +62,14 @@ prompt = "你是 Live2D 桌面宠物，正在和用户一对一私聊。回复�
     └── maibot-deskpet-plugin/    ← 整个仓库放这里
         ├── _manifest.json
         ├── plugin.py
-        ├── config.toml
-        ├── start.bat
+        ├── cloud-tts-bridge.py
         ├── gpt-sovits-bridge.py
         ├── stt-bridge.py
+        ├── hotkey-bridge.py
         └── deskpet-app/          ← 前端代码
 ```
 
-> **用安装版 exe 时**：MaiBot 插件目录只需要 `plugin.py`、`_manifest.json`、`config.toml` 三个文件即可——前端和桥脚本都打进安装包了，不需要整仓库。
+> **用安装版 exe 时**：MaiBot 插件目录只需要 `plugin.py` 和 `_manifest.json` 两个文件即可（运行时配置文件 `config.toml` 会在 MaiBot 首次加载插件时根据 `DeskpetPluginConfig` 配置模板自动生成）——前端和桥脚本都打进安装包了，不需要整仓库。
 
 ---
 
@@ -157,9 +157,7 @@ Invoke-WebRequest -Uri "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice
 
 1. 下载 [GPT-SoVITS 整合包](https://github.com/RVC-Boss/GPT-SoVITS)，解压到任意位置
 2. 下载角色模型（权重文件 `.ckpt` + `.pth` + 参考音频 `.wav`）
-3. 告诉桌宠整合包在哪（二选一）：
-   - **安装版 exe**：设置面板 → 后台服务 → 服务路径配置 → 填「GPT-SoVITS 整合包目录」（常见路径会自动探测，探测到就不用填）
-   - **start.bat 启动**：改脚本里的 `GSV_DIR` 一行：`set "GSV_DIR=D:\你的GPT-SoVITS目录"`
+3. 在桌宠 **设置面板 → 后台服务 → 服务路径配置** 中填写「GPT-SoVITS 整合包目录」（常见路径会自动探测，探测到就不用填）
 4. 配置参考音频（角色声线 `.wav`）和它对应的文本（设置面板 → 服务路径配置）
 
 **C. 云 TTS（可选，免本地部署）**
@@ -184,31 +182,26 @@ Invoke-WebRequest -Uri "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice
 
 ## 第五步：启动
 
-**方式 A（推荐）：安装版 exe**
+**方式 A（推荐）：安装版 exe / 免安装便携版 zip**
 
-运行 `deskpet-app` 下的 `npm run dist` 得到 `release/MaiBot-Deskpet-Setup-x.x.x.exe`（或直接用发布的安装包），安装后桌面双击图标即可——**STT 桥 / TTS 桥 / GPT-SoVITS 会随桌宠自动启动**，不再弹一排命令行窗口。
+从 GitHub Releases 下载 `MaiBot-Deskpet-Setup-x.x.x.exe`（或免安装版 `MaiBot-Deskpet-Portable-x.x.x-win-x64.zip` 解压运行 `MaiBot Deskpet.exe`），或者在 `deskpet-app` 下执行 `npm run dist` 自行打包。启动后 **STT 桥 / TTS 桥 / 云 TTS 桥 / 快捷键桥 / GPT-SoVITS 由桌宠内置的后台服务管理器统一托管**，不再弹出命令行黑框。
 
-- 服务的状态灯、启动/停止/重启、日志都在 **设置面板 ⚙ → 后台服务** 里
+- 服务的状态灯、启动/停止/重启、实时日志都在 **设置面板 ⚙ → 后台服务** 里
 - 想看某个服务的原生控制台？勾选该服务的「终端窗口」再重启它
-- SenseVoice 语音识别模型已随包分发，装完即用
-- 桥脚本默认复用 MaiBot 的 Python（连上 MaiBot 后自动获得路径）；如需指定别的 Python，在「服务路径配置」里填写
+- 桥脚本可复用 MaiBot 的 Python（连上 MaiBot 并人工确认解释器路径后即可使用）；如需指定别的 Python，在「服务路径配置」里填写
 
-> 自己构建安装包：`npm run dist` 即可产出 NSIS 安装包（语音模型已包含，Python 复用 MaiBot 环境，无需额外组装）。
+**方式 B：源码开发模式（`npm run dev`）**
 
-**方式 B：start.bat（开发 / 跑源码）**
+```bash
+cd deskpet-app
+npm run dev
+```
 
-双击 `start.bat`，会弹出 4 个命令行窗口：
+源码模式同样内置完整的后台服务管理器，所有语音与快捷键桥均可直接在设置面板中启停。
 
-| 窗口标题 | 作用 | 必须？ |
-|---------|------|--------|
-| STT Bridge | 语音识别 | 可选 |
-| GPT-SoVITS API | 语音合成 | 可选 |
-| TTS Bridge | 文字→语音 | 可选 |
-| Deskpet | 桌宠前端 | ✅ 必须 |
+两种方式都需要**启动 MaiBot**（设置面板里的「MaiBot 插件」状态灯会告诉你连上没有）。
 
-两种方式都需要**手动启动 MaiBot**（设置面板里的「MaiBot 插件」状态灯会告诉你连上没有）。
-
-> 如果 GPT-SoVITS 没配，TTS 服务会显示"未找到整合包"，不影响文字聊天。
+> 如果 GPT-SoVITS 没配，本地 TTS 服务会显示"未找到整合包"，不影响文字聊天或云 TTS。
 
 ---
 
@@ -240,7 +233,7 @@ Invoke-WebRequest -Uri "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice
 
 ### 服务器端（运行 MaiBot 的机器）
 
-编辑 `config.toml`：
+在 MaiBot WebUI 插件配置页修改，或编辑 MaiBot 首次加载插件后在插件目录下自动生成的 `config.toml`：
 
 ```toml
 [ws_server]
@@ -264,7 +257,7 @@ auth_token = "你的密码"
 ### 安全注意事项
 
 - **CORS 配置**：STT 桥（端口 18530）和 TTS 桥（端口 9881）默认允许所有来源的跨域请求（`Access-Control-Allow-Origin: *`），这是为了方便本地开发。如果对外暴露这些端口，请通过反向代理（如 nginx）添加访问控制。
-- **鉴权令牌**：`config.toml` 中的 `auth_token` 默认为空。在局域网或公网使用时务必设置强密码，并在客户端设置面板中填写对应的 WS Token。
+- **鉴权令牌**：`ws_server.auth_token` 默认为空。在局域网或公网使用时务必设置强密码，并在客户端设置面板中填写对应的 WS Token。
 - **绑定地址**：默认绑定 `127.0.0.1`（仅本机）。如需跨设备使用，将 `host` 改为 `0.0.0.0`，但务必同时设置 `auth_token`。
 - **STT 地址可配**：客户端可自定义 STT 地址，指向任意服务器。仅在信任的网络环境中使用此功能。
 
@@ -272,12 +265,12 @@ auth_token = "你的密码"
 
 ## 配置项一览
 
-后端 `config.toml`：
+后端插件配置（由 `plugin.py` 中的 `DeskpetPluginConfig` 模板定义，MaiBot 首次加载插件时自动在插件目录生成 `config.toml`，也可在 MaiBot WebUI 中直接配置）：
 
 ```toml
 [plugin]
 enabled = true
-config_version = "1.0.0"
+config_version = "1.0.1"
 
 [ws_server]
 host = "127.0.0.1"       # 本机；跨设备改为 "0.0.0.0"
@@ -286,6 +279,11 @@ auth_token = ""           # 跨设备时建议设置密码
 
 [chat]
 stream_buffer_size = 50
+
+[tts]
+enabled = true
+url = "http://127.0.0.1:9881/tts"
+timeout = 60
 ```
 
 前端设置（快捷键 ⚙）：
@@ -297,4 +295,4 @@ stream_buffer_size = 50
 | STT 地址 | localStorage `deskpet/stt-url` | `http://127.0.0.1:18530/stt` |
 | VAD 灵敏度 | localStorage `deskpet/vad-threshold` | `0.02` |
 | 静音判定秒数 | localStorage `deskpet/vad-silence` | `1.5` |
-| 自动截图间隔 | localStorage `deskpet/auto-screenshot-interval` | `60` |
+
