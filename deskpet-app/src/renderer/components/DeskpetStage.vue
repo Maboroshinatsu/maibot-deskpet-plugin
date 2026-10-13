@@ -143,6 +143,7 @@ import { createPttController } from '@/composables/usePttInput'
 import {
   createPixiApp, createLive2DModel, attachLive2DModel, discardLive2DModel, unloadLive2DModel,
   getMotionGroups, describeModel, resizeModel, resizeModelFit, getModelMetrics, RESOLUTION,
+  isCssPointOverModelInk,
   setBaseParameters, setControlLayer, setFocusWeight, focusLive2DModel, setModelLipSync,
   type DeskpetModel, type ModelDiskAssetsInfo,
 } from '@/services/live2d/loader'
@@ -1059,7 +1060,12 @@ const { onModelMouseDown, consumeDragOffsets, isDragging } = useModelDrag()
 function isCursorOverLive2dModel(canvasCssX: number, canvasCssY: number): boolean {
   const m = store.live2dModel
   if (!m || !store.modelLoaded) return false
+  // 首选：模型「可见轮廓」包围盒 —— 排除画布四周的透明留白，只有真正落在角色身上才算命中。
+  // （getBounds() 取的是整块 artboard，模型放大后几乎等于整个窗口，会误触发。）
+  const overInk = isCssPointOverModelInk(m, canvasCssX, canvasCssY)
+  if (overInk !== null) return overInk
 
+  // 兜底：核心 API 不可用时，退回整块画布包围盒
   let minX = NaN
   let maxX = NaN
   let minY = NaN

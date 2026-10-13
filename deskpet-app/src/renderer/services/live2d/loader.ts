@@ -1479,3 +1479,128 @@ export function resizeModelFit(
   model.scale.set(newScale)
   model.position.set(cw / 2, ch / 2)
 }
+
+/** 模型「可见轮廓」的包围盒（artboard 坐标系） */
+export interface ModelInkBounds {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+/** 轮廓包围盒的缓存有效期：模型随动作形变，定期重算即可（悬停判定只需「大概范围」） */
+const INK_BOUNDS_TTL_MS = 250
+const inkBoundsCache = new WeakMap<object, { at: number; bounds: ModelInkBounds | null }>()
+
+/**
+ * 求模型「实际可见轮廓」的包围盒，用于悬停命中判定。
+ *
+ * 为什么不用 model.getBounds()：pixi-live2d-display 的 _calculateBounds() 取的是
+ * (0,0)-(width,height) 整块画布，而画布四周有大量透明留白，模型又被放大到窗口的 85%，
+ * 结果「命中范围」≈ 整个窗口 —— 鼠标划过窗口空白处也会触发悬停淡化。
+ *
+ * 这里改为遍历所有「可见且有透明度」的 drawable，取其顶点包围盒的并集，
+ * 得到贴合角色的近似矩形（约 250ms 缓存一次，开销可忽略）。
+ */
+export function getModelInkBounds(model: DeskpetModel): ModelInkBounds | null {
+  const key = model as unknown as object
+  const now = performance.now()
+  const cached = inkBoundsCache.get(key)
+  if (cached && now - cached.at < INK_BOUNDS_TTL_MS) return cached.bounds
+
+  const bounds = computeModelInkBounds(model)
+  inkBoundsCache.set(key, { at: now, bounds })
+  return bounds
+}
+
+function computeModelInkBounds(model: DeskpetModel): ModelInkBounds | null {
+  const internal = (model as unknown as { internalModel?: any }).internalModel
+  const core = internal?.coreModel
+  if (!internal || !core) return null
+  if (typeof core.getDrawableCount !== 'function') return null
+  if (typeof internal.getDrawableBounds !== 'function') return null
+
+  let count = 0
+  try {
+    count = core.getDrawableCount()
+  } catch {
+    return null
+  }
+
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+
+  for (let i = 0; i < count; i++) {
+    try {
+      // 不可见的部件（例如被隐藏的配件）不计入轮廓
+      if (
+        typeof core.getDrawableDynamicFlagIsVisible === 'function' &&
+        !core.getDrawableDynamicFlagIsVisible(i)
+      ) {
+        continue
+      }
+      // 完全透明的部件同样不计入
+      if (typeof core.getDrawableOpacity === 'function' && core.getDrawableOpacity(i) <= 0.01) {
+        continue
+      }
+      const b = internal.getDrawableBounds(i)
+      if (!b || !(b.width > 0) || !(b.height > 0)) continue
+      if (b.x < minX) minX = b.x
+      if (b.y < minY) minY = b.y
+      if (b.x + b.width > maxX) maxX = b.x + b.width
+      if (b.y + b.height > maxY) maxY = b.y + b.height
+    } catch {
+      // 单个 drawable 读取失败不影响整体
+    }
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null
+  }
+  if (maxX <= minX || maxY <= minY) return null
+  return { minX, minY, maxX, maxY }
+}
+
+/**
+ * 把 CSS 像素坐标换算到模型 artboard 坐标系。
+ * 复用库自身的 toModelPosition（与其内部 hitTest 同一套变换），保证坐标一致。
+ */
+export function cssPointToModelSpace(
+  model: DeskpetModel,
+  cssX: number,
+  cssY: number,
+): { x: number; y: number } | null {
+  try {
+    const toModelPosition = (model as unknown as {
+      toModelPosition?: (p: { x: number; y: number }, out: { x: number; y: number }) => unknown
+    }).toModelPosition
+    if (typeof toModelPosition !== 'function') return null
+
+    // 画布按 RESOLUTION 倍渲染，世界坐标 = CSS 坐标 × RESOLUTION
+    const input = { x: cssX * RESOLUTION, y: cssY * RESOLUTION }
+    const out = { x: 0, y: 0 }
+    toModelPosition.call(model, input, out)
+    if (!Number.isFinite(out.x) || !Number.isFinite(out.y)) return null
+    return out
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 判断 CSS 坐标是否落在模型可见轮廓内（近似矩形）。
+ * 返回 null 表示无法判定（核心 API 不可用），调用方应回落到整块画布判定。
+ */
+export function isCssPointOverModelInk(
+  model: DeskpetModel,
+  cssX: number,
+  cssY: number,
+): boolean | null {
+  const ink = getModelInkBounds(model)
+  if (!ink) return null
+  const p = cssPointToModelSpace(model, cssX, cssY)
+  if (!p) return null
+  return p.x >= ink.minX && p.x <= ink.maxX && p.y >= ink.minY && p.y <= ink.maxY
+}
