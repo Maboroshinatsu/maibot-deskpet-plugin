@@ -1416,6 +1416,9 @@ function resetModelView() {
   border-radius: 28px;
 }
 
+/* 悬停边缘暗角（focus vignette）
+   旧写法是三层叠加的 inset box-shadow，每条低透明度渐变斜坡在 8-bit / 6-bit 屏上都会量化出可见色带。
+   新写法：一条平滑的径向渐变 + 一层同色噪点抖动（dither），把量化台阶打散成随机噪点，低端显示器上不再断层。 */
 .deskpet-stage::after {
   content: '';
   position: absolute;
@@ -1425,14 +1428,37 @@ function resetModelView() {
   z-index: 30;
   opacity: 0;
   transition: opacity 0.25s ease;
-  box-shadow:
-    inset 0 0 40px 20px rgba(60, 60, 60, 0.25),
-    inset 0 0 80px 40px rgba(60, 60, 60, 0.15),
-    inset 0 0 140px 70px rgba(60, 60, 60, 0.06);
+  background: radial-gradient(
+    120% 120% at 50% 50%,
+    rgba(60, 60, 60, 0) 44%,
+    rgba(60, 60, 60, 0.05) 64%,
+    rgba(60, 60, 60, 0.13) 80%,
+    rgba(60, 60, 60, 0.24) 94%
+  );
+}
+
+/* 抖动层：与暗角同色的噪点，只在暗角出现的区域生效（中心留白不受影响），用来打散色带 */
+.deskpet-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  pointer-events: none;
+  z-index: 29;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.2353 0 0 0 0 0.2353 0 0 0 0 0.2353 0 0 0 0.7 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+  -webkit-mask-image: radial-gradient(120% 120% at 50% 50%, transparent 44%, #000 94%);
+  mask-image: radial-gradient(120% 120% at 50% 50%, transparent 44%, #000 94%);
 }
 
 .deskpet-stage:not(.click-through-locked).hovered::after {
   opacity: 1;
+}
+
+.deskpet-stage:not(.click-through-locked).hovered::before {
+  opacity: 0.18;
 }
 
 /* 角色层：伴随浮窗打开时平滑横移，留出零遮挡空间 */
