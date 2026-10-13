@@ -1117,7 +1117,6 @@ function updateModelHover(clientX: number, clientY: number): void {
 
 const shouldFadeModel = computed(() => {
   if (!store.hoverFadeEnabled) return false
-  if (store.clickThroughLocked) return false
   if (showSettings.value || chatPanelOpen.value || showInput.value) return false
   if (isUiHovered.value || isDragging.value) return false
   return isModelHovered.value
