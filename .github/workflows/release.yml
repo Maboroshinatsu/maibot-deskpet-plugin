@@ -50,9 +50,9 @@ jobs:
             deskpet-app/release/MaiBot-Deskpet-Portable-*-win-x64.zip
           if-no-files-found: error
 
-      # SignPath Foundation 审批通过并配置仓库 Secret SIGNPATH_API_TOKEN 后自动启用签名
+      # SignPath Foundation 审批通过并配置仓库 Variable SIGNPATH_ORGANIZATION_ID 与 Secret SIGNPATH_API_TOKEN 后自动启用签名
       - name: Submit signing request to SignPath
-        if: ${{ secrets.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && startsWith(github.ref, 'refs/tags/v') }}
         uses: signpath/github-action-submit-signing-request@v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
