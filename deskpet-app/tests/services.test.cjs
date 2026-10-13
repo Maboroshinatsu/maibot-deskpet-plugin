@@ -461,3 +461,11 @@ test('taskkill failure with live target times out without duplicate spawn', asyn
   await flush()
   assert.equal(h.spawns.length, 1)
 })
+
+test('hotkey resolves absolute powershell.exe path and repairs missing System32 PATH entries', async () => {
+  const h = harness()
+  await h.manager.start('hotkey')
+  assert.equal(h.spawns.length, 1)
+  assert.match(h.spawns[0].command, /WindowsPowerShell[\\/]v1\.0[\\/]powershell\.exe$/i)
+  assert.match(h.spawns[0].options.env.PATH || '', /WindowsPowerShell[\\/]v1\.0/i)
+})

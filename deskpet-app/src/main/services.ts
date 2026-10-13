@@ -200,6 +200,50 @@ function buildWin32HotkeyScript(vk: number, keySpec: string): string {
   ].join('\n')
 }
 
+function resolveWindowsRoot(): string {
+  const raw = (process.env?.SystemRoot || process.env?.windir || 'C:\\Windows').trim()
+  return !raw || raw.includes('%') ? 'C:\\Windows' : raw
+}
+
+function resolvePowerShellExe(): string {
+  const winRoot = resolveWindowsRoot()
+  const candidates = [
+    path.join(winRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    path.join(winRoot, 'Sysnative', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    path.join(winRoot, 'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  ]
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(candidate).isFile()) return candidate
+    } catch {
+      // ignore missing path and try next candidate
+    }
+  }
+  return 'powershell.exe'
+}
+
+function ensureWindowsSystemPath(env: Record<string, string | undefined>): void {
+  if (!env || typeof env !== 'object') return
+  const winRoot = resolveWindowsRoot()
+  const requiredDirs = [
+    path.join(winRoot, 'System32'),
+    winRoot,
+    path.join(winRoot, 'System32', 'Wbem'),
+    path.join(winRoot, 'System32', 'WindowsPowerShell', 'v1.0'),
+  ]
+  const pathKey = Object.keys(env).find((k) => k.toLowerCase() === 'path') || 'PATH'
+  const current = (env[pathKey] || '').split(';').filter(Boolean)
+  const lowerSet = new Set(current.map((p) => p.toLowerCase()))
+  for (const dir of requiredDirs) {
+    if (!lowerSet.has(dir.toLowerCase())) {
+      current.push(dir)
+      lowerSet.add(dir.toLowerCase())
+    }
+  }
+  env[pathKey] = current.join(';')
+}
+
 export class ServiceManager {
   private config: ServicesConfig
   private processes = new Map<ServiceId, ChildProcess>()
@@ -225,6 +269,7 @@ export class ServiceManager {
 
   constructor(emit: (channel: string, payload: unknown) => void) {
     this.emit = emit
+    ensureWindowsSystemPath(process.env)
     this.config = this.loadConfig()
   }
 
@@ -580,7 +625,7 @@ export class ServiceManager {
             }
           }
           return {
-            command: 'powershell.exe',
+            command: resolvePowerShellExe(),
             args: [
               '-NoLogo',
               '-NoProfile',
@@ -814,7 +859,11 @@ export class ServiceManager {
 
     proc.on('error', (err) => {
       if (!isCurrent()) return
-      const hint = /ENOENT/.test(String(err)) ? '（找不到可执行文件，检查 Python 路径）' : ''
+      const hint = /ENOENT/.test(String(err))
+        ? id === 'hotkey'
+          ? '（找不到系统 PowerShell 可执行文件）'
+          : '（找不到可执行文件，检查 Python 路径）'
+        : ''
       // spawn 失败没有 PID；已有 PID 的 error 不等于退出，不能丢掉所有权。
       if (proc.pid == null) {
         this.finishProcess(id, proc, 'error', `${err}${hint}`)
