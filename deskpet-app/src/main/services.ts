@@ -244,6 +244,21 @@ function ensureWindowsSystemPath(env: Record<string, string | undefined>): void 
   env[pathKey] = current.join(';')
 }
 
+/**
+ * Windows CreateProcessW 要求 cwd 必须是磁盘上的真实目录。
+ * 打包后 app.getAppPath() 返回 ".../resources/app.asar"（在 OS 层是文件而非目录），
+ * 直接作为 cwd 传给 child_process.spawn 会导致 Windows 报 Error: spawn <cmd> ENOENT。
+ */
+export function resolveSafeWorkingDir(rawCwd: string | null | undefined): string {
+  const trimmed = typeof rawCwd === 'string' ? rawCwd.trim() : ''
+  if (!trimmed) return process.cwd()
+  const asarMatch = /^(.+?\.asar)(?:[\\/].*)?$/i.exec(trimmed)
+  if (asarMatch) {
+    return path.dirname(asarMatch[1])
+  }
+  return trimmed
+}
+
 export class ServiceManager {
   private config: ServicesConfig
   private processes = new Map<ServiceId, ChildProcess>()
@@ -635,7 +650,7 @@ export class ServiceManager {
               '-Command',
               buildWin32HotkeyScript(vk, key),
             ],
-            cwd: app.getAppPath(),
+            cwd: this.bridgesRoot() ?? resolveSafeWorkingDir(app.getAppPath()),
           }
         },
       },
@@ -752,6 +767,7 @@ export class ServiceManager {
     resolved: { command: string; args: string[]; cwd: string; env?: Record<string, string> },
     title: string,
   ): ChildProcess {
+    const safeCwd = resolveSafeWorkingDir(resolved.cwd)
     let command = resolved.command
     if (/pythonw\.exe$/i.test(command)) {
       const sibling = command.replace(/pythonw\.exe$/i, 'python.exe')
@@ -762,11 +778,11 @@ export class ServiceManager {
     return spawn(
       'cmd.exe',
       [
-        '/c', 'start', `"${title}"`, '/wait', '/D', `"${resolved.cwd}"`,
+        '/c', 'start', `"${title}"`, '/wait', '/D', `"${safeCwd}"`,
         command, ...resolved.args.map((a) => (a.includes(' ') ? `"${a}"` : a)),
       ],
       {
-        cwd: resolved.cwd,
+        cwd: safeCwd,
         env: { ...process.env, ...(resolved.env ?? {}), DESKPET_PARENT_PID: String(process.pid) },
         // 外层 cmd 藏起来；python 的控制台窗口由 start 创建
         windowsHide: true,
@@ -815,15 +831,16 @@ export class ServiceManager {
     }
     if (!this.isCurrentStart(id, generation)) return
 
+    const safeCwd = resolveSafeWorkingDir(resolved.cwd)
     const showTerminal = id !== 'hotkey' && this.config.showTerminal[id]
-    this.appendLog(id, `[launcher] ${resolved.command} ${resolved.args.join(' ')}`)
+    this.appendLog(id, `[launcher] (cwd=${safeCwd}) ${resolved.command} ${resolved.args.join(' ')}`)
     if (!this.isCurrentStart(id, generation)) return
     let proc: ChildProcess
     try {
       proc = showTerminal
-        ? this.spawnTerminal(resolved, def.name)
+        ? this.spawnTerminal({ ...resolved, cwd: safeCwd }, def.name)
         : spawn(resolved.command, resolved.args, {
-            cwd: resolved.cwd,
+            cwd: safeCwd,
             env: { ...process.env, ...(resolved.env ?? {}), DESKPET_PARENT_PID: String(process.pid) },
             windowsHide: true,
             stdio: ['ignore', 'pipe', 'pipe'],

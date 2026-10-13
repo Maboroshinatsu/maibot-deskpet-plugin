@@ -61,7 +61,12 @@ function harness(options = {}) {
       if (options.config) return JSON.stringify(options.config)
       throw new Error('no saved config')
     },
-    statSync() { return { isFile: () => true } },
+    statSync(target) {
+      if (options.noBridges && String(target).includes('stt-bridge.py')) {
+        throw new Error('ENOENT')
+      }
+      return { isFile: () => true }
+    },
     existsSync: () => true,
     mkdirSync() {},
     writeFileSync(_file, value) { writtenConfig = JSON.parse(value) },
@@ -70,7 +75,13 @@ function harness(options = {}) {
   const dependencies = {
     './runtime-policy': { validateDetectedPython: () => ({ ok: false, reason: 'No runtime approval in lifecycle fixture' }) },
     child_process: childProcess, net: options.net || fakeNet, path, fs: fakeFs,
-    electron: { app: { getPath: () => '/test/userdata', getAppPath: () => '/test/plugin/deskpet-app', isPackaged: false } },
+    electron: {
+      app: {
+        getPath: () => '/test/userdata',
+        getAppPath: () => options.appPath || '/test/plugin/deskpet-app',
+        isPackaged: Boolean(options.isPackaged),
+      },
+    },
   }
   vm.runInNewContext(compiled, {
     module, exports: module.exports,
@@ -78,7 +89,7 @@ function harness(options = {}) {
       assert.ok(Object.hasOwn(dependencies, name), `unexpected dependency: ${name}`)
       return dependencies[name]
     },
-    process: { pid: 99, env: {}, resourcesPath: '/test/resources' },
+    process: { pid: 99, env: {}, resourcesPath: '/test/resources', cwd: () => '/test/cwd' },
     console: { info() {}, warn() {} },
     setTimeout(fn, ms) { const id = nextTimer++; timeouts.set(id, { fn, ms }); return id },
     clearTimeout(id) { timeouts.delete(id) },
@@ -469,3 +480,24 @@ test('hotkey resolves absolute powershell.exe path and repairs missing System32 
   assert.match(h.spawns[0].command, /WindowsPowerShell[\\/]v1\.0[\\/]powershell\.exe$/i)
   assert.match(h.spawns[0].options.env.PATH || '', /WindowsPowerShell[\\/]v1\.0/i)
 })
+
+test('hotkey never passes app.asar file path as spawn cwd in packaged builds', async () => {
+  const packagedWithBridges = harness({
+    isPackaged: true,
+    appPath: 'C:\\Program Files\\MaiBot Deskpet\\resources\\app.asar',
+  })
+  await packagedWithBridges.manager.start('hotkey')
+  assert.equal(packagedWithBridges.spawns.length, 1)
+  assert.doesNotMatch(packagedWithBridges.spawns[0].options.cwd, /\.asar([\\/]|$)/i)
+
+  const packagedWithoutBridges = harness({
+    isPackaged: true,
+    noBridges: true,
+    appPath: 'C:\\Program Files\\MaiBot Deskpet\\resources\\app.asar',
+  })
+  await packagedWithoutBridges.manager.start('hotkey')
+  assert.equal(packagedWithoutBridges.spawns.length, 1)
+  assert.doesNotMatch(packagedWithoutBridges.spawns[0].options.cwd, /\.asar([\\/]|$)/i)
+  assert.equal(packagedWithoutBridges.spawns[0].options.cwd, 'C:\\Program Files\\MaiBot Deskpet\\resources')
+})
+

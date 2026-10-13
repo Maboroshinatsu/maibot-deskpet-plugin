@@ -31,6 +31,13 @@
             <button class="btn btn-sm" @click="stopService(svc.id)">停止</button>
             <button class="btn btn-sm" @click="restartService(svc.id)">重启</button>
           </template>
+          <button
+            v-if="openLogs.has(svc.id) || svc.status === 'error'"
+            class="btn btn-sm btn-ghost"
+            @click="copyLog(svc)"
+          >
+            {{ copiedMap[svc.id] ? '已复制' : '复制' }}
+          </button>
           <button class="btn btn-sm btn-ghost" @click="toggleLog(svc.id)">
             {{ openLogs.has(svc.id) ? '收起' : '日志' }}
           </button>
@@ -127,6 +134,13 @@
                 <button class="btn btn-sm" @click="stopService(svc.id)">停止</button>
                 <button class="btn btn-sm" @click="restartService(svc.id)">重启</button>
               </template>
+              <button
+                v-if="openLogs.has(svc.id) || svc.status === 'error'"
+                class="btn btn-sm btn-ghost"
+                @click="copyLog(svc)"
+              >
+                {{ copiedMap[svc.id] ? '已复制' : '复制' }}
+              </button>
               <button class="btn btn-sm btn-ghost" @click="toggleLog(svc.id)">
                 {{ openLogs.has(svc.id) ? '收起' : '日志' }}
               </button>
@@ -195,6 +209,13 @@
                 <button class="btn btn-sm" @click="stopService(svc.id)">停止</button>
                 <button class="btn btn-sm" @click="restartService(svc.id)">重启</button>
               </template>
+              <button
+                v-if="openLogs.has(svc.id) || svc.status === 'error'"
+                class="btn btn-sm btn-ghost"
+                @click="copyLog(svc)"
+              >
+                {{ copiedMap[svc.id] ? '已复制' : '复制' }}
+              </button>
               <button class="btn btn-sm btn-ghost" @click="toggleLog(svc.id)">
                 {{ openLogs.has(svc.id) ? '收起' : '日志' }}
               </button>
@@ -305,6 +326,13 @@
                 <button class="btn btn-sm" @click="stopService(svc.id)">停止</button>
                 <button class="btn btn-sm" @click="restartService(svc.id)">重启</button>
               </template>
+              <button
+                v-if="openLogs.has(svc.id) || svc.status === 'error'"
+                class="btn btn-sm btn-ghost"
+                @click="copyLog(svc)"
+              >
+                {{ copiedMap[svc.id] ? '已复制' : '复制' }}
+              </button>
               <button class="btn btn-sm btn-ghost" @click="toggleLog(svc.id)">
                 {{ openLogs.has(svc.id) ? '收起' : '日志' }}
               </button>
@@ -397,6 +425,8 @@ const services = ref<ServiceState[]>([])
 const config = ref<ServicesConfig | null>(null)
 const logsMap = reactive<Partial<Record<ServiceId, string[]>>>({})
 const openLogs = reactive(new Set<ServiceId>())
+const copiedMap = reactive<Partial<Record<ServiceId, boolean>>>({})
+const copyTimers = new Map<ServiceId, ReturnType<typeof setTimeout>>()
 const logRefs = new Map<ServiceId, HTMLElement>()
 
 const coreServices = computed(() =>
@@ -540,6 +570,36 @@ async function toggleLog(id: ServiceId) {
   scrollLogToEnd(id)
 }
 
+async function copyLog(svc: ServiceState) {
+  const id = svc.id
+  const lines = logsMap[id] ?? (await window.electronAPI?.getServiceLogs(id)) ?? []
+  logsMap[id] = lines
+  const header = `[${svc.name}] 状态: ${statusText(svc)}`
+  const text = lines.length > 0 ? `${header}\n${lines.join('\n')}` : header
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  copiedMap[id] = true
+  const prev = copyTimers.get(id)
+  if (prev) clearTimeout(prev)
+  copyTimers.set(
+    id,
+    setTimeout(() => {
+      copiedMap[id] = false
+      copyTimers.delete(id)
+    }, 1800),
+  )
+}
+
 function setAutoStart(id: ServiceId, e: Event) {
   const checked = (e.target as HTMLInputElement).checked
   void window.electronAPI?.setServicesConfig({ autoStart: { [id]: checked } as Record<ServiceId, boolean> })
@@ -672,6 +732,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   candidateSeq++
+  for (const timer of copyTimers.values()) clearTimeout(timer)
+  copyTimers.clear()
   window.removeEventListener('deskpet:ws-config-changed', onWsConfigChanged)
   unsubUpdate?.()
   unsubLog?.()
@@ -694,8 +756,18 @@ onUnmounted(() => {
 .svc-main { flex: 1; min-width: 0; }
 .svc-name { color: var(--dp-text-main); font-size: 12px; font-weight: 700; }
 .svc-port { color: var(--dp-text-sub); font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 600; margin-left: 4px; }
-.svc-detail { color: var(--dp-text-sub); font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.svc-error { color: #ef4444; white-space: normal; }
+.svc-detail {
+  color: var(--dp-text-sub);
+  font-size: 11px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+.svc-error { color: #ef4444; white-space: normal; word-break: break-word; }
 .svc-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
 .mode-group {
@@ -822,10 +894,15 @@ onUnmounted(() => {
   margin-left: 16px; max-height: 140px; overflow-y: auto;
   background: var(--dp-input-bg); border: none;
   border-radius: 10px; padding: 7px 9px;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 .log-line {
   color: var(--dp-text-sub); font-family: ui-monospace, Consolas, monospace;
   font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .log-muted { color: var(--dp-text-dim); }
 
