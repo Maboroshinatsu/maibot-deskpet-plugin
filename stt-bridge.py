@@ -179,16 +179,6 @@ async def handle_stt(request: web.Request) -> web.Response:
             pass
 
 
-async def handle_options(_request: web.Request) -> web.Response:
-    return web.Response(
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        },
-    )
-
-
 def main() -> None:
     import sys
 
@@ -213,7 +203,6 @@ def main() -> None:
 
     app = web.Application(client_max_size=MAX_AUDIO_BYTES)
     app.router.add_post("/stt", handle_stt)
-    app.router.add_route("OPTIONS", "/stt", handle_options)
     print(f"[stt-bridge] listening on http://127.0.0.1:{PORT}/stt", flush=True)
     web.run_app(app, host="127.0.0.1", port=PORT)
 

@@ -322,14 +322,6 @@ async def handle_tts(request: web.Request) -> web.Response:
         return web.json_response({"error": str(exc)}, status=500)
 
 
-async def handle_options(_request: web.Request) -> web.Response:
-    return web.Response(headers={
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-    })
-
-
 def main() -> None:
     # 桌宠退出后自动跟着退出，避免孤儿进程占着端口
     try:
@@ -345,8 +337,6 @@ def main() -> None:
     app = web.Application()
     app.router.add_post("/tts", handle_tts)
     app.router.add_post("/synthesize", handle_tts)
-    app.router.add_route("OPTIONS", "/tts", handle_options)
-    app.router.add_route("OPTIONS", "/synthesize", handle_options)
     print(f"[cloud-tts-bridge] listening on http://127.0.0.1:{PORT}/tts")
     if backend == "unknown":
         print(f"[cloud-tts-bridge] WARNING: {cfg.get('error')}")
