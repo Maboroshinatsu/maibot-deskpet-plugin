@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "id": "maibot.deskpet-plugin",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "name": "MaiBot Deskpet",
   "description": "为 MaiBot 接入 Live2D 桌面宠物，支持双向对话（消息管线集成）、状态与情绪预设编排、视线追踪、滚轮缩放和端云双模语音合成/识别。",
   "author": {

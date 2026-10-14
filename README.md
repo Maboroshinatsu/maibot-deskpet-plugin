@@ -8,15 +8,15 @@
 
 <br />
 
-[![Release](https://img.shields.io/badge/Release-v1.0.7-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.7)
-[![Installer](https://img.shields.io/badge/Setup.exe-85.2_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.7/MaiBot-Deskpet-Setup-1.0.7.exe)
-[![Portable](https://img.shields.io/badge/Portable.zip-124.9_MB-3b82f6?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.7/MaiBot-Deskpet-Portable-1.0.7-win-x64.zip)
+[![Release](https://img.shields.io/badge/Release-v1.0.8-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.8)
+[![Installer](https://img.shields.io/badge/Setup.exe-85.2_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.8/MaiBot-Deskpet-Setup-1.0.8.exe)
+[![Portable](https://img.shields.io/badge/Portable.zip-124.9_MB-3b82f6?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.8/MaiBot-Deskpet-Portable-1.0.8-win-x64.zip)
 [![Electron](https://img.shields.io/badge/Electron_34-Vue_3_+_TS-5c7cfa?style=flat-square&labelColor=231d19)](https://www.electronjs.org/)
 [![Live2D](https://img.shields.io/badge/Live2D-Cubism_2_/_4-d66853?style=flat-square&labelColor=231d19)](https://www.live2d.com/)
 [![MaiBot](https://img.shields.io/badge/MaiBot-Plugin_SDK_v2-8b6fd4?style=flat-square&labelColor=231d19)](https://github.com/MaiM-with-u/MaiBot)
 [![License](https://img.shields.io/badge/License-MIT-e08b52?style=flat-square&labelColor=231d19)](LICENSE)
 
-**[下载安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.7)** &nbsp;·&nbsp; **[使用指南](docs/GUIDE.md)** &nbsp;·&nbsp; **[部署配置](docs/SETUP.md)** &nbsp;·&nbsp; **[模型适配规范](docs/MODEL-ADAPTER-SPEC.md)** &nbsp;·&nbsp; **[v1.0 更新日志](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)**
+**[下载安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.8)** &nbsp;·&nbsp; **[使用指南](docs/GUIDE.md)** &nbsp;·&nbsp; **[部署配置](docs/SETUP.md)** &nbsp;·&nbsp; **[模型适配规范](docs/MODEL-ADAPTER-SPEC.md)** &nbsp;·&nbsp; **[v1.0 更新日志](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)**
 
 </div>
 
@@ -33,7 +33,7 @@
 ## 快速开始
 
 **1. 安装桌面端**  
-前往 [**Releases**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.7) 下载并运行安装版 **`MaiBot-Deskpet-Setup-1.0.7.exe`**，或下载免安装便携版 **`MaiBot-Deskpet-Portable-1.0.7-win-x64.zip`** 解压即用。
+前往 [**Releases**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.8) 下载并运行安装版 **`MaiBot-Deskpet-Setup-1.0.8.exe`**，或下载免安装便携版 **`MaiBot-Deskpet-Portable-1.0.8-win-x64.zip`** 解压即用。
 
 **2. 接入 MaiBot 插件**  
 将本仓库克隆至 MaiBot 的 `plugins/` 目录，重启 MaiBot 即可自动监听 `127.0.0.1:8523`：
@@ -49,14 +49,14 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 
 ---
 
-## 💡 v1.0.7 最新改进与修复
+## 💡 v1.0.8 最新改进与修复
 
-本版本修复了几处影响使用的问题：
+本版本修好了几处「数据会丢、声音会乱」的毛病：
 
-- 🔑 **API Key 不再"消失"**：修复了重启桌宠后语音服务的密钥显示为空、且服务起不来的问题（密钥一直存着，只是读取时机不对）。
-- 💬 **聊天记录可保留**：聊天记录会保存到本机，重启桌宠后不再清空（上限 200 条 / 1MB，超出自动丢弃最旧的）。
-- 🗣️ **MiMo 语音更有表现力**：语音合成支持「风格指令」，可用一句话控制语气、情绪与角色扮演。
-- ✅ **回复不再重复你的话**：修复了回复里带上你自己输入的问题。
+- 💾 **聊天记录关窗不再丢**：以前收到回复后马上关掉桌宠，最后一条消息可能没来得及存下来。现在关窗前会先把记录写完再退出，稳了。
+- 🛡️ **聊天记录不会整份损坏**：记录文件改成「先写临时文件、再一次性替换」，即使写入过程中断电或强杀，下次打开也不会把历史记录全部清空。
+- 🔀 **多段回复的语音不再乱序**：当 MaiBot 把一段话分成几条短消息发来时，语音会严格按先后顺序播完一段再播下一段，不再出现短句抢在前面的情况。
+- 🚫 **不再念出表情包标记**：修复了回复里夹带「表情包: …」这类标记时，桌宠把它当台词念出来的问题。
 
 ---
 
