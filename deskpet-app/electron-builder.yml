@@ -30,9 +30,15 @@ extraResources:
     to: bridges/hotkey-bridge.py
   - from: ../watchdog.py
     to: bridges/watchdog.py
-  # 只随包分发默认模型与静态立绘示例包；个人测试模型与离线语音包不进安装包
+  # 只随包分发默认模型与静态立绘示例包；个人测试模型与离线语音包不进安装包。
+  # 排除 Cubism Editor 源工程文件（.cmo3/.can3）：运行时只用 runtime/ 下的 .moc3 等输出文件，
+  # 源文件既非运行时所需，按 Live2D 素材授权协议也不宜随包再分发。
   - from: src/renderer/public/models/hiyori_pro_zh
     to: models/hiyori_pro_zh
+    filter:
+      - "**/*"
+      - "!**/*.cmo3"
+      - "!**/*.can3"
   - from: src/renderer/public/models/sample_static
     to: models/sample_static
   - from: build/icon.png

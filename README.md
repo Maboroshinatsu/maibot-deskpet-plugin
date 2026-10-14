@@ -85,7 +85,10 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 ## 开源协议与素材声明
 
 - **项目源码**：本仓库所有自研代码与静态立绘示例包（`sample_static`）均基于 [MIT License](LICENSE) 开源。
-- **Live2D Web 运行时与示例模型**：`live2dcubismcore.min.js`（Live2D Cubism SDK for Web 核心脚本）及默认内置示例模型 **「桃濑日和 (Hiyori Momose / 桃瀬ひより)」** 版权归 **Live2D Inc.** 所有，依据 [Live2D Proprietary Software License Agreement](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html) 与 [Live2D Free Material License Agreement](https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html) 随开源项目分发演示，不包含在 MIT 源码协议授权范围内。
+- **Live2D Web 运行时**：`live2dcubismcore.min.js`（Live2D Cubism SDK for Web 核心脚本）版权归 **Live2D Inc.** 所有，依据 [Live2D Proprietary Software License Agreement](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html) 随本项目分发，不包含在 MIT 源码协议授权范围内。
+- **默认示例模型「桃濑日和 (Hiyori Momose / 桃瀬ひより)」**：为 Live2D Inc. 提供的示例素材（Live2D 原创角色），版权归 **Live2D Inc.** 所有，依据 [Live2D Free Material License Agreement](https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html) 与 [《Live2D Cubism 素材样本的使用授权要求》](https://www.live2d.com/zh-CHS/learn/sample/model-terms/) 使用与分发，不包含在 MIT 源码协议授权范围内。
+  - 本仓库仅随包分发该模型的**运行时输出文件**（`.moc3`、贴图与动作/物理等 `.json`），不含 Cubism Editor 源工程文件（`.cmo3` / `.can3`）。
+  - 依协议要求标注：**「本作品的角色在运用株式会社Live2D的著作物素材样本时依据了株式会社Live2D规定的协议。本作品完全根据制作者的自我裁量制作而成。」**
 
 ---
 
