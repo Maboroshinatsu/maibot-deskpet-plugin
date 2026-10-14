@@ -27,6 +27,11 @@ except ImportError:
 PORT = 9881
 SOVITS_URL = os.environ.get("DESKPET_GSV_API_URL", "http://127.0.0.1:9880/tts")
 
+# 监听地址与访问令牌：默认仅本机（127.0.0.1）。跨机部署（桌宠与 MaiBot 不在同一台机器）时
+# 由桌宠注入 DESKPET_BRIDGE_HOST=0.0.0.0 与 DESKPET_BRIDGE_TOKEN，插件侧需带上同样的令牌。
+BRIDGE_HOST = os.environ.get("DESKPET_BRIDGE_HOST", "127.0.0.1").strip() or "127.0.0.1"
+BRIDGE_TOKEN = os.environ.get("DESKPET_BRIDGE_TOKEN", "").strip()
+
 # ── 默认角色声线：手动跑脚本时改这里；由桌宠拉起时以设置面板/环境变量为准 ──
 REF_AUDIO_PATH = os.environ.get("DESKPET_GSV_REF_AUDIO", "")
 PROMPT_TEXT = os.environ.get("DESKPET_GSV_PROMPT_TEXT", "")
@@ -47,7 +52,16 @@ def _resolve_ref_audio(body: dict) -> str:
     return REF_AUDIO_PATH
 
 
+def _check_auth(request: web.Request) -> bool:
+    """设置了令牌时校验 Authorization: Bearer <token>；未设置则放行（仅本机模式）。"""
+    if not BRIDGE_TOKEN:
+        return True
+    return request.headers.get("Authorization", "") == f"Bearer {BRIDGE_TOKEN}"
+
+
 async def handle_tts(request: web.Request) -> web.Response:
+    if not _check_auth(request):
+        return web.json_response({"error": "unauthorized"}, status=401)
     try:
         body = await request.json()
     except Exception:
@@ -113,7 +127,8 @@ def main() -> None:
 
     app = web.Application()
     app.router.add_post("/tts", handle_tts)
-    print(f"[gpt-sovits-bridge] listening on http://127.0.0.1:{PORT}/tts")
+    print(f"[gpt-sovits-bridge] listening on http://{BRIDGE_HOST}:{PORT}/tts"
+          + ("（已启用访问令牌）" if BRIDGE_TOKEN else ""))
     print(f"[gpt-sovits-bridge] forwarding to {SOVITS_URL}")
     # 未配置/配置错误不算致命（请求方还能自带 ref_audio_path），但必须把话说清楚
     if not REF_AUDIO_PATH:
@@ -122,7 +137,7 @@ def main() -> None:
         print("  手动启动：设置环境变量 DESKPET_GSV_REF_AUDIO / DESKPET_GSV_PROMPT_TEXT，或改脚本顶部常量")
     elif not os.path.isfile(REF_AUDIO_PATH):
         print(f"[gpt-sovits-bridge] WARNING: 参考音频不存在: {REF_AUDIO_PATH}")
-    web.run_app(app, host="127.0.0.1", port=PORT)
+    web.run_app(app, host=BRIDGE_HOST, port=PORT)
 
 
 if __name__ == "__main__":

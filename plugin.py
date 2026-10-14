@@ -60,7 +60,8 @@ class TTSConfig(PluginConfigBase):
     __ui_icon__ = "volume-2"
     __ui_order__ = 3
     enabled: bool = Field(default=True, description="是否为回复生成语音")
-    url: str = Field(default="http://127.0.0.1:9881/tts", description="TTS 桥地址（gpt-sovits-bridge.py）")
+    url: str = Field(default="http://127.0.0.1:9881/tts", description="TTS 桥地址（gpt-sovits-bridge.py）；跨机部署时填桌宠机器的 IP:端口")
+    auth_token: str = Field(default="", description="TTS 桥访问令牌；跨机部署时填桌宠设置面板显示的值，留空则不携带鉴权头")
     timeout: int = Field(default=60, description="TTS 请求超时秒数")
 
 
@@ -457,12 +458,17 @@ class DeskpetPlugin(MaiBotPlugin):
             self._ws_server.auth_token = ws_cfg.auth_token
 
     async def _fetch_tts_audio(self, text: str) -> Optional[str]:
-        """调用 TTS 桥获取音频 base64。"""
+        """调用 TTS 桥获取音频 base64。跨机部署时桥由桌宠机器托管，需带访问令牌。"""
+        headers: Dict[str, str] = {}
+        token = (self.config.tts.auth_token or "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     self.config.tts.url,
                     json={"text": text},
+                    headers=headers,
                     timeout=aiohttp.ClientTimeout(total=self.config.tts.timeout),
                 ) as resp:
                     if resp.status == 200:

@@ -65,6 +65,9 @@ interface ServicesConfig {
   ttsVoice: string
   ttsModel: string
   ttsEndpoint: string
+  bridgeExpose: 'auto' | 'on' | 'off'
+  maibotWsUrl: string
+  bridgeToken: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
@@ -126,6 +129,7 @@ interface ElectronAPI {
   getServiceLogs: (id: ServiceId) => Promise<string[]>
   getServicesConfig: () => Promise<ServicesConfig>
   setServicesConfig: (patch: Partial<ServicesConfig>) => Promise<ServicesConfig>
+  getBridgeInfo: () => Promise<{ exposed: boolean; mode: 'auto' | 'on' | 'off'; wsUrl: string; token: string; port: number }>
   setDetectedPython: (pythonPath: string, sourceUrl: string) => Promise<void>
   clearDetectedPython: () => Promise<void>
   getRuntimeCandidate: () => Promise<{ id: string; pythonPath: string; sourceUrl: string } | null>

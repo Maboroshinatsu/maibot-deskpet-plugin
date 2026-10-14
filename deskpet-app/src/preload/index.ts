@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getServiceLogs: (id: string): Promise<string[]> => ipcRenderer.invoke('service-logs', id),
   getServicesConfig: () => ipcRenderer.invoke('services-get-config'),
   setServicesConfig: (patch: unknown) => ipcRenderer.invoke('services-set-config', patch),
+  getBridgeInfo: () => ipcRenderer.invoke('services-bridge-info'),
   setDetectedPython: (pythonPath: string, sourceUrl: string) => ipcRenderer.invoke('services-set-detected-python', pythonPath, sourceUrl),
   clearDetectedPython: () => ipcRenderer.invoke('services-clear-detected-python'),
   getRuntimeCandidate: () => ipcRenderer.invoke('services-runtime-candidate'),

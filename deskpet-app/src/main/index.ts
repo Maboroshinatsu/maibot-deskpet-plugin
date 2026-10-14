@@ -1201,7 +1201,14 @@ app.whenReady().then(() => {
   ipcMain.handle('service-restart', (_event, id: ServiceId) => serviceManager.restart(id))
   ipcMain.handle('service-logs', (_event, id: ServiceId) => serviceManager.logsOf(id))
   ipcMain.handle('services-get-config', () => serviceManager.getConfig())
-  ipcMain.handle('services-set-config', (_event, patch: Partial<ServicesConfig>) => serviceManager.setConfig(patch))
+  ipcMain.handle('services-set-config', (_event, patch: Partial<ServicesConfig>) => {
+    const exposedBefore = serviceManager.bridgesExposed()
+    const result = serviceManager.setConfig(patch)
+    // 远程模式判定翻转时，正在运行的 TTS 桥需要重启才能套用新的监听地址/令牌
+    if (serviceManager.bridgesExposed() !== exposedBefore) serviceManager.restartTtsBridgesIfRunning()
+    return result
+  })
+  ipcMain.handle('services-bridge-info', () => serviceManager.getBridgeInfo())
   // 仅主窗口顶层 frame 可提交候选；任何网络消息本身都不能批准本机执行。
   const isRuntimeSender = (event: Electron.IpcMainInvokeEvent) =>
     !!mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&

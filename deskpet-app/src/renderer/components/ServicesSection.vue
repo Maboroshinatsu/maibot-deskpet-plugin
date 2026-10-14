@@ -11,6 +11,25 @@
       </div>
     </div>
 
+    <!-- 跨机部署：TTS 桥自动对外监听，令牌需填进 MaiBot 的 config.toml -->
+    <div v-if="bridgeInfo?.exposed" class="svc-block">
+      <div class="svc-row">
+        <span class="dot dot-running" />
+        <div class="svc-main">
+          <div class="svc-name">TTS 桥对外监听<span class="svc-port">:{{ bridgeInfo.port }}</span></div>
+          <div class="svc-detail">
+            跨机部署已开启：请在 MaiBot 的 config.toml 里把 [tts] url 指向本机 IP，并填入下面的令牌
+          </div>
+          <div class="svc-detail svc-token-line">
+            <span class="svc-token">令牌：{{ bridgeInfo.token }}</span>
+            <button class="btn btn-sm btn-ghost" @click="copyBridgeToken">
+              {{ bridgeTokenCopied ? '已复制' : '复制' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 常驻：PTT 全局热键 -->
     <div v-for="svc in coreServices" :key="svc.id" class="svc-block">
       <div class="svc-row">
@@ -419,6 +438,28 @@ function readMaibotPort(): string {
 const maibotPort = ref(readMaibotPort())
 function onWsConfigChanged() {
   maibotPort.value = readMaibotPort()
+  void loadBridgeInfo()
+}
+
+const bridgeInfo = ref<{ exposed: boolean; mode: 'auto' | 'on' | 'off'; wsUrl: string; token: string; port: number } | null>(null)
+const bridgeTokenCopied = ref(false)
+
+async function loadBridgeInfo() {
+  try {
+    bridgeInfo.value = (await window.electronAPI?.getBridgeInfo?.()) ?? null
+  } catch {
+    bridgeInfo.value = null
+  }
+}
+
+async function copyBridgeToken() {
+  const token = bridgeInfo.value?.token
+  if (!token) return
+  try {
+    await navigator.clipboard.writeText(token)
+    bridgeTokenCopied.value = true
+    setTimeout(() => { bridgeTokenCopied.value = false }, 1500)
+  } catch { /* ignore */ }
 }
 
 const services = ref<ServiceState[]>([])
@@ -510,6 +551,7 @@ async function refresh() {
   services.value = (await window.electronAPI?.listServices()) ?? []
   config.value = (await window.electronAPI?.getServicesConfig()) ?? null
   void refreshCandidate()
+  void loadBridgeInfo()
 }
 
 async function refreshCandidate() {
@@ -742,6 +784,8 @@ onUnmounted(() => {
 
 <style scoped>
 .section { display: flex; flex-direction: column; gap: 10px; }
+.svc-token-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.svc-token { font-family: ui-monospace, Consolas, monospace; word-break: break-all; user-select: all; }
 .section-title {
   color: var(--dp-text-dim);
   font-size: 9.5px;

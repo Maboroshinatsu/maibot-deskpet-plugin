@@ -26,6 +26,9 @@ function getWsToken(): string {
   } catch { return '' }
 }
 
+/** 上一次已同步给主进程的 WS 地址，避免每次重连都写配置 */
+let lastSyncedWsUrl: string | null = null
+
 export function useWebSocket() {
   let activeUrl = getWsUrl()
   const store = useDeskpetStore()
@@ -141,6 +144,11 @@ export function useWebSocket() {
     const currentUrl = getWsUrl()
     const currentToken = getWsToken()
     activeUrl = currentUrl
+    // 同步给主进程：主进程据此判定是否跨机部署（远程模式下需让 TTS 桥对外监听）
+    if (currentUrl !== lastSyncedWsUrl) {
+      lastSyncedWsUrl = currentUrl
+      void window.electronAPI?.setServicesConfig?.({ maibotWsUrl: currentUrl })
+    }
 
     try {
       ws.value = new WebSocket(currentUrl)

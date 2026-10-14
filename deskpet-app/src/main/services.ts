@@ -13,6 +13,7 @@ import { spawn, execFile, execFileSync, ChildProcess } from 'child_process'
 import net from 'net'
 import path from 'path'
 import fs from 'fs'
+import { randomUUID } from 'crypto'
 import { app, safeStorage } from 'electron'
 import { validateDetectedPython } from './runtime-policy'
 
@@ -50,6 +51,12 @@ export interface ServicesConfig {
   ttsModel: string
   /** 自定义 TTS 端点地址（空 = 各后端官方默认地址） */
   ttsEndpoint: string
+  /** 远程模式（TTS 桥是否对外监听）：auto = 按 MaiBot WS 地址自动判定；on = 强制对外；off = 始终仅本机 */
+  bridgeExpose: 'auto' | 'on' | 'off'
+  /** 桌宠连接的 MaiBot WebSocket 地址（由渲染层同步，用于判定是否跨机） */
+  maibotWsUrl: string
+  /** TTS 桥对外监听时校验请求用的令牌（远程模式下自动生成） */
+  bridgeToken: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
@@ -99,6 +106,9 @@ const DEFAULT_CONFIG: ServicesConfig = {
   ttsVoice: '',
   ttsModel: '',
   ttsEndpoint: '',
+  bridgeExpose: 'auto',
+  maibotWsUrl: '',
+  bridgeToken: '',
   autoStart: { 'stt-bridge': true, 'tts-bridge': true, 'gpt-sovits': true, hotkey: true, 'cloud-tts': false },
   showTerminal: { 'stt-bridge': false, 'tts-bridge': false, 'gpt-sovits': false, hotkey: false, 'cloud-tts': false },
 }
@@ -335,6 +345,9 @@ export class ServiceManager {
         ttsVoice: typeof raw.ttsVoice === 'string' ? raw.ttsVoice : '',
         ttsModel: typeof raw.ttsModel === 'string' ? raw.ttsModel : '',
         ttsEndpoint: typeof raw.ttsEndpoint === 'string' ? raw.ttsEndpoint : '',
+        bridgeExpose: raw.bridgeExpose === 'on' || raw.bridgeExpose === 'off' ? raw.bridgeExpose : 'auto',
+        maibotWsUrl: typeof raw.maibotWsUrl === 'string' ? raw.maibotWsUrl : '',
+        bridgeToken: typeof raw.bridgeToken === 'string' ? raw.bridgeToken : '',
         autoStart: { ...DEFAULT_CONFIG.autoStart, ...(raw.autoStart ?? {}) },
         showTerminal: { ...DEFAULT_CONFIG.showTerminal, ...(raw.showTerminal ?? {}), hotkey: false },
       }
@@ -389,10 +402,21 @@ export class ServiceManager {
     if (typeof patch.ttsVoice === 'string') this.config.ttsVoice = patch.ttsVoice
     if (typeof patch.ttsModel === 'string') this.config.ttsModel = patch.ttsModel
     if (typeof patch.ttsEndpoint === 'string') this.config.ttsEndpoint = patch.ttsEndpoint
+    if (patch.bridgeExpose === 'auto' || patch.bridgeExpose === 'on' || patch.bridgeExpose === 'off') {
+      this.config.bridgeExpose = patch.bridgeExpose
+    }
+    if (typeof patch.maibotWsUrl === 'string') this.config.maibotWsUrl = patch.maibotWsUrl
     if (patch.autoStart) this.config.autoStart = { ...this.config.autoStart, ...patch.autoStart }
     if (patch.showTerminal) this.config.showTerminal = { ...this.config.showTerminal, ...patch.showTerminal }
     // 热键事件依赖 stdout；旧配置和直接 IPC 调用也不能启用会丢事件的终端模式。
     this.config.showTerminal.hotkey = false
+    this.persist()
+    this.pushAllStates()
+    return this.getConfig()
+  }
+
+  /** 落盘配置（含 API Key 的 safeStorage 加密） */
+  private persist(): void {
     try {
       fs.mkdirSync(app.getPath('userData'), { recursive: true })
       const diskConfig: Record<string, unknown> = JSON.parse(JSON.stringify(this.config))
@@ -416,8 +440,6 @@ export class ServiceManager {
     } catch (err) {
       console.warn('[services] failed to persist config:', err)
     }
-    this.pushAllStates()
-    return this.getConfig()
   }
 
   // ── 路径解析 ────────────────────────────────
@@ -533,6 +555,64 @@ export class ServiceManager {
     return { PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }
   }
 
+  /**
+   * 是否处于「远程模式」——即在另一台机器上通过非回环地址连接 MaiBot。
+   * 仅 TTS 桥需要据此对外监听：STT/热键桥由桌宠本机调用，始终走回环。
+   * bridgeExpose: on/off 可无条件覆盖自动判定。
+   */
+  private isRemoteMode(): boolean {
+    if (this.config.bridgeExpose === 'on') return true
+    if (this.config.bridgeExpose === 'off') return false
+    const raw = (this.config.maibotWsUrl || '').trim()
+    if (!raw) return false
+    try {
+      const host = new URL(raw).hostname.toLowerCase().replace(/^\[|\]$/g, '')
+      return !['', '127.0.0.1', 'localhost', '::1'].includes(host)
+    } catch {
+      return false
+    }
+  }
+
+  /** 远程模式下确保存在访问令牌（缺失或过短时生成并落盘） */
+  private ensureBridgeToken(): string {
+    if (!this.isRemoteMode()) return ''
+    if (this.config.bridgeToken && this.config.bridgeToken.length >= 16) return this.config.bridgeToken
+    this.config.bridgeToken = randomUUID().replace(/-/g, '')
+    this.persist()
+    return this.config.bridgeToken
+  }
+
+  /** TTS 桥的监听地址与令牌环境变量：仅本机时保持默认回环、无令牌 */
+  private bridgeEnv(): Record<string, string> {
+    if (!this.isRemoteMode()) return {}
+    return { DESKPET_BRIDGE_HOST: '0.0.0.0', DESKPET_BRIDGE_TOKEN: this.ensureBridgeToken() }
+  }
+
+  /** 是否对外监听（无副作用；getBridgeInfo 会顺带生成令牌，故单独提供） */
+  bridgesExposed(): boolean {
+    return this.isRemoteMode()
+  }
+
+  /** 供设置面板展示的桥接信息（是否对外监听、令牌、端口） */
+  getBridgeInfo(): { exposed: boolean; mode: 'auto' | 'on' | 'off'; wsUrl: string; token: string; port: number } {
+    const exposed = this.isRemoteMode()
+    const backend = (this.config.ttsBackend || '').trim().toLowerCase()
+    return {
+      exposed,
+      mode: this.config.bridgeExpose,
+      wsUrl: this.config.maibotWsUrl,
+      token: exposed ? this.ensureBridgeToken() : '',
+      port: backend && backend !== 'off' ? 9882 : 9881,
+    }
+  }
+
+  /** 远程模式判定结果变化后，重启正在运行的 TTS 桥以套用新的监听地址/令牌 */
+  restartTtsBridgesIfRunning(): void {
+    for (const id of ['tts-bridge', 'cloud-tts'] as ServiceId[]) {
+      if (this.status.get(id) === 'running') this.restart(id)
+    }
+  }
+
   private defs(): ServiceDef[] {
     return [
       {
@@ -559,7 +639,7 @@ export class ServiceManager {
         resolve: () => {
           const root = this.bridgesRoot()
           if (!root) return { unavailable: '未找到 gpt-sovits-bridge.py（插件目录缺失）' }
-          const env: Record<string, string> = { ...this.pythonEnv() }
+          const env: Record<string, string> = { ...this.pythonEnv(), ...this.bridgeEnv() }
           // 角色声线透传给桥脚本（与桥脚本认的环境变量名一一对应）
           const refAudio = this.config.ttsRefAudio.trim()
           if (refAudio) env.DESKPET_GSV_REF_AUDIO = refAudio
@@ -586,6 +666,7 @@ export class ServiceManager {
           }
           const env: Record<string, string> = {
             ...this.pythonEnv(),
+            ...this.bridgeEnv(),
             DESKPET_TTS_BACKEND: backend,
           }
           if (apiKey) {

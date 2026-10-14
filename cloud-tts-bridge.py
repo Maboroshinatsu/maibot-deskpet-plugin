@@ -33,6 +33,11 @@ except ImportError:
     raise
 
 PORT = 9882
+
+# 监听地址与访问令牌：默认仅本机（127.0.0.1）。跨机部署（桌宠与 MaiBot 不在同一台机器）时
+# 由桌宠注入 DESKPET_BRIDGE_HOST=0.0.0.0 与 DESKPET_BRIDGE_TOKEN，插件侧需带上同样的令牌。
+BRIDGE_HOST = os.environ.get("DESKPET_BRIDGE_HOST", "127.0.0.1").strip() or "127.0.0.1"
+BRIDGE_TOKEN = os.environ.get("DESKPET_BRIDGE_TOKEN", "").strip()
 TIMEOUT = 60
 
 MIMO_URL = "https://api.xiaomimimo.com/v1/chat/completions"
@@ -287,7 +292,16 @@ def _synthesize_fishaudio(text: str, cfg: dict) -> bytes:
         return resp.read()
 
 
+def _check_auth(request: web.Request) -> bool:
+    """设置了令牌时校验 Authorization: Bearer <token>；未设置则放行（仅本机模式）。"""
+    if not BRIDGE_TOKEN:
+        return True
+    return request.headers.get("Authorization", "") == f"Bearer {BRIDGE_TOKEN}"
+
+
 async def handle_tts(request: web.Request) -> web.Response:
+    if not _check_auth(request):
+        return web.json_response({"error": "unauthorized"}, status=401)
     try:
         body = await request.json()
     except Exception:
@@ -337,7 +351,8 @@ def main() -> None:
     app = web.Application()
     app.router.add_post("/tts", handle_tts)
     app.router.add_post("/synthesize", handle_tts)
-    print(f"[cloud-tts-bridge] listening on http://127.0.0.1:{PORT}/tts")
+    print(f"[cloud-tts-bridge] listening on http://{BRIDGE_HOST}:{PORT}/tts"
+          + ("（已启用访问令牌）" if BRIDGE_TOKEN else ""))
     if backend == "unknown":
         print(f"[cloud-tts-bridge] WARNING: {cfg.get('error')}")
     else:
@@ -347,7 +362,7 @@ def main() -> None:
             print(f"[cloud-tts-bridge] WARNING: {cfg['error']}（/tts 将返回 400）")
         else:
             print(f"[cloud-tts-bridge] forwarding to {cfg['url']}")
-    web.run_app(app, host="127.0.0.1", port=PORT)
+    web.run_app(app, host=BRIDGE_HOST, port=PORT)
 
 
 if __name__ == "__main__":
