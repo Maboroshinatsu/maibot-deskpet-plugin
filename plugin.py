@@ -45,7 +45,7 @@ class WSServerConfig(PluginConfigBase):
     __ui_order__ = 1
     host: str = Field(default="127.0.0.1", description="监听地址，跨设备时设为 0.0.0.0")
     port: int = Field(default=8523, description="监听端口")
-    auth_token: str = Field(default="", description="鉴权令牌，留空则不验证")
+    auth_token: str = Field(default="", description="鉴权令牌；留空则不校验连接来源（本机任意程序可连接，跨设备或本机多人共用时务必设置）")
 
 
 class ChatConfig(PluginConfigBase):
