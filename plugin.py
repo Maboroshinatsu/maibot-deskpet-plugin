@@ -102,6 +102,22 @@ ACTION_LIST = [
 ]
 
 
+# 出站文本里可能混入的媒体占位标记（如「[表情包: 摸摸头]」「[图片]」）。
+# 这些标记由 MaiBot 把 emoji / image 组件渲染成文本而来，不是回复正文，
+# 不应被当作台词念出来，也不该显示在气泡里。
+MEDIA_PLACEHOLDER_RE = re.compile(r"\[(?:表情包|图片)(?:[：:][^\]]*)?\]")
+
+
+def clean_outbound_text(text: Any) -> str:
+    """统一的出站文本后处理：剥离媒体占位标记并去除首尾空白。
+
+    raw_message 的 text 组件、processed_plain_text 回退、以及新旧字段回退
+    都必须走这一步，否则同一段文本会因走的分支不同而清洗结果不一致：
+    raw_message 分支曾漏掉媒体占位过滤，把「表情包: 某某」直接念了出来。
+    """
+    return MEDIA_PLACEHOLDER_RE.sub("", str(text)).strip()
+
+
 @dataclass
 class DeskpetMessage:
     type: str
@@ -589,25 +605,24 @@ class DeskpetPlugin(MaiBotPlugin):
             ]
             # raw_message 存在即以其 text 组件为准：即使为空也不回退到
             # processed_plain_text，避免把引用内容当作正文回显。
-            return re.sub(r'^(?:@桌宠用户\s*)+', '', "".join(texts)).strip()
+            return clean_outbound_text(re.sub(r'^(?:@桌宠用户\s*)+', '', "".join(texts)))
 
         plain = message.get("processed_plain_text") or ""
         if plain:
             # 无 raw_message 时退回纯文本，尽力剥离可能的回复前缀与媒体占位标签
             cleaned = re.sub(r'^(?:\[回复[^\]]*\]\s*|@桌宠用户\s*)+', '', str(plain))
-            cleaned = re.sub(r'\[(?:表情包|图片)(?:[：:][^\]]*)?\]', '', cleaned).strip()
-            return cleaned
+            return clean_outbound_text(cleaned)
 
         # Newer MaiBot replyer output may use different fields
         for key in ("content", "text", "response", "message"):
             val = message.get(key)
             if isinstance(val, str) and val.strip():
-                return val
+                return clean_outbound_text(val)
             if isinstance(val, list):
                 parts = [str(item.get("text") or item.get("data") or "") for item in val if isinstance(item, dict)]
                 result = "".join(parts)
                 if result:
-                    return result
+                    return clean_outbound_text(result)
 
         return ""
 

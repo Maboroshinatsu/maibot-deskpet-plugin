@@ -754,6 +754,41 @@ class OutboundTextExtractionTest(unittest.TestCase):
             "开心",
         )
 
+    def test_media_placeholder_in_raw_message_text_is_stripped(self):
+        # 回归：raw_message 的 text 组件里混入内联媒体标记时，也必须被过滤，
+        # 否则桌宠会把「表情包: 摸摸头」当成台词念出来（raw_message 分支曾漏过滤）。
+        plug = self._plugin()
+        msg = {
+            "raw_message": [{"type": "text", "data": "开心 [表情包: 摸摸头]"}],
+            "processed_plain_text": "开心 [表情包: 摸摸头]",
+        }
+        self.assertEqual(plug._extract_text_from_message(msg), "开心")
+
+    def test_image_placeholder_in_raw_message_text_is_stripped(self):
+        plug = self._plugin()
+        msg = {"raw_message": [{"type": "text", "data": "[图片] 这是配图"}]}
+        self.assertEqual(plug._extract_text_from_message(msg), "这是配图")
+
+    def test_raw_and_fallback_branches_agree_on_cleaning(self):
+        # 同一段文本走 raw_message 分支与 plain 回退分支，清洗结果必须一致
+        plug = self._plugin()
+        text = "开心 [表情包: 摸摸头] [图片: 猫]"
+        via_raw = plug._extract_text_from_message({
+            "raw_message": [{"type": "text", "data": text}],
+            "processed_plain_text": text,
+        })
+        via_plain = plug._extract_text_from_message({"processed_plain_text": text})
+        self.assertEqual(via_raw, "开心")
+        self.assertEqual(via_raw, via_plain)
+
+    def test_alt_field_fallback_is_also_cleaned(self):
+        # 新旧字段回退分支同样要走公共清洗，避免返回值契约不一致
+        plug = self._plugin()
+        self.assertEqual(
+            plug._extract_text_from_message({"content": "嗨 [表情包: 挥手]"}).strip(),
+            "嗨",
+        )
+
     def test_raw_message_with_only_reply_yields_empty(self):
         # 只有引用、没有正文时不得回退到 processed_plain_text（否则又会回显引用内容）
         plug = self._plugin()
