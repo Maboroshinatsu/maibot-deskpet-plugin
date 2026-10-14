@@ -282,7 +282,7 @@ auth_token = "客户端生成的令牌"     # 见下方「客户端」第 3 步
 ```toml
 [plugin]
 enabled = true
-config_version = "1.0.4"
+config_version = "1.0.5"
 
 [ws_server]
 host = "127.0.0.1"       # 本机；跨设备改为 "0.0.0.0"
