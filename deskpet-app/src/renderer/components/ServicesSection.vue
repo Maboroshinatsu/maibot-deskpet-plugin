@@ -295,8 +295,8 @@
         </details>
         <p class="hint">
           {{ cloudTtsRunning
-            ? '云 TTS 桥 (9882) 运行中：请确认 MaiBot 插件 config.toml 的 tts.url 已指向 http://127.0.0.1:9882/tts'
-            : '启动后请将 MaiBot 插件 config.toml 的 tts.url 指向 http://127.0.0.1:9882/tts（兼容 /synthesize）' }}
+            ? '云 TTS 桥 (9882) 运行中：桌宠收到回复后会自行合成并播放语音'
+            : '启动后，桌宠收到回复会自动用本机云 TTS 桥 (9882) 合成并播放语音' }}
         </p>
       </div>
 
