@@ -3,7 +3,7 @@
 > 本文档是**完整教程**。快速上手请看根目录 [README](../README.md) 的「快速开始」。
 
 ## 目录
-- [第零步：MaiBot 配置（必要）](#第零步maibot-配置必要)
+- [第零步：MaiBot 配置（通常无需手动改）](#第零步maibot-配置通常无需手动改)
 - [第一步：安装插件到 MaiBot](#第一步安装插件到-maibot)
 - [第二步：安装前端依赖（仅源码方式）](#第二步安装前端依赖仅源码方式)
 - [第三步：Python 依赖（通常无需手动操作）](#第三步python-依赖通常无需手动操作)
@@ -16,39 +16,27 @@
 
 ---
 
-## 第零步：MaiBot 配置（必要）
+## 第零步：MaiBot 配置（通常无需手动改）
 
-在安装插件前，需要先编辑 MaiBot 的 `config/bot_config.toml`，让 MaiBot 认识桌宠平台和用户。
+**不需要在 `config/bot_config.toml` 里注册桌宠平台。**
 
-**1. 注册桌宠平台**
+新版 MaiBot 已废弃 `[bot] platforms` 的用法（账号与身份改由各适配器自行上报），WebUI 中也没有对应设置项。桌宠的平台身份（`deskpet` / `deskpet-user`）由本插件通过 MessageGateway 自动上报——装上插件、桌宠连上即可收发消息，无需任何额外配置。
 
-在 `[bot]` 节的 `platforms` 数组中添加 `"deskpet:deskpet-user"`：
+> 只有旧版本（MaiBot `1.0.0-pre.*` 及更早）才需要手动往 `[bot] platforms` 里加 `"deskpet:deskpet-user"`。新版请忽略这一要求。
 
-```toml
-[bot]
-platforms = ["deskpet:deskpet-user"]
-```
+**（可选）让麦麦在桌宠场景下换个说话风格**
 
-如果已经有其他平台（如 QQ），用逗号分隔：
+默认情况下桌宠私聊会走 MaiBot 的通用私聊提示词。若想让它在桌宠场景下更简短自然，可在 **MaiBot WebUI 的聊天提示词设置**里为 `deskpet` 平台的私聊新增一条；也可以直接编辑 `config/bot_config.toml`（该段路径随 MaiBot 版本变化，常见为 `[[chat.chat_prompts]]` 或 `[[chat.reply_style.chat_prompts]]`）：
 
 ```toml
-[bot]
-platforms = ["qq:123456789", "deskpet:deskpet-user"]
-```
-
-**2. 为桌宠配置专属 Prompt（必读）**
-
-在 `[[chat.chat_prompts]]` 中新增一条，让 AI 知道桌宠场景下该怎样说话，以及桌宠用户对应哪个 QQ 用户。替换 `qq:12345678` 和昵称为你自己的：
-
-```toml
-[[chat.chat_prompts]]
+[[chat.reply_style.chat_prompts]]
 platform = "deskpet"
 item_id = "deskpet-user"
 rule_type = "private"
-prompt = "你是 Live2D 桌面宠物，正在和用户一对一私聊。回复简短自然，像朋友聊天。桌宠用户和 qq:12345678 (昵称:千石可乐) 是同一个人，共享记忆和对话上下文。可以使用 set_deskpet_emotion 和 trigger_deskpet_animation 工具。"
+prompt = "你是 Live2D 桌面宠物，正在和用户一对一私聊。回复简短自然，像朋友聊天。可以使用 set_deskpet_emotion 和 trigger_deskpet_animation 工具。"
 ```
 
-如果不需关联 QQ，去掉身份映射那句即可。
+如果希望桌宠与某个 QQ 账号共享记忆和对话上下文，在提示词里补一句身份映射即可（例如「桌宠用户和 qq:12345678（昵称:xxx）是同一个人」）。
 
 ---
 
