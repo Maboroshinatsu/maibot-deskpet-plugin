@@ -72,29 +72,6 @@ jobs:
           $ver = (Get-Content package.json | ConvertFrom-Json).version
           Compress-Archive -Path "release/win-unpacked/*" -DestinationPath "release/MaiBot-Deskpet-Portable-$ver-win-x64.zip" -Force
 
-      - name: Upload unsigned build artifacts (for SignPath verification)
-        id: upload-unsigned
-        uses: actions/upload-artifact@v4
-        with:
-          name: unsigned-installer
-          path: |
-            deskpet-app/release/MaiBot-Deskpet-Setup-*.exe
-            deskpet-app/release/MaiBot-Deskpet-Portable-*-win-x64.zip
-          if-no-files-found: error
-
-      # SignPath Foundation 审批通过并配置仓库 Variable SIGNPATH_ORGANIZATION_ID 与 Secret SIGNPATH_API_TOKEN 后自动启用签名
-      - name: Submit signing request to SignPath
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && startsWith(github.ref, 'refs/tags/v') }}
-        uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: 'maibot-deskpet-plugin'
-          signing-policy-slug: 'release-signing'
-          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: 'deskpet-app/release-signed'
-
       - name: Publish GitHub Release assets
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -117,8 +94,4 @@ jobs:
           } else {
             Write-Host "Release $tag 已存在，直接上传附件"
           }
-          if (Test-Path "deskpet-app/release-signed") {
-            gh release upload $tag deskpet-app/release-signed/* --clobber
-          } else {
-            gh release upload $tag deskpet-app/release/MaiBot-Deskpet-Setup-*.exe deskpet-app/release/MaiBot-Deskpet-Portable-*-win-x64.zip --clobber
-          }
+          gh release upload $tag deskpet-app/release/MaiBot-Deskpet-Setup-*.exe deskpet-app/release/MaiBot-Deskpet-Portable-*-win-x64.zip --clobber

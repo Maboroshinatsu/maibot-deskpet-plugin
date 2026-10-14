@@ -89,21 +89,11 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 
 ---
 
-## Code Signing & Privacy Policy
+## Privacy Policy
 
-### Code Signing Policy
-
-> **（小声说明）**：……虽然这一栏写得有模有样的，但其实免费开源签名还在 SignPath 的审核队列里排队中（还没正式批下来！）。所以在证书正式发下来之前，运行安装包时 Windows SmartScreen 弹出的“未知发布者”是完全正常的现象……请大家暂时包容一下，先点击「更多信息 → 仍要运行」（心虚地移开视线并卑微鞠躬）。
-
-Free code signing is provided by [SignPath.io](https://signpath.io/), and the code signing certificate is provided by the [SignPath Foundation](https://signpath.org/).
-
-- **Committers and Reviewers**: [Maboroshinatsu](https://github.com/Maboroshinatsu)
-- **Approvers**: [Maboroshinatsu](https://github.com/Maboroshinatsu)
-
-All official Windows release binaries are built reproducibly from source via [GitHub Actions](.github/workflows/release.yml).
-
-### Privacy Policy
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 - By default, the desktop companion connects only to the user's local MaiBot WebSocket endpoint (`ws://127.0.0.1:8523/ws`).
 - No telemetry, analytics, or background tracking is collected or transmitted. External network requests (such as cloud STT/TTS API calls or optional local ASR model downloads) occur strictly when explicitly configured and triggered by the user.
+
+All official Windows release binaries are built reproducibly from source via [GitHub Actions](.github/workflows/release.yml).
 
