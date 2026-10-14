@@ -6,7 +6,9 @@
 后端经环境变量选择（桌宠设置面板「后台服务 → 服务路径配置」里填好后注入）：
   DESKPET_TTS_BACKEND      = mimo | cosyvoice | gsv2p（必填）
   DESKPET_MIMO_API_KEY     小米 MiMo API Key（必填）
-  DESKPET_MIMO_VOICE       MiMo 音色（默认 mimo_default；风格可用 <style>开心</style> 前缀文本）
+  DESKPET_MIMO_VOICE       MiMo 音色（默认 mimo_default；预置：mimo_default/冰糖/茉莉/苏打/白桦…）
+  DESKPET_MIMO_STYLE       风格指令（可选；作为 user 消息发送，用于控制语气/情绪/角色扮演等。
+                           mimo-v2.5-tts-voicedesign 模型此项必填）
   DESKPET_COSYVOICE_API_KEY  阿里云百炼 DashScope API Key（必填）
   DESKPET_COSYVOICE_MODEL    默认 qwen-audio-3.0-tts-flash
   DESKPET_COSYVOICE_VOICE    音色（默认 cherry；示例 longanhuan_v3.6）
@@ -82,6 +84,7 @@ def _backend_config() -> tuple[str, dict]:
     common_voice = _env("DESKPET_TTS_VOICE")
     common_model = _env("DESKPET_TTS_MODEL")
     common_endpoint = _env("DESKPET_TTS_ENDPOINT")
+    common_style = _env("DESKPET_TTS_STYLE")
 
     if backend == "siliconflow":
         key = common_key or _env("DESKPET_SILICONFLOW_API_KEY")
@@ -102,11 +105,19 @@ def _backend_config() -> tuple[str, dict]:
         key = common_key or _env("DESKPET_MIMO_API_KEY")
         if not key:
             return backend, {"error": "缺少 DESKPET_MIMO_API_KEY（小米 MiMo API Key）"}
+        model = common_model or _env("DESKPET_MIMO_MODEL", MIMO_MODEL)
+        style = common_style or _env("DESKPET_MIMO_STYLE")
+        # 官方文档：音色设计模型必须提供 user 指令（用于描述目标音色）
+        if model.endswith("-voicedesign") and not style:
+            return backend, {
+                "error": "mimo-v2.5-tts-voicedesign 必须填写「风格指令」（对应官方 user message）"
+            }
         return backend, {
             "url": common_endpoint or MIMO_URL,
             "api_key": key,
-            "model": common_model or MIMO_MODEL,
+            "model": model,
             "voice": common_voice or _env("DESKPET_MIMO_VOICE", MIMO_DEFAULT_VOICE),
+            "style": style,
         }
 
     if backend == "cosyvoice":
@@ -151,9 +162,16 @@ def _backend_config() -> tuple[str, dict]:
 
 
 def _synthesize_mimo(text: str, cfg: dict) -> bytes:
+    # 官方文档：目标文本必须放在 role=assistant 的消息里；
+    # role=user 的消息为可选指令，用于调整语气与风格（其内容不会出现在合成语音中）。
+    messages: list[dict] = []
+    style = (cfg.get("style") or "").strip()
+    if style:
+        messages.append({"role": "user", "content": style})
+    messages.append({"role": "assistant", "content": text})
     body = {
         "model": cfg.get("model") or MIMO_MODEL,
-        "messages": [{"role": "assistant", "content": text}],
+        "messages": messages,
         "audio": {"format": "wav", "voice": cfg["voice"]},
     }
     req = urllib.request.Request(

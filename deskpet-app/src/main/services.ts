@@ -50,6 +50,8 @@ export interface ServicesConfig {
   ttsModel: string
   /** 自定义 TTS 端点地址（空 = 各后端官方默认地址） */
   ttsEndpoint: string
+  /** 风格指令（可选）：作为 user 消息发送给云 TTS，用于控制语气/情绪/角色扮演；MiMo voicedesign 模型必填 */
+  ttsStyle: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
@@ -99,6 +101,7 @@ const DEFAULT_CONFIG: ServicesConfig = {
   ttsVoice: '',
   ttsModel: '',
   ttsEndpoint: '',
+  ttsStyle: '',
   autoStart: { 'stt-bridge': true, 'tts-bridge': true, 'gpt-sovits': true, hotkey: true, 'cloud-tts': false },
   showTerminal: { 'stt-bridge': false, 'tts-bridge': false, 'gpt-sovits': false, hotkey: false, 'cloud-tts': false },
 }
@@ -346,6 +349,7 @@ export class ServiceManager {
         ttsVoice: typeof raw.ttsVoice === 'string' ? raw.ttsVoice : '',
         ttsModel: typeof raw.ttsModel === 'string' ? raw.ttsModel : '',
         ttsEndpoint: typeof raw.ttsEndpoint === 'string' ? raw.ttsEndpoint : '',
+        ttsStyle: typeof raw.ttsStyle === 'string' ? raw.ttsStyle : '',
         autoStart: { ...DEFAULT_CONFIG.autoStart, ...(raw.autoStart ?? {}) },
         showTerminal: { ...DEFAULT_CONFIG.showTerminal, ...(raw.showTerminal ?? {}), hotkey: false },
       }
@@ -408,6 +412,7 @@ export class ServiceManager {
     if (typeof patch.ttsVoice === 'string') this.config.ttsVoice = patch.ttsVoice
     if (typeof patch.ttsModel === 'string') this.config.ttsModel = patch.ttsModel
     if (typeof patch.ttsEndpoint === 'string') this.config.ttsEndpoint = patch.ttsEndpoint
+    if (typeof patch.ttsStyle === 'string') this.config.ttsStyle = patch.ttsStyle
     if (patch.autoStart) this.config.autoStart = { ...this.config.autoStart, ...patch.autoStart }
     if (patch.showTerminal) this.config.showTerminal = { ...this.config.showTerminal, ...patch.showTerminal }
     // 热键事件依赖 stdout；旧配置和直接 IPC 调用也不能启用会丢事件的终端模式。
@@ -636,6 +641,11 @@ export class ServiceManager {
           if (endpoint) {
             env.DESKPET_TTS_ENDPOINT = endpoint
             if (backend === 'cosyvoice') env.DESKPET_COSYVOICE_ENDPOINT = endpoint
+          }
+          const style = (this.config.ttsStyle || '').trim()
+          if (style) {
+            env.DESKPET_TTS_STYLE = style
+            if (backend === 'mimo') env.DESKPET_MIMO_STYLE = style
           }
           return { command: this.python(), args: ['-u', path.join(root, 'cloud-tts-bridge.py')], cwd: root, env }
         },

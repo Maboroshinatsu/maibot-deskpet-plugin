@@ -260,6 +260,15 @@
           @change="setTtsVoice($event)"
           placeholder="claire / cherry / mimo_default / 原神-中文-派蒙_ZH / nova"
         />
+        <template v-if="config?.ttsBackend === 'mimo'">
+          <label class="field-label">风格指令（可选，MiMo）</label>
+          <input
+            class="field-input"
+            :value="config?.ttsStyle ?? ''"
+            @change="setTtsStyle($event)"
+            placeholder="例如：轻快、略带笑意，语速稍快（voicedesign 模型必填）"
+          />
+        </template>
         <template v-if="config?.ttsBackend === 'openai'">
           <label class="field-label">自定义 TTS 端点地址</label>
           <input
@@ -707,6 +716,11 @@ async function setTtsVoice(e: Event) {
 
 async function setTtsModel(e: Event) {
   const next = await window.electronAPI?.setServicesConfig({ ttsModel: (e.target as HTMLInputElement).value.trim() })
+  if (next) config.value = next
+}
+
+async function setTtsStyle(e: Event) {
+  const next = await window.electronAPI?.setServicesConfig({ ttsStyle: (e.target as HTMLInputElement).value.trim() })
   if (next) config.value = next
 }
 

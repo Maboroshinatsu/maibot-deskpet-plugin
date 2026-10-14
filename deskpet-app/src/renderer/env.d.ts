@@ -65,6 +65,7 @@ interface ServicesConfig {
   ttsVoice: string
   ttsModel: string
   ttsEndpoint: string
+  ttsStyle: string
   autoStart: Record<ServiceId, boolean>
   showTerminal: Record<ServiceId, boolean>
 }
