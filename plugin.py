@@ -139,11 +139,42 @@ class DeskpetWSServer:
         self._clients: Set[websockets.WebSocketServerProtocol] = set()
 
     @staticmethod
+    def _extract_origin(ws) -> Optional[str]:
+        """读取握手 Origin 头，兼容 websockets 新旧两种连接对象。
+
+        - websockets >= 14：连接对象是 ServerConnection，只有 .request.headers
+        - websockets < 14：连接对象是 WebSocketServerProtocol，有 .origin / .request_headers
+
+        任一读取失败都返回 None（等价于「无 Origin 头」）。
+        """
+        req = getattr(ws, "request", None)
+        headers = getattr(req, "headers", None) if req is not None else None
+        if headers is not None:
+            try:
+                origin = headers.get("Origin")
+            except Exception:
+                origin = None
+            if origin is not None:
+                return origin
+        origin = getattr(ws, "origin", None)
+        if origin is not None:
+            return origin
+        req_headers = getattr(ws, "request_headers", None)
+        if req_headers is not None:
+            try:
+                return req_headers.get("Origin")
+            except Exception:
+                return None
+        return None
+
+    @staticmethod
     def _is_trusted_origin(origin: Optional[str]) -> bool:
         if not origin:
             return True  # 桌面端原生/IPC（无 Origin 头）、脚本或本地进程
         norm = origin.strip().lower()
-        if norm in ("null", "deskpet://"):
+        # Electron 桌面端：打包态渲染进程 Origin 实测为 file://（开发态走下方回环分支）。
+        # 刻意不信任 "null"：浏览器中沙箱 iframe / data: 页面的 Origin 即 null，属网页可达来源。
+        if norm in ("file://", "deskpet://"):
             return True
         if norm.startswith(("deskpet://", "vscode-webview://")):
             return True
@@ -192,9 +223,7 @@ class DeskpetWSServer:
         return len(self._clients) > 0
 
     async def _handle_client(self, ws: websockets.WebSocketServerProtocol):
-        origin = getattr(ws, "origin", None)
-        if origin is None and hasattr(ws, "request_headers"):
-            origin = ws.request_headers.get("Origin")
+        origin = self._extract_origin(ws)
 
         # 检查网页 Origin：若来源于外部不可信网页且未配置鉴权令牌，拒绝握手
         if not self._is_trusted_origin(origin) and not self.auth_token:

@@ -723,12 +723,44 @@ class ModelControlsToolTest(unittest.IsolatedAsyncioTestCase):
         )
 
 
+class OriginExtractionTest(unittest.TestCase):
+    """回归：origin 读取必须兼容 websockets 新旧连接对象。
+
+    历史 bug：旧代码只读 .origin / .request_headers，而 websockets >= 14 的
+    ServerConnection 两者都没有，导致 origin 恒为 None、白名单彻底失效。
+    """
+
+    def test_modern_server_connection(self):
+        class _Headers:
+            def __init__(self, value): self._value = value
+            def get(self, key): return self._value if key == "Origin" else None
+
+        class _Request:
+            def __init__(self, value): self.headers = _Headers(value)
+
+        class _Conn:
+            def __init__(self, value): self.request = _Request(value)
+
+        self.assertEqual(plugin.DeskpetWSServer._extract_origin(_Conn("file://")), "file://")
+        self.assertIsNone(plugin.DeskpetWSServer._extract_origin(_Conn(None)))
+
+    def test_legacy_protocol_object(self):
+        class _Conn:
+            def __init__(self, value): self.origin = value
+
+        self.assertEqual(plugin.DeskpetWSServer._extract_origin(_Conn("file://")), "file://")
+
+    def test_missing_attributes_yield_none(self):
+        self.assertIsNone(plugin.DeskpetWSServer._extract_origin(object()))
+
+
 class OriginValidationTest(unittest.TestCase):
     def test_trusted_origins(self):
         # 允许原生应用、本地文件、开发环境和自定义协议
         self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin(None))
         self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin(""))
-        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("null"))
+        # Electron 打包态渲染进程的 Origin 实测为 file://
+        self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("file://"))
         self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("deskpet://"))
         self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("deskpet://models"))
         self.assertTrue(plugin.DeskpetWSServer._is_trusted_origin("vscode-webview://abc"))
@@ -740,6 +772,8 @@ class OriginValidationTest(unittest.TestCase):
         self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("https://untrusted.example"))
         self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("http://evil.com"))
         self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("http://attacker.local:8080"))
+        # 浏览器可达的 null 来源（沙箱 iframe / data: 页面）必须拒绝
+        self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("null"))
 
 
 if __name__ == "__main__":
