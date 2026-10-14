@@ -26,9 +26,6 @@ function getWsToken(): string {
   } catch { return '' }
 }
 
-/** 上一次已同步给主进程的 WS 地址，避免每次重连都写配置 */
-let lastSyncedWsUrl: string | null = null
-
 export function useWebSocket() {
   let activeUrl = getWsUrl()
   const store = useDeskpetStore()
@@ -144,11 +141,6 @@ export function useWebSocket() {
     const currentUrl = getWsUrl()
     const currentToken = getWsToken()
     activeUrl = currentUrl
-    // 同步给主进程：主进程据此判定是否跨机部署（远程模式下需让 TTS 桥对外监听）
-    if (currentUrl !== lastSyncedWsUrl) {
-      lastSyncedWsUrl = currentUrl
-      void window.electronAPI?.setServicesConfig?.({ maibotWsUrl: currentUrl })
-    }
 
     try {
       ws.value = new WebSocket(currentUrl)
@@ -251,6 +243,7 @@ export function useWebSocket() {
     },
     appendReplyDelta: (delta, requestId) => { chatStore.appendChatText(delta, requestId) },
     finishReply: (requestId, error) => { chatStore.finishChatStream(requestId, error) },
+    speakReply: (text) => { void speakReply(text) },
     showReplyText: (text) => { chatStore.showChatMessage(text) },
     playAudio,
     addEmoji: (base64, description) => { chatStore.addEmojiMessage(base64, description) },
@@ -274,6 +267,18 @@ export function useWebSocket() {
     if (ws.value?.readyState !== WebSocket.OPEN) return false
     ws.value.send(JSON.stringify({ type, data, timestamp: Date.now() }))
     return true
+  }
+
+  /** 收到完整回复文本后，调本机 TTS 桥合成并播放（跨机部署时合成在客户端完成） */
+  async function speakReply(text: string) {
+    const api = window.electronAPI
+    if (!api?.ttsSynthesize) return
+    try {
+      const b64 = await api.ttsSynthesize(text)
+      if (b64) playAudio(b64)
+    } catch (err) {
+      console.warn('[Deskpet] TTS synthesize failed:', err)
+    }
   }
 
   function sendScreenshot(base64: string) {

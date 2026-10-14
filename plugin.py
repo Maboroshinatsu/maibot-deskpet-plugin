@@ -59,10 +59,11 @@ class TTSConfig(PluginConfigBase):
     __ui_label__ = "语音合成"
     __ui_icon__ = "volume-2"
     __ui_order__ = 3
-    enabled: bool = Field(default=True, description="是否为回复生成语音")
-    url: str = Field(default="http://127.0.0.1:9881/tts", description="TTS 桥地址（gpt-sovits-bridge.py）；跨机部署时填桌宠机器的 IP:端口")
-    auth_token: str = Field(default="", description="TTS 桥访问令牌；跨机部署时填桌宠设置面板显示的值，留空则不携带鉴权头")
-    timeout: int = Field(default=60, description="TTS 请求超时秒数")
+    enabled: bool = Field(default=True, description="是否让桌宠朗读回复语音（实际合成在桌宠端本地完成）")
+    # 语音合成已改为在桌宠端本地完成，插件不再请求 TTS 桥。
+    # 以下字段仅保留以兼容既有 config.toml（避免加载时报未知字段），不再生效。
+    url: str = Field(default="http://127.0.0.1:9881/tts", description="[已弃用] 合成改由桌宠端本地完成，此项不再生效")
+    timeout: int = Field(default=60, description="[已弃用] 合成改由桌宠端本地完成，此项不再生效")
 
 
 class DeskpetPluginConfig(PluginConfigBase):
@@ -457,28 +458,6 @@ class DeskpetPlugin(MaiBotPlugin):
             self.ctx.logger.info("[Deskpet] WebSocket 鉴权令牌已更新")
             self._ws_server.auth_token = ws_cfg.auth_token
 
-    async def _fetch_tts_audio(self, text: str) -> Optional[str]:
-        """调用 TTS 桥获取音频 base64。跨机部署时桥由桌宠机器托管，需带访问令牌。"""
-        headers: Dict[str, str] = {}
-        token = (self.config.tts.auth_token or "").strip()
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.config.tts.url,
-                    json={"text": text},
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=self.config.tts.timeout),
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.read()
-                        return base64.b64encode(data).decode("ascii")
-                    self.ctx.logger.warning(f"[Deskpet] TTS returned HTTP {resp.status}")
-        except Exception as e:
-            self.ctx.logger.warning(f"[Deskpet] TTS fetch failed: {e}")
-        return None
-
     # ── MessageGateway: 出站 (MaiBot → 桌宠) ──
 
     @MessageGateway(
@@ -535,13 +514,13 @@ class DeskpetPlugin(MaiBotPlugin):
 
             if self._closing:
                 return {"success": False, "error": "Plugin unloading"}
-            await server.broadcast("output:text:done", {"request_id": req_id})
-
-            # 异步取 TTS 音频；卸载开始后不再新建任务
-            if self.config.tts.enabled and not self._closing:
-                task = asyncio.create_task(self._send_tts_audio(response_text, req_id))
-                self._bg_tasks.add(task)
-                task.add_done_callback(self._reap_bg_task)
+            # 语音合成由桌宠端本地完成：这里只把「完整文本 + 是否朗读」交给客户端，
+            # 客户端自行调用本机 TTS 桥并播放（避免服务器反向连接 NAT 后的客户端）。
+            await server.broadcast("output:text:done", {
+                "request_id": req_id,
+                "text": response_text,
+                "speak": bool(self.config.tts.enabled),
+            })
 
         for item in media_items:
             if self._closing:
@@ -553,33 +532,6 @@ class DeskpetPlugin(MaiBotPlugin):
             })
 
         return {"success": True}
-
-    async def _send_tts_audio(self, text: str, req_id: str) -> None:
-        """后台获取 TTS 音频并严格按回复顺序推送到前端。"""
-        # 已排队/直接调用的任务在卸载开始后不得再发起 TTS 请求
-        if self._closing:
-            return
-        prev_task = getattr(self, "_last_tts_task", None)
-        if prev_task is not None and prev_task.done():
-            prev_task = None
-        current_task = asyncio.current_task()
-        if current_task is not None and current_task is not prev_task:
-            self._last_tts_task = current_task
-
-        b64 = await self._fetch_tts_audio(text)
-        # 在判断 b64 之前先等待前一条 TTS 任务结束，保证即使本条合成失败也不会破坏后续任务的先后链条
-        if prev_task is not None and not prev_task.done():
-            await asyncio.wait({prev_task})
-        if not b64:
-            return
-        # 取 TTS 期间插件可能已被卸载，这里要重新确认服务器还在且未开始卸载
-        server = self._ws_server
-        if not server or self._closing:
-            return
-        await server.broadcast("output:audio", {
-            "base64": b64,
-            "request_id": req_id,
-        })
 
     def _extract_media_from_message(self, message: Dict[str, Any]) -> list[Dict[str, str]]:
         """从 MaiBot 出站消息字典中提取表情包与图片组件（支持 binary_data_base64 与 Seg base64）。"""

@@ -382,14 +382,12 @@ class NormalReplyTest(unittest.IsolatedAsyncioTestCase):
 
 class BgTaskReapTest(unittest.IsolatedAsyncioTestCase):
     async def test_bg_task_exception_is_reaped(self):
-        plug = _make_plugin(tts_enabled=True)
-        server = _FakeServer()
-        plug._ws_server = server
+        # 语音合成已移到桌宠端；这里直接验证后台任务登记/回收机制本身：
+        # 抛异常的后台任务必须被回调回收并记录，且不得冒泡成 loop 级未处理异常。
+        plug = _make_plugin()
 
-        async def _boom(text, req_id):
-            raise RuntimeError("tts exploded")
-
-        plug._send_tts_audio = _boom
+        async def _boom():
+            raise RuntimeError("background exploded")
 
         loop = asyncio.get_running_loop()
         handled = []
@@ -400,8 +398,9 @@ class BgTaskReapTest(unittest.IsolatedAsyncioTestCase):
 
         loop.set_exception_handler(_capture)
         try:
-            result = await plug.send_to_deskpet({"processed_plain_text": "你好世界"})
-            self.assertTrue(result["success"])
+            task = asyncio.create_task(_boom())
+            plug._bg_tasks.add(task)
+            task.add_done_callback(plug._reap_bg_task)
             tasks = list(plug._bg_tasks)
             self.assertEqual(len(tasks), 1)
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -412,7 +411,6 @@ class BgTaskReapTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(plug._bg_tasks, set())
         self.assertEqual(handled, [])
         self.assertTrue(plug.ctx.logger.contains("Background task failed"))
-        self.assertTrue(plug.ctx.logger.contains("tts exploded"))
 
 
 class BoundedUnloadTest(unittest.IsolatedAsyncioTestCase):
@@ -579,39 +577,31 @@ class ModelControlsToolTest(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
-    async def test_tts_audio_broadcast_preserves_reply_order_when_short_reply_finishes_first(self):
+    async def test_reply_done_carries_full_text_and_speak_flag(self):
+        # 语音合成改由桌宠端本地完成：出站 done 帧必须携带完整回复文本与朗读意图，
+        # 且插件自身不再发起任何 TTS 桥请求（不再广播 output:audio）。
         plug = _make_plugin(tts_enabled=True)
         server = _FakeServer()
         plug._ws_server = server
 
-        gate_first = asyncio.Event()
+        await plug.send_to_deskpet({"processed_plain_text": "你好世界"})
 
-        async def fake_fetch(text: str):
-            if text == "第一句长回复":
-                await gate_first.wait()
-                return "audio-1"
-            if text == "第二句失败回复":
-                return None
-            return "audio-3"
+        done = [d for ty, d, _r in server.sent if ty == "output:text:done"]
+        self.assertEqual(len(done), 1)
+        self.assertEqual(done[0].get("text"), "你好世界")
+        self.assertIs(done[0].get("speak"), True)
+        self.assertEqual([d for ty, d, _r in server.sent if ty == "output:audio"], [])
+        self.assertEqual(plug._bg_tasks, set())
 
-        plug._fetch_tts_audio = fake_fetch
+    async def test_speak_flag_false_when_tts_disabled(self):
+        plug = _make_plugin(tts_enabled=False)
+        server = _FakeServer()
+        plug._ws_server = server
 
-        await plug.send_to_deskpet({"processed_plain_text": "第一句长回复"})
-        await plug.send_to_deskpet({"processed_plain_text": "第二句失败回复"})
-        await plug.send_to_deskpet({"processed_plain_text": "第三句短回复"})
-
-        # 给第 2、3 句留出合成完成的时间；由于第 1 句尚未完成，第 3 句不应抢先播报
-        await asyncio.sleep(0.05)
-        audio_events_before = [d["base64"] for t, d, _r in server.sent if t == "output:audio"]
-        self.assertEqual(audio_events_before, [])
-
-        # 放行第 1 句后，应严格按 audio-1 -> audio-3 顺序广播
-        gate_first.set()
-        if plug._bg_tasks:
-            await asyncio.wait(list(plug._bg_tasks), timeout=2.0)
-
-        audio_events_after = [d["base64"] for t, d, _r in server.sent if t == "output:audio"]
-        self.assertEqual(audio_events_after, ["audio-1", "audio-3"])
+        await plug.send_to_deskpet({"processed_plain_text": "你好"})
+        done = [d for ty, d, _r in server.sent if ty == "output:text:done"]
+        self.assertEqual(len(done), 1)
+        self.assertIs(done[0].get("speak"), False)
 
     async def test_preset_group_non_repeating_random_selection(self):
         plug = _make_plugin()

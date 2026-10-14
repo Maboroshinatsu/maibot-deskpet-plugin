@@ -1179,6 +1179,40 @@ app.whenReady().then(() => {
     })
   })
 
+  // 语音合成在桌宠端本地完成：渲染层拿到完整回复文本后，经此 IPC 调本机 TTS 桥取音频。
+  // 这样跨机部署时无需服务器反向连接客户端（NAT 后的客户端本就不可达）。
+  ipcMain.handle('tts-synthesize', async (_event, text: string): Promise<string | null> => {
+    const tts = serviceManager.getTtsRuntimeConfig()
+    if (!tts.enabled) return null
+    const payload = JSON.stringify({ text: String(text ?? '') })
+    return await new Promise<string | null>((resolve) => {
+      const req = http.request({
+        hostname: '127.0.0.1', port: tts.port, path: '/tts', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+        // 本地 GPT-SoVITS 首次加载较慢，放宽超时
+        timeout: 120_000,
+      }, (res) => {
+        if (res.statusCode !== 200) {
+          res.resume()
+          console.warn('[deskpet] TTS bridge HTTP', res.statusCode)
+          resolve(null)
+          return
+        }
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve(Buffer.concat(chunks).toString('base64')))
+        res.on('error', () => resolve(null))
+      })
+      req.on('timeout', () => { req.destroy(); resolve(null) })
+      req.on('error', (err) => {
+        console.warn('[deskpet] TTS synth failed:', err.message)
+        resolve(null)
+      })
+      req.write(payload)
+      req.end()
+    })
+  })
+
   ipcMain.handle('set-auto-screenshot-interval', () => {
     // 自动截图定时器已停用，保留空 IPC 兼容旧预加载接口
   })
@@ -1201,14 +1235,7 @@ app.whenReady().then(() => {
   ipcMain.handle('service-restart', (_event, id: ServiceId) => serviceManager.restart(id))
   ipcMain.handle('service-logs', (_event, id: ServiceId) => serviceManager.logsOf(id))
   ipcMain.handle('services-get-config', () => serviceManager.getConfig())
-  ipcMain.handle('services-set-config', (_event, patch: Partial<ServicesConfig>) => {
-    const exposedBefore = serviceManager.bridgesExposed()
-    const result = serviceManager.setConfig(patch)
-    // 远程模式判定翻转时，正在运行的 TTS 桥需要重启才能套用新的监听地址/令牌
-    if (serviceManager.bridgesExposed() !== exposedBefore) serviceManager.restartTtsBridgesIfRunning()
-    return result
-  })
-  ipcMain.handle('services-bridge-info', () => serviceManager.getBridgeInfo())
+  ipcMain.handle('services-set-config', (_event, patch: Partial<ServicesConfig>) => serviceManager.setConfig(patch))
   // 仅主窗口顶层 frame 可提交候选；任何网络消息本身都不能批准本机执行。
   const isRuntimeSender = (event: Electron.IpcMainInvokeEvent) =>
     !!mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents &&

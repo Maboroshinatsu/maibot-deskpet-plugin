@@ -15,6 +15,8 @@ export interface DeskpetEventDeps {
   setControl?(control: string, action: DeskpetControlAction): void
   appendReplyDelta(delta: string, requestId: string): void
   finishReply(requestId: string, error?: string): void
+  /** 用完整回复文本触发端侧语音合成与播放（可选：平台不支持时省略） */
+  speakReply?(text: string): void
   showReplyText(text: string): void
   playAudio(base64: string): void
   addEmoji(base64: string, description: string): void
@@ -45,6 +47,8 @@ export function applyHostEvent(event: DeskpetHostEvent, deps: DeskpetEventDeps):
       deps.setThinking(false)
       deps.finishReply(event.requestId, event.error)
       if (event.error) deps.warn('[Deskpet] Reply failed:', event.error)
+      // 端侧语音合成：宿主只给完整文本与朗读意图，合成与播放由平台层在本机完成
+      else if (event.text && event.speak !== false) deps.speakReply?.(event.text)
       return true
 
     case 'reply-text':
