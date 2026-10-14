@@ -74,18 +74,33 @@ export const useChatStore = defineStore('chat', () => {
   let hydrated = false
   let persistTimer: ReturnType<typeof setTimeout> | null = null
 
-  function persistNow() {
+  function persistNow(): Promise<void> {
     if (persistTimer) {
       clearTimeout(persistTimer)
       persistTimer = null
     }
+    const api = window.electronAPI
+    if (!api?.saveChatHistory) return Promise.resolve()
     // 只存必要字段，避免把瞬态状态写进磁盘
     const payload = messages.value.map((m) =>
       m.type === 'emoji'
         ? { id: m.id, role: m.role, base64: m.base64, description: m.description, timestamp: m.timestamp, type: m.type }
         : { id: m.id, role: m.role, text: m.text, streaming: false, timestamp: m.timestamp, type: m.type, ...(m.requestId ? { requestId: m.requestId } : {}) },
     )
-    void window.electronAPI?.saveChatHistory?.(payload).catch(() => {})
+    // 返回 Promise：退出前握手需要 await 到真正写完，而不是只把 IPC 发出去
+    return api.saveChatHistory(payload).then(() => {}).catch(() => {})
+  }
+
+  /**
+   * 立即落盘并等待写入完成。
+   *
+   * 退出时由主进程握手调用：800ms 防抖窗口内直接关窗会丢掉最后一条消息，
+   * 而 saveChatHistory 是异步 IPC，窗口卸载后不保证送达，所以必须由主进程
+   * 阻塞关闭流程、等这里回执后再真正退出。
+   */
+  function flush(): Promise<void> {
+    if (!hydrated) return Promise.resolve()
+    return persistNow()
   }
 
   function schedulePersist() {
@@ -177,6 +192,8 @@ export const useChatStore = defineStore('chat', () => {
     } else if (error) {
       showChatMessage(`（回复失败：${error}）`)
     }
+    // 回复结束正是用户最可能立刻关窗的时刻：立即落盘一次，不依赖退出握手兜底
+    void flush()
   }
 
   function showChatMessage(text: string) {
@@ -203,7 +220,7 @@ export const useChatStore = defineStore('chat', () => {
 
   function clear() {
     messages.value = []
-    persistNow()
+    void persistNow()
   }
 
   return {
@@ -216,5 +233,6 @@ export const useChatStore = defineStore('chat', () => {
     showChatMessage,
     clear,
     hydrate,
+    flush,
   }
 })

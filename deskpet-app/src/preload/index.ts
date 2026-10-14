@@ -66,6 +66,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sttTranscribe: (audio: ArrayBuffer, url?: string): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio, url),
   loadChatHistory: (): Promise<unknown[]> => ipcRenderer.invoke('chat-history-load'),
   saveChatHistory: (messages: unknown[]): Promise<boolean> => ipcRenderer.invoke('chat-history-save', messages),
+  /** 主进程在放行关窗前请求渲染层立即落盘聊天记录 */
+  onChatHistoryFlushRequest: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('chat-history-flush-request', listener)
+    return () => ipcRenderer.removeListener('chat-history-flush-request', listener)
+  },
+  /** 渲染层回执：防抖队列已落盘，主进程可以放行关闭 */
+  notifyChatHistoryFlushed: () => ipcRenderer.send('chat-history-flushed'),
   ttsSynthesize: (text: string): Promise<string | null> => ipcRenderer.invoke('tts-synthesize', text),
   listModels: (): Promise<ModelEntry[]> => ipcRenderer.invoke('list-models'),
   inspectModelAssets: (modelUrl: string): Promise<unknown> => ipcRenderer.invoke('inspect-model-assets', modelUrl),

@@ -87,6 +87,10 @@ interface ElectronAPI {
   sttTranscribe: (audio: ArrayBuffer, url?: string) => Promise<string | null>
   loadChatHistory: () => Promise<unknown[]>
   saveChatHistory: (messages: unknown[]) => Promise<boolean>
+  /** 主进程在放行关窗前请求渲染层立即落盘聊天记录 */
+  onChatHistoryFlushRequest: (callback: () => void) => () => void
+  /** 渲染层回执：防抖队列已落盘，主进程可以放行关闭 */
+  notifyChatHistoryFlushed: () => void
   ttsSynthesize: (text: string) => Promise<string | null>
   listModels: () => Promise<ModelEntry[]>
   inspectModelAssets: (modelUrl: string) => Promise<{

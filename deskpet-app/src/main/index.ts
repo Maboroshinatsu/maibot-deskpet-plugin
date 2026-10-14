@@ -698,6 +698,8 @@ function getChatHistoryPath(): string {
 }
 
 function loadChatHistory(): unknown[] {
+  // 上次写入若在 rename 前被打断，会残留 .tmp；它不代表有效数据，启动时清掉
+  try { fs.rmSync(`${getChatHistoryPath()}.tmp`, { force: true }) } catch { /* ignore */ }
   try {
     const raw = JSON.parse(fs.readFileSync(getChatHistoryPath(), 'utf-8')) as { messages?: unknown }
     return Array.isArray(raw.messages) ? raw.messages : []
@@ -720,12 +722,53 @@ function saveChatHistory(messages: unknown): boolean {
   }
   try {
     fs.mkdirSync(app.getPath('userData'), { recursive: true })
-    fs.writeFileSync(getChatHistoryPath(), payload, 'utf-8')
+    // 先写临时文件再原子替换：直接覆写时若进程在写入途中被强杀，文件会被截断，
+    // 下次启动 JSON.parse 失败就走 catch 当成「损坏」清空全部历史。rename 在
+    // Windows 上对已存在的目标同样是原子覆盖（MoveFileEx REPLACE_EXISTING）。
+    const target = getChatHistoryPath()
+    const tmpPath = `${target}.tmp`
+    fs.writeFileSync(tmpPath, payload, 'utf-8')
+    fs.renameSync(tmpPath, target)
     return true
   } catch (err) {
     console.warn('[deskpet] Failed to save chat history:', err)
     return false
   }
+}
+
+/**
+ * 退出前与渲染层握手：请渲染层把 800ms 防抖队列里的聊天记录立即落盘，
+ * 落盘完成回执后再放行关闭，避免「收到回复后立刻关窗」丢掉最后一条消息。
+ * 渲染进程无响应时由超时兜底，保证窗口一定关得掉。
+ */
+const CHAT_FLUSH_TIMEOUT_MS = 1500
+/**
+ * 关闭握手状态：idle 未发起 / flushing 已请求落盘等待回执 / done 已落盘可放行。
+ * 必须区分 flushing 与 done——若把「已发起」当成「已完成」，用户在握手期间
+ * 再点一次关闭就会被直接放行，反而丢掉这次 flush 想保住的数据。
+ */
+let chatFlushState: 'idle' | 'flushing' | 'done' = 'idle'
+let resolveChatFlush: (() => void) | null = null
+
+function flushChatHistoryBeforeClose(): Promise<void> {
+  if (!mainWindow || mainWindow.webContents.isDestroyed()) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      resolveChatFlush = null
+      resolve()
+    }, CHAT_FLUSH_TIMEOUT_MS)
+    resolveChatFlush = () => {
+      clearTimeout(timer)
+      resolveChatFlush = null
+      resolve()
+    }
+    mainWindow!.webContents.send('chat-history-flush-request')
+  })
+}
+
+/** 渲染层回执：防抖队列已落盘，放行挂起的关闭流程 */
+function onChatHistoryFlushed(): void {
+  resolveChatFlush?.()
 }
 
 let saveStateTimer: ReturnType<typeof setTimeout> | null = null
@@ -942,7 +985,19 @@ function createWindow(): void {
     sendWindowPlacement()
     scheduleSaveWindowState()
   })
-  mainWindow.on('close', saveWindowState)
+  mainWindow.on('close', (event) => {
+    saveWindowState()
+    // 关窗前先与渲染层握手刷盘；已刷过或 webContents 已销毁则直接放行
+    if (chatFlushState === 'done' || !mainWindow || mainWindow.webContents.isDestroyed()) return
+    event.preventDefault()
+    // 握手进行中：继续等待其完成，不要放行（连点关闭会提前关掉、丢掉 flush）
+    if (chatFlushState === 'flushing') return
+    chatFlushState = 'flushing'
+    void flushChatHistoryBeforeClose().then(() => {
+      chatFlushState = 'done'
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close()
+    })
+  })
 
   mainWindow.on('closed', () => {
     stopGlobalCursorPolling()
@@ -1264,6 +1319,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('chat-history-load', () => loadChatHistory())
   ipcMain.handle('chat-history-save', (_event, messages: unknown) => saveChatHistory(messages))
+  ipcMain.on('chat-history-flushed', () => onChatHistoryFlushed())
 
   ipcMain.handle('list-models', () => listModels())
   ipcMain.handle('inspect-model-assets', (_event, modelUrl: string) => inspectModelAssets(modelUrl))
