@@ -22,8 +22,6 @@
 
 新版 MaiBot 已废弃 `[bot] platforms` 的用法（账号与身份改由各适配器自行上报），WebUI 中也没有对应设置项。桌宠的平台身份（`deskpet` / `deskpet-user`）由本插件通过 MessageGateway 自动上报——装上插件、桌宠连上即可收发消息，无需任何额外配置。
 
-> 只有旧版本（MaiBot `1.0.0-pre.*` 及更早）才需要手动往 `[bot] platforms` 里加 `"deskpet:deskpet-user"`。新版请忽略这一要求。
-
 **（可选）让麦麦在桌宠场景下换个说话风格**
 
 默认情况下桌宠私聊会走 MaiBot 的通用私聊提示词。若想让它在桌宠场景下更简短自然，可在 **MaiBot WebUI 的聊天提示词设置**里为 `deskpet` 平台的私聊新增一条；也可以直接编辑 `config/bot_config.toml`（该段路径随 MaiBot 版本变化，常见为 `[[chat.chat_prompts]]` 或 `[[chat.reply_style.chat_prompts]]`）：
