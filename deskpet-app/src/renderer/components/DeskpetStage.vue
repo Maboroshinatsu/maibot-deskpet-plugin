@@ -1414,51 +1414,18 @@ function resetModelView() {
   user-select: none;
   overflow: hidden;
   border-radius: 28px;
+  /* 悬停底衬载体：作为 stage 自身背景，天然位于所有子元素（角色层）下方 */
+  background-color: transparent;
+  transition: background-color 0.25s ease;
 }
 
-/* 悬停边缘暗角（focus vignette）
-   旧写法是三层叠加的 inset box-shadow，每条低透明度渐变斜坡在 8-bit / 6-bit 屏上都会量化出可见色带。
-   新写法：一条平滑的径向渐变 + 一层同色噪点抖动（dither），把量化台阶打散成随机噪点，低端显示器上不再断层。 */
-.deskpet-stage::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 28px;
-  pointer-events: none;
-  z-index: 30;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  background: radial-gradient(
-    120% 120% at 50% 50%,
-    rgba(60, 60, 60, 0) 44%,
-    rgba(60, 60, 60, 0.05) 64%,
-    rgba(60, 60, 60, 0.13) 80%,
-    rgba(60, 60, 60, 0.24) 94%
-  );
-}
-
-/* 抖动层：与暗角同色的噪点，只在暗角出现的区域生效（中心留白不受影响），用来打散色带 */
-.deskpet-stage::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 28px;
-  pointer-events: none;
-  z-index: 29;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.2353 0 0 0 0 0.2353 0 0 0 0 0.2353 0 0 0 0.7 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 140px 140px;
-  -webkit-mask-image: radial-gradient(120% 120% at 50% 50%, transparent 44%, #000 94%);
-  mask-image: radial-gradient(120% 120% at 50% 50%, transparent 44%, #000 94%);
-}
-
-.deskpet-stage:not(.click-through-locked).hovered::after {
-  opacity: 1;
-}
-
-.deskpet-stage:not(.click-through-locked).hovered::before {
-  opacity: 0.18;
+/* 悬停底衬（hover backdrop）
+   鼠标进入窗口时，在角色层「下方」铺一层灰色背景，用于指示窗口边界。
+   改用纯色填充而非渐变暗角，原因有二：
+   1) 铺在角色下方，角色本身不会被蒙灰（旧暗角在角色上方，会把角色边缘一起压暗）；
+   2) 纯色没有渐变台阶，天然不存在低色深屏幕的色带问题，故不再需要噪点抖动层。 */
+.deskpet-stage:not(.click-through-locked).hovered {
+  background-color: rgba(70, 70, 70, 0.42);
 }
 
 /* 角色层：伴随浮窗打开时平滑横移，留出零遮挡空间 */
