@@ -713,6 +713,57 @@ class ModelControlsToolTest(unittest.IsolatedAsyncioTestCase):
         )
 
 
+class OutboundTextExtractionTest(unittest.TestCase):
+    """回归：出站文本必须只取回复正文，不能把被引用的用户输入一起回显。
+
+    实测结构（MaiBot 回复时会在 raw_message 头部插入 reply 组件）：
+      raw_message = [
+        {"type": "reply", "data": {"target_message_content": "用户原文"}},
+        {"type": "text",  "data": "回复正文"},
+      ]
+      processed_plain_text = "用户原文 回复正文"   # 引用内容被拼了进来
+    旧实现优先用 processed_plain_text，导致前端看到「用户输入 用户输入」。
+    """
+
+    def _plugin(self):
+        return _make_plugin()
+
+    def test_reply_component_is_not_echoed(self):
+        plug = self._plugin()
+        msg = {
+            "raw_message": [
+                {"type": "reply", "data": {"target_message_content": "回显探针1",
+                                           "target_message_sender_id": "deskpet-user"}},
+                {"type": "text", "data": "回显探针1"},
+            ],
+            "processed_plain_text": "回显探针1 回显探针1",
+        }
+        self.assertEqual(plug._extract_text_from_message(msg), "回显探针1")
+
+    def test_plain_text_used_when_no_raw_message(self):
+        plug = self._plugin()
+        self.assertEqual(
+            plug._extract_text_from_message({"processed_plain_text": "你好呀"}),
+            "你好呀",
+        )
+
+    def test_media_placeholders_stripped_in_fallback(self):
+        plug = self._plugin()
+        self.assertEqual(
+            plug._extract_text_from_message({"processed_plain_text": "开心 [表情包: 摸摸头]"}),
+            "开心",
+        )
+
+    def test_raw_message_with_only_reply_yields_empty(self):
+        # 只有引用、没有正文时不得回退到 processed_plain_text（否则又会回显引用内容）
+        plug = self._plugin()
+        msg = {
+            "raw_message": [{"type": "reply", "data": {"target_message_content": "用户原文"}}],
+            "processed_plain_text": "用户原文",
+        }
+        self.assertEqual(plug._extract_text_from_message(msg), "")
+
+
 class OriginExtractionTest(unittest.TestCase):
     """回归：origin 读取必须兼容 websockets 新旧连接对象。
 

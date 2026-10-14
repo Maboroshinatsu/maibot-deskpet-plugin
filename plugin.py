@@ -573,25 +573,30 @@ class DeskpetPlugin(MaiBotPlugin):
         return media_list
 
     def _extract_text_from_message(self, message: Dict[str, Any]) -> str:
-        """从 MaiBot 出站消息字典中提取纯文本（自动剥离回复前缀与图片/表情包占位标签）。"""
-        plain = message.get("processed_plain_text") or ""
-        if plain:
-            # Strip MaiBot platform reply prefix (e.g. [回复消息], [回复...], @桌宠用户)
-            cleaned = re.sub(r'^(?:\[回复[^\]]*\]\s*|@桌宠用户\s*)+', '', str(plain))
-            # Strip MaiBot media component placeholders (e.g. [表情包: 开心], [表情包], [图片：...])
-            cleaned = re.sub(r'\[(?:表情包|图片)(?:[：:][^\]]*)?\]', '', cleaned).strip()
-            return cleaned
+        """从 MaiBot 出站消息字典中提取纯文本。
 
-        raw = message.get("raw_message") or []
-        if isinstance(raw, list):
+        优先取 raw_message 的 text 组件：MaiBot 回复时会在 raw_message 头部插入一个
+        reply 组件（引用被回复的消息），而 processed_plain_text 会把该引用内容与回复
+        正文用空格拼接（形如「用户原文 回复正文」）。若直接采用 processed_plain_text，
+        会把用户自己的输入当成回复内容回显给前端（旧实现即此问题）。
+        """
+        raw = message.get("raw_message")
+        if isinstance(raw, list) and raw:
             texts = [
                 str(comp.get("data", ""))
                 for comp in raw
                 if isinstance(comp, dict) and comp.get("type") == "text"
             ]
-            result = "".join(texts).strip()
-            if result:
-                return result
+            # raw_message 存在即以其 text 组件为准：即使为空也不回退到
+            # processed_plain_text，避免把引用内容当作正文回显。
+            return re.sub(r'^(?:@桌宠用户\s*)+', '', "".join(texts)).strip()
+
+        plain = message.get("processed_plain_text") or ""
+        if plain:
+            # 无 raw_message 时退回纯文本，尽力剥离可能的回复前缀与媒体占位标签
+            cleaned = re.sub(r'^(?:\[回复[^\]]*\]\s*|@桌宠用户\s*)+', '', str(plain))
+            cleaned = re.sub(r'\[(?:表情包|图片)(?:[：:][^\]]*)?\]', '', cleaned).strip()
+            return cleaned
 
         # Newer MaiBot replyer output may use different fields
         for key in ("content", "text", "response", "message"):
