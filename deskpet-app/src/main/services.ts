@@ -288,6 +288,17 @@ export class ServiceManager {
     this.config = this.loadConfig()
   }
 
+  /**
+   * app ready 之后重新读取配置。
+   *
+   * 本类在模块级构造（早于 app ready），此时 Electron 的 safeStorage 尚不可用，
+   * 首次 loadConfig 无法解密已保存的 API Key，会得到空串——表现为「重启后 Key 没了」，
+   * 并连带导致依赖 Key 的服务被判为不可用而拒绝启动。ready 后重读一次即可修正。
+   */
+  reloadConfig(): void {
+    this.config = this.loadConfig()
+  }
+
   // ── 配置持久化 ──────────────────────────────
 
   private configPath(): string {

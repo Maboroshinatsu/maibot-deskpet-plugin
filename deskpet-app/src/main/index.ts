@@ -980,6 +980,9 @@ function createTray(): void {
 }
 
 app.whenReady().then(() => {
+  // ServiceManager 在模块级构造，早于 app ready；那时 safeStorage 不可用，
+  // 已保存的 API Key 无法解密。ready 后立即重读配置，避免 Key 被当成空值。
+  serviceManager.reloadConfig()
   protocol.handle('deskpet', async (request) => {
     const url = new URL(request.url)
     if (url.host !== 'models') return new Response('Not Found', { status: 404 })
