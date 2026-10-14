@@ -263,7 +263,7 @@ auth_token = "你的密码"     # 强烈建议设置，否则局域网内任何�
 ```toml
 [plugin]
 enabled = true
-config_version = "1.0.6"
+config_version = "1.0.7"
 
 [ws_server]
 host = "127.0.0.1"       # 本机；跨设备改为 "0.0.0.0"
