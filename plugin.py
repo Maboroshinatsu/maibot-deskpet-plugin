@@ -36,7 +36,7 @@ class PluginCoreConfig(PluginConfigBase):
     __ui_icon__ = "package"
     __ui_order__ = 0
     enabled: bool = Field(default=True, description="是否启用插件")
-    config_version: str = Field(default="1.0.2", description="配置版本")
+    config_version: str = Field(default="1.0.3", description="配置版本")
 
 
 class WSServerConfig(PluginConfigBase):

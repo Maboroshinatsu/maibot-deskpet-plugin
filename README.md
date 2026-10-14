@@ -8,15 +8,15 @@
 
 <br />
 
-[![Release](https://img.shields.io/badge/Release-v1.0.2-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.2)
-[![Installer](https://img.shields.io/badge/Setup.exe-112.4_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.2/MaiBot-Deskpet-Setup-1.0.2.exe)
-[![Portable](https://img.shields.io/badge/Portable.zip-144.9_MB-3b82f6?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.2/MaiBot-Deskpet-Portable-1.0.2-win-x64.zip)
+[![Release](https://img.shields.io/badge/Release-v1.0.3-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.3)
+[![Installer](https://img.shields.io/badge/Setup.exe-112.4_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.3/MaiBot-Deskpet-Setup-1.0.3.exe)
+[![Portable](https://img.shields.io/badge/Portable.zip-144.9_MB-3b82f6?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.3/MaiBot-Deskpet-Portable-1.0.3-win-x64.zip)
 [![Electron](https://img.shields.io/badge/Electron_34-Vue_3_+_TS-5c7cfa?style=flat-square&labelColor=231d19)](https://www.electronjs.org/)
 [![Live2D](https://img.shields.io/badge/Live2D-Cubism_2_/_4-d66853?style=flat-square&labelColor=231d19)](https://www.live2d.com/)
 [![MaiBot](https://img.shields.io/badge/MaiBot-Plugin_SDK_v2-8b6fd4?style=flat-square&labelColor=231d19)](https://github.com/MaiM-with-u/MaiBot)
 [![License](https://img.shields.io/badge/License-MIT-e08b52?style=flat-square&labelColor=231d19)](LICENSE)
 
-**[下载安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.2)** &nbsp;·&nbsp; **[使用指南](docs/GUIDE.md)** &nbsp;·&nbsp; **[部署配置](docs/SETUP.md)** &nbsp;·&nbsp; **[模型适配规范](docs/MODEL-ADAPTER-SPEC.md)** &nbsp;·&nbsp; **[v1.0 更新日志](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)**
+**[下载安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.3)** &nbsp;·&nbsp; **[使用指南](docs/GUIDE.md)** &nbsp;·&nbsp; **[部署配置](docs/SETUP.md)** &nbsp;·&nbsp; **[模型适配规范](docs/MODEL-ADAPTER-SPEC.md)** &nbsp;·&nbsp; **[v1.0 更新日志](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)**
 
 </div>
 
@@ -33,7 +33,7 @@
 ## 快速开始
 
 **1. 安装桌面端**  
-前往 [**Releases**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.2) 下载并运行安装版 **`MaiBot-Deskpet-Setup-1.0.2.exe`**，或下载免安装便携版 **`MaiBot-Deskpet-Portable-1.0.2-win-x64.zip`** 解压即用。
+前往 [**Releases**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.3) 下载并运行安装版 **`MaiBot-Deskpet-Setup-1.0.3.exe`**，或下载免安装便携版 **`MaiBot-Deskpet-Portable-1.0.3-win-x64.zip`** 解压即用。
 
 **2. 接入 MaiBot 插件**  
 将本仓库克隆至 MaiBot 的 `plugins/` 目录，重启 MaiBot 即可自动监听 `127.0.0.1:8523`：
@@ -49,13 +49,13 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 
 ---
 
-## 💡 v1.0.2 最新改进与修复
+## 💡 v1.0.3 最新改进与修复
 
-本版本集中打磨桌面端的「鼠标悬停」交互，让透明窗口在低配显示器上表现更自然：
+本版本让桌宠的窗口更「看得见」，并加固了本机安全边界：
 
-- 🎯 **悬停判定更精准**：鼠标移到角色旁边的透明空白处不再误触发半透明淡化，只有真正落在角色轮廓内才会淡出——判定从「整块画布」改为「模型实际可见轮廓包围盒」。
-- 🖥️ **低端显示器不再有断层**：悬停时出现的边缘暗角由三层叠加阴影改为「单条径向渐变 + 噪点抖动」，在 8-bit / 6-bit 色深屏幕上不再出现可见色带。
-- 🖱️ **穿透模式下悬停生效**：修复了「锁定穿透」模式下悬停淡化永远不触发的问题，现在穿透状态下鼠标悬停模型也能正常变透明，方便操作下层内容。
+- 🪟 **窗口轮廓更清晰**：鼠标移入窗口时，会在角色**下方**铺一层灰色底衬，一眼就能看出窗口范围。底衬位于角色下方，所以角色本身不会被蒙灰、颜色依旧鲜亮。
+- 🛡️ **安全性加固**：修复了桌宠与 MaiBot 之间连接来源校验失效的问题——此前任意网页都可能连上你本机的桌宠端口，现在已被正确拦截。
+- 🔒 **收紧本机服务**：移除了本地语音服务多余的跨域许可，浏览器网页无法再跨源调用你本机的语音接口。
 
 ---
 

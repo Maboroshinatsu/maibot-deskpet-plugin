@@ -270,7 +270,7 @@ auth_token = "你的密码"
 ```toml
 [plugin]
 enabled = true
-config_version = "1.0.2"
+config_version = "1.0.3"
 
 [ws_server]
 host = "127.0.0.1"       # 本机；跨设备改为 "0.0.0.0"
