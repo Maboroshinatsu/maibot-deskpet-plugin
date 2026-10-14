@@ -6,6 +6,7 @@ import { findModelStatePreset, isDeskpetEmotionValue } from '@/services/live2d/e
 import { DEFAULT_WS_URL, type ServerMessage } from '@/services/protocol'
 import { normalizeServerMessage } from '@/services/host/maibot-protocol'
 import { applyHostEvent, type DeskpetEventDeps } from '@/services/host/event-controller'
+import { createSerialTaskQueue } from '@/services/serial-task-queue'
 
 /** TTS 停下后再静默一小段，避免尾音被 VAD 当成用户说话 */
 const SPEAKING_TAIL_MS = 400
@@ -243,7 +244,7 @@ export function useWebSocket() {
     },
     appendReplyDelta: (delta, requestId) => { chatStore.appendChatText(delta, requestId) },
     finishReply: (requestId, error) => { chatStore.finishChatStream(requestId, error) },
-    speakReply: (text) => { void speakReply(text) },
+    speakReply: (text, requestId) => speakReply(text, requestId),
     showReplyText: (text) => { chatStore.showChatMessage(text) },
     playAudio,
     addEmoji: (base64, description) => { chatStore.addEmojiMessage(base64, description) },
@@ -269,16 +270,26 @@ export function useWebSocket() {
     return true
   }
 
+  /** 串行合成队列：语音按消息到达顺序依次合成入队；断线/重连时整体作废 */
+  const speakQueue = createSerialTaskQueue((err) => {
+    console.warn('[Deskpet] TTS synthesize failed:', err)
+  })
+
   /** 收到完整回复文本后，调本机 TTS 桥合成并播放（跨机部署时合成在客户端完成） */
-  async function speakReply(text: string) {
+  function speakReply(text: string, requestId?: string): void {
     const api = window.electronAPI
     if (!api?.ttsSynthesize) return
-    try {
-      const b64 = await api.ttsSynthesize(text)
-      if (b64) playAudio(b64)
-    } catch (err) {
-      console.warn('[Deskpet] TTS synthesize failed:', err)
-    }
+    const synthesize = api.ttsSynthesize
+    speakQueue.push(async (isStale) => {
+      // 排队期间已断线/重连：旧任务直接丢弃，不再白跑一次合成
+      if (isStale()) return
+      const b64 = await synthesize(text)
+      if (!b64) return
+      // 合成期间发生断线/重连：丢弃结果，避免旧语音插进新会话
+      if (isStale()) return
+      if (requestId) console.debug('[Deskpet] TTS ready:', requestId)
+      playAudio(b64)
+    })
   }
 
   function sendScreenshot(base64: string) {
@@ -327,6 +338,8 @@ export function useWebSocket() {
       reconnectTimer.value = null
     }
     stopAllAudio()
+    // 作废在途合成：重连后不应再冒出上一轮的语音
+    speakQueue.invalidate()
     ws.value?.close()
     ws.value = null
   }

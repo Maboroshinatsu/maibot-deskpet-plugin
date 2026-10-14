@@ -7,7 +7,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "test": "node --test tests/services.test.cjs tests/ptt.test.cjs tests/voice-input.test.cjs tests/imageset.test.cjs",
+    "test": "node --test tests/services.test.cjs tests/ptt.test.cjs tests/voice-input.test.cjs tests/imageset.test.cjs tests/serial-task-queue.test.cjs",
     "test:host": "node --test tests/maibot-protocol.test.cjs tests/host-controller.test.cjs tests/fake-host.test.cjs tests/host-boundary.test.cjs",
     "test:model-lifecycle": "node --test tests/probe-guard.test.cjs tests/live2d-loader.test.cjs tests/motion-priority.test.cjs tests/expression-ownership.test.cjs",
     "test:runtime-trust": "node --test tests/runtime-policy.test.cjs tests/runtime-approval.test.cjs tests/runtime-confirmation.test.cjs tests/runtime-transport.test.cjs",

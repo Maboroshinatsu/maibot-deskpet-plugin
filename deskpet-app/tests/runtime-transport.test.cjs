@@ -32,6 +32,10 @@ function harness(configuredUrl = 'ws://127.0.0.1:8523/ws') {
     // DP-017：这两条边界现在由 useWebSocket 调用；加载真实实现而不是打桩
     '@/services/host/maibot-protocol': require('./helpers/host-loader.cjs').loadHostModule('maibot-protocol'),
     '@/services/host/event-controller': require('./helpers/host-loader.cjs').loadHostModule('event-controller'),
+    // 串行合成队列是纯逻辑模块：加载真实实现而不是打桩
+    '@/services/serial-task-queue': require('./helpers/host-loader.cjs').loadTsModule(
+      path.join(__dirname, '../src/renderer/services/serial-task-queue.ts'),
+    ),
   }
   const module = { exports: {} }
   vm.runInNewContext(code, {

@@ -126,3 +126,22 @@ test('control event with action=preset does not call setEmotion to overwrite pre
   assert.deepEqual(h.calls, [])
 })
 
+
+test('reply-done synthesizes the full text and forwards requestId for ordering', () => {
+  const spoke = []
+  const h = deps({ speakReply: (text, requestId) => spoke.push([text, requestId]) })
+  assert.equal(
+    applyHostEvent({ kind: 'reply-done', requestId: 'req-7', text: '你好呀', speak: true }, h.deps),
+    true,
+  )
+  assert.deepEqual(spoke, [['你好呀', 'req-7']])
+})
+
+test('reply-done does not synthesize when speak is false, on error, or without text', () => {
+  const spoke = []
+  const h = deps({ speakReply: (text, requestId) => spoke.push([text, requestId]) })
+  applyHostEvent({ kind: 'reply-done', requestId: 'r1', text: '你好', speak: false }, h.deps)
+  applyHostEvent({ kind: 'reply-done', requestId: 'r2', text: '你好', error: 'boom' }, h.deps)
+  applyHostEvent({ kind: 'reply-done', requestId: 'r3' }, h.deps)
+  assert.deepEqual(spoke, [])
+})

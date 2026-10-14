@@ -27,4 +27,24 @@ function loadHostModule(name) {
   return module.exports
 }
 
-module.exports = { loadHostModule, HOST_DIR }
+/**
+ * 加载 host/ 之外、但同样应保持纯逻辑（只允许相对导入）的渲染层模块。
+ * 用于让 useWebSocket 这类组合式函数的边界测试拿到真实实现，而不是打桩。
+ */
+function loadTsModule(absPath) {
+  const key = absPath
+  if (cache.has(key)) return cache.get(key)
+  const code = ts.transpileModule(fs.readFileSync(absPath, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  const module = { exports: {} }
+  const requireShim = (spec) => {
+    if (spec.startsWith('.')) return loadTsModule(path.resolve(path.dirname(absPath), spec) + '.ts')
+    throw new Error(`module may not depend on: ${spec}`)
+  }
+  vm.runInNewContext(code, { module, exports: module.exports, require: requireShim, console }, { filename: absPath })
+  cache.set(key, module.exports)
+  return module.exports
+}
+
+module.exports = { loadHostModule, loadTsModule, HOST_DIR }
