@@ -13,7 +13,6 @@ import { spawn, execFile, execFileSync, ChildProcess } from 'child_process'
 import net from 'net'
 import path from 'path'
 import fs from 'fs'
-import { randomUUID } from 'crypto'
 import { app, safeStorage } from 'electron'
 import { validateDetectedPython } from './runtime-policy'
 
@@ -573,11 +572,19 @@ export class ServiceManager {
     }
   }
 
+  /** 生成随机令牌：优先用 Node 20 的全局 crypto，退化为时间戳+随机串 */
+  private randomToken(): string {
+    const g = globalThis as { crypto?: { randomUUID?: () => string } }
+    const uuid = g.crypto?.randomUUID?.()
+    if (uuid) return uuid.replace(/-/g, '')
+    return (Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/[^a-z0-9]/gi, '')
+  }
+
   /** 远程模式下确保存在访问令牌（缺失或过短时生成并落盘） */
   private ensureBridgeToken(): string {
     if (!this.isRemoteMode()) return ''
     if (this.config.bridgeToken && this.config.bridgeToken.length >= 16) return this.config.bridgeToken
-    this.config.bridgeToken = randomUUID().replace(/-/g, '')
+    this.config.bridgeToken = this.randomToken()
     this.persist()
     return this.config.bridgeToken
   }
