@@ -68,7 +68,9 @@ jobs:
         shell: pwsh
         run: |
           npx electron-vite build
+          if ($LASTEXITCODE -ne 0) { throw "electron-vite build 失败（exit $LASTEXITCODE）" }
           npx electron-builder --win nsis --publish never
+          if ($LASTEXITCODE -ne 0) { throw "electron-builder 打包失败（exit $LASTEXITCODE）" }
           $ver = (Get-Content package.json | ConvertFrom-Json).version
           Compress-Archive -Path "release/win-unpacked/*" -DestinationPath "release/MaiBot-Deskpet-Portable-$ver-win-x64.zip" -Force
 
@@ -95,3 +97,4 @@ jobs:
             Write-Host "Release $tag 已存在，直接上传附件"
           }
           gh release upload $tag deskpet-app/release/MaiBot-Deskpet-Setup-*.exe deskpet-app/release/MaiBot-Deskpet-Portable-*-win-x64.zip --clobber
+          if ($LASTEXITCODE -ne 0) { throw "上传 Release 附件失败（exit $LASTEXITCODE）" }
