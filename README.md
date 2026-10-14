@@ -8,15 +8,15 @@
 
 <br />
 
-[![Release](https://img.shields.io/badge/Release-v1.0.5-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.5)
-[![Installer](https://img.shields.io/badge/Setup.exe-85.2_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.5/MaiBot-Deskpet-Setup-1.0.5.exe)
-[![Portable](https://img.shields.io/badge/Portable.zip-124.9_MB-3b82f6?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.5/MaiBot-Deskpet-Portable-1.0.5-win-x64.zip)
+[![Release](https://img.shields.io/badge/Release-v1.0.6-c87137?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.6)
+[![Installer](https://img.shields.io/badge/Setup.exe-85.2_MB-2a7b4c?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.6/MaiBot-Deskpet-Setup-1.0.6.exe)
+[![Portable](https://img.shields.io/badge/Portable.zip-124.9_MB-3b82f6?style=flat-square&labelColor=231d19)](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/download/v1.0.6/MaiBot-Deskpet-Portable-1.0.6-win-x64.zip)
 [![Electron](https://img.shields.io/badge/Electron_34-Vue_3_+_TS-5c7cfa?style=flat-square&labelColor=231d19)](https://www.electronjs.org/)
 [![Live2D](https://img.shields.io/badge/Live2D-Cubism_2_/_4-d66853?style=flat-square&labelColor=231d19)](https://www.live2d.com/)
 [![MaiBot](https://img.shields.io/badge/MaiBot-Plugin_SDK_v2-8b6fd4?style=flat-square&labelColor=231d19)](https://github.com/MaiM-with-u/MaiBot)
 [![License](https://img.shields.io/badge/License-MIT-e08b52?style=flat-square&labelColor=231d19)](LICENSE)
 
-**[下载安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.5)** &nbsp;·&nbsp; **[使用指南](docs/GUIDE.md)** &nbsp;·&nbsp; **[部署配置](docs/SETUP.md)** &nbsp;·&nbsp; **[模型适配规范](docs/MODEL-ADAPTER-SPEC.md)** &nbsp;·&nbsp; **[v1.0 更新日志](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)**
+**[下载安装包](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.6)** &nbsp;·&nbsp; **[使用指南](docs/GUIDE.md)** &nbsp;·&nbsp; **[部署配置](docs/SETUP.md)** &nbsp;·&nbsp; **[模型适配规范](docs/MODEL-ADAPTER-SPEC.md)** &nbsp;·&nbsp; **[v1.0 更新日志](docs/UPGRADE-AND-FIX-LOG-2026-10-12.md)**
 
 </div>
 
@@ -33,7 +33,7 @@
 ## 快速开始
 
 **1. 安装桌面端**  
-前往 [**Releases**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.5) 下载并运行安装版 **`MaiBot-Deskpet-Setup-1.0.5.exe`**，或下载免安装便携版 **`MaiBot-Deskpet-Portable-1.0.5-win-x64.zip`** 解压即用。
+前往 [**Releases**](https://github.com/Maboroshinatsu/maibot-deskpet-plugin/releases/tag/v1.0.6) 下载并运行安装版 **`MaiBot-Deskpet-Setup-1.0.6.exe`**，或下载免安装便携版 **`MaiBot-Deskpet-Portable-1.0.6-win-x64.zip`** 解压即用。
 
 **2. 接入 MaiBot 插件**  
 将本仓库克隆至 MaiBot 的 `plugins/` 目录，重启 MaiBot 即可自动监听 `127.0.0.1:8523`：
@@ -49,13 +49,13 @@ git clone https://github.com/Maboroshinatsu/maibot-deskpet-plugin.git maibot_des
 
 ---
 
-## 💡 v1.0.5 最新改进与修复
+## 💡 v1.0.6 最新改进与修复
 
-本版本打通了**跨机部署**（桌宠与 MaiBot 不在同一台电脑）的语音链路：
+本版本把**跨机部署**（桌宠与 MaiBot 不在同一台电脑）做得更简单可靠：
 
-- 🌐 **跨机语音可用**：此前跨机时只能收发文字，语音合成拿不到音频。现在桌宠检测到连接的是远程 MaiBot 后，会自动让本地语音合成服务对外提供，并在设置面板显示一个访问令牌——把它和本机地址填进 MaiBot 的配置即可，语音正常发声。
-- 🔒 **对外服务带令牌保护**：对外提供的语音服务强制校验令牌，避免同一网络里其他人随意调用。仅本机使用时行为完全不变（仍然只在本地可见、无需令牌）。
-- 📖 **文档已更正**：旧文档让客户端把语音识别地址指向服务器，其实识别是在你本机完成的。现已按「哪个服务跑在哪台电脑」重新说明。
+- 🌐 **跨机语音更简单**：语音合成本来只是给桌宠自己听的，现在改为**在桌宠端本地完成**。此前需要让本地语音服务对外提供、再配一个访问令牌，现在**完全不需要**——跨机时只用到一条连接（8523），不用开任何额外端口，天然不受家用网络限制。
+- 🔒 **本机更安全**：语音识别与语音合成服务始终只在本机可见，不对外暴露，也就不需要额外的令牌保护。
+- 📖 **文档同步更新**：跨设备连接说明按新方案重写，并更正了旧文档中「语音识别要指向服务器」的错误说法（识别一直是在你本机完成的）。
 
 ---
 
