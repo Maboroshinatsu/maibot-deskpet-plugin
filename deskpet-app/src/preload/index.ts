@@ -64,6 +64,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   setAutoScreenshotInterval: (sec: number) => ipcRenderer.invoke('set-auto-screenshot-interval', sec),
   sttTranscribe: (audio: ArrayBuffer, url?: string): Promise<string | null> => ipcRenderer.invoke('stt-transcribe', audio, url),
+  loadChatHistory: (): Promise<unknown[]> => ipcRenderer.invoke('chat-history-load'),
+  saveChatHistory: (messages: unknown[]): Promise<boolean> => ipcRenderer.invoke('chat-history-save', messages),
   ttsSynthesize: (text: string): Promise<string | null> => ipcRenderer.invoke('tts-synthesize', text),
   listModels: (): Promise<ModelEntry[]> => ipcRenderer.invoke('list-models'),
   inspectModelAssets: (modelUrl: string): Promise<unknown> => ipcRenderer.invoke('inspect-model-assets', modelUrl),

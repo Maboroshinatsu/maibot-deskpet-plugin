@@ -1,8 +1,45 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 /** 聊天记录上限，超出后丢弃最旧的消息，避免长时间挂机内存持续增长 */
 const MAX_MESSAGES = 200
+
+/** 落盘防抖：流式回复会高频追加，避免每条都写盘 */
+const PERSIST_DEBOUNCE_MS = 800
+
+/** 从磁盘读回的消息可能是旧版本或损坏的，逐条做最小校验并复位瞬态字段 */
+function sanitizeLoadedMessage(raw: unknown): ChatMessage | null {
+  if (!raw || typeof raw !== 'object') return null
+  const m = raw as Record<string, unknown>
+  const type = m.type
+  const role = m.role
+  const id = typeof m.id === 'string' ? m.id : null
+  const timestamp = typeof m.timestamp === 'number' ? m.timestamp : Date.now()
+  if (!id) return null
+  if (type === 'text' && (role === 'user' || role === 'assistant') && typeof m.text === 'string') {
+    return {
+      id,
+      role,
+      text: m.text,
+      // 上次退出时可能正处在流式中：复位为已完成，否则气泡会一直显示「正在输入」
+      streaming: false,
+      timestamp,
+      type: 'text',
+      ...(typeof m.requestId === 'string' ? { requestId: m.requestId } : {}),
+    }
+  }
+  if (type === 'emoji' && role === 'assistant' && typeof m.base64 === 'string') {
+    return {
+      id,
+      role: 'assistant',
+      base64: m.base64,
+      description: typeof m.description === 'string' ? m.description : '',
+      timestamp,
+      type: 'emoji',
+    }
+  }
+  return null
+}
 
 export interface TextMessage {
   id: string
@@ -34,6 +71,46 @@ function nextId(prefix: string): string {
 
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
+  let hydrated = false
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+
+  function persistNow() {
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    // 只存必要字段，避免把瞬态状态写进磁盘
+    const payload = messages.value.map((m) =>
+      m.type === 'emoji'
+        ? { id: m.id, role: m.role, base64: m.base64, description: m.description, timestamp: m.timestamp, type: m.type }
+        : { id: m.id, role: m.role, text: m.text, streaming: false, timestamp: m.timestamp, type: m.type, ...(m.requestId ? { requestId: m.requestId } : {}) },
+    )
+    void window.electronAPI?.saveChatHistory?.(payload).catch(() => {})
+  }
+
+  function schedulePersist() {
+    if (!hydrated) return
+    if (persistTimer) clearTimeout(persistTimer)
+    persistTimer = setTimeout(persistNow, PERSIST_DEBOUNCE_MS)
+  }
+
+  /** 启动时从磁盘恢复聊天记录（不存在或损坏则保持为空） */
+  async function hydrate() {
+    if (hydrated) return
+    try {
+      const raw = (await window.electronAPI?.loadChatHistory?.()) ?? []
+      const restored = raw.map(sanitizeLoadedMessage).filter((m): m is ChatMessage => m !== null)
+      if (restored.length > 0) messages.value = restored.slice(-MAX_MESSAGES)
+    } catch {
+      // 读取失败不影响启动
+    } finally {
+      hydrated = true
+      watch(messages, schedulePersist, { deep: true })
+    }
+  }
+
+  // 首次实例化即开始恢复；后续调用是空操作
+  void hydrate()
 
   // backward-compat: last assistant bubble
   const chatBubble = computed(() => {
@@ -126,6 +203,7 @@ export const useChatStore = defineStore('chat', () => {
 
   function clear() {
     messages.value = []
+    persistNow()
   }
 
   return {
@@ -137,5 +215,6 @@ export const useChatStore = defineStore('chat', () => {
     finishChatStream,
     showChatMessage,
     clear,
+    hydrate,
   }
 })

@@ -686,6 +686,48 @@ function enforceWindowBounds(): void {
   }
 }
 
+/** 聊天记录持久化：写 userData/chat-history.json，总量超限时丢弃最旧的消息 */
+const CHAT_HISTORY_FILENAME = 'chat-history.json'
+/** 历史文件总大小上限（含表情包 base64，故按字节控制而非条数） */
+const CHAT_HISTORY_MAX_BYTES = 1_000_000
+/** 保留的最大消息条数（与渲染层内存上限一致） */
+const CHAT_HISTORY_MAX_MESSAGES = 200
+
+function getChatHistoryPath(): string {
+  return path.join(app.getPath('userData'), CHAT_HISTORY_FILENAME)
+}
+
+function loadChatHistory(): unknown[] {
+  try {
+    const raw = JSON.parse(fs.readFileSync(getChatHistoryPath(), 'utf-8')) as { messages?: unknown }
+    return Array.isArray(raw.messages) ? raw.messages : []
+  } catch {
+    // 文件不存在 / 损坏都按空历史处理，不影响启动
+    return []
+  }
+}
+
+function saveChatHistory(messages: unknown): boolean {
+  const list = Array.isArray(messages) ? messages : []
+  // 先按条数截断，再按字节截断（从最旧的开始丢）
+  let kept = list.slice(-CHAT_HISTORY_MAX_MESSAGES)
+  let payload = ''
+  for (;;) {
+    payload = JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), messages: kept }, null, 2)
+    if (Buffer.byteLength(payload, 'utf-8') <= CHAT_HISTORY_MAX_BYTES || kept.length <= 1) break
+    // 一次丢 10% 或至少 1 条，避免逐条重算太慢
+    kept = kept.slice(Math.max(1, Math.floor(kept.length * 0.1)))
+  }
+  try {
+    fs.mkdirSync(app.getPath('userData'), { recursive: true })
+    fs.writeFileSync(getChatHistoryPath(), payload, 'utf-8')
+    return true
+  } catch (err) {
+    console.warn('[deskpet] Failed to save chat history:', err)
+    return false
+  }
+}
+
 let saveStateTimer: ReturnType<typeof setTimeout> | null = null
 
 function scheduleSaveWindowState(): void {
@@ -1219,6 +1261,9 @@ app.whenReady().then(() => {
   ipcMain.handle('set-auto-screenshot-interval', () => {
     // 自动截图定时器已停用，保留空 IPC 兼容旧预加载接口
   })
+
+  ipcMain.handle('chat-history-load', () => loadChatHistory())
+  ipcMain.handle('chat-history-save', (_event, messages: unknown) => saveChatHistory(messages))
 
   ipcMain.handle('list-models', () => listModels())
   ipcMain.handle('inspect-model-assets', (_event, modelUrl: string) => inspectModelAssets(modelUrl))

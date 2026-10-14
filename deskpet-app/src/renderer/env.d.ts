@@ -85,6 +85,8 @@ interface ElectronAPI {
   onScreenshotCaptured: (callback: (base64: string) => void) => () => void
   setAutoScreenshotInterval: (sec: number) => void
   sttTranscribe: (audio: ArrayBuffer, url?: string) => Promise<string | null>
+  loadChatHistory: () => Promise<unknown[]>
+  saveChatHistory: (messages: unknown[]) => Promise<boolean>
   ttsSynthesize: (text: string) => Promise<string | null>
   listModels: () => Promise<ModelEntry[]>
   inspectModelAssets: (modelUrl: string) => Promise<{
