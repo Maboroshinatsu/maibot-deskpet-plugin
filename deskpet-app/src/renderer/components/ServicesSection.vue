@@ -307,6 +307,9 @@
             ? '云 TTS 桥 (9882) 运行中：桌宠收到回复后会自行合成并播放语音'
             : '启动后，桌宠收到回复会自动用本机云 TTS 桥 (9882) 合成并播放语音' }}
         </p>
+        <p class="hint hint-warn">
+          改动上方 API Key / 音色 / 模型 / 风格指令后，需要点上面的「重启」按钮重新加载云 TTS 桥才会生效。
+        </p>
       </div>
 
       <!-- 本地 GPT-SoVITS 模式：仅显示本地 TTS 桥 (9881) 与 GPT-SoVITS (9880) -->
@@ -956,4 +959,5 @@ onUnmounted(() => {
 .candidate-feedback-error { color: #ef4444; }
 
 .hint { color: var(--dp-text-dim); font-size: 10.5px; margin: 2px 0 0; line-height: 1.45; }
+.hint-warn { color: var(--dp-accent); }
 </style>
