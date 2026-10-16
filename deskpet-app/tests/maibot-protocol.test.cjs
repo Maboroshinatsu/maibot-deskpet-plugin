@@ -22,6 +22,8 @@ test('reply done omits error when absent and keeps it when present', () => {
     { kind: 'reply-done', requestId: 'r1' })
   same(n('output:text:done', { error: 'boom' }, { request_id: 'r2' }),
     { kind: 'reply-done', requestId: 'r2', error: 'boom' })
+  same(n('output:text:done', { text: '你好', speak: true, tts_style: '欢快活泼' }, { request_id: 'r3' }),
+    { kind: 'reply-done', requestId: 'r3', text: '你好', speak: true, style: '欢快活泼' })
 })
 
 test('full text, emotion, animation, audio, thinking, emoji map correctly', () => {

@@ -211,6 +211,8 @@ def _make_plugin(tts_enabled=False, gateway=None):
     plug = plugin.DeskpetPlugin()
     plug.ctx = _FakeCtx(gateway)
     plug._last_tool_emotion_at = 0.0
+    plug._last_tool_emotion = ""
+    plug._pending_tts_style = ""
     plug._ws_server = None
     plug._model_emotions = set()
     plug._bg_tasks = set()
@@ -850,6 +852,55 @@ class OriginValidationTest(unittest.TestCase):
         self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("http://attacker.local:8080"))
         # 浏览器可达的 null 来源（沙箱 iframe / data: 页面）必须拒绝
         self.assertFalse(plugin.DeskpetWSServer._is_trusted_origin("null"))
+
+
+class TTSStyleToolAndDeliveryTest(unittest.IsolatedAsyncioTestCase):
+    async def test_set_deskpet_tts_style_tool(self):
+        plug = _make_plugin()
+        # 空输入校验
+        res_empty = await plug.handle_set_tts_style("")
+        self.assertFalse(res_empty["success"])
+        self.assertEqual(plug._pending_tts_style, "")
+
+        # 正常设置
+        res = await plug.handle_set_tts_style(" 欢快活泼，带有一丝笑意 ")
+        self.assertTrue(res["success"])
+        self.assertEqual(res["applied_tts_style"], "欢快活泼，带有一丝笑意")
+        self.assertEqual(plug._pending_tts_style, "欢快活泼，带有一丝笑意")
+
+    def test_consume_tts_style_prioritizes_pending(self):
+        plug = _make_plugin()
+        plug._pending_tts_style = "温柔轻声"
+        # 即使推断出情绪是 angry，也必须优先使用模型显式指定的 pending 风格
+        consumed = plug._consume_tts_style(inferred_emotion="angry")
+        self.assertEqual(consumed, "温柔轻声")
+        # 消费后清空
+        self.assertEqual(plug._pending_tts_style, "")
+
+    def test_consume_tts_style_fallback_to_emotion_map(self):
+        plug = _make_plugin()
+        plug._pending_tts_style = ""
+        consumed = plug._consume_tts_style(inferred_emotion="happy")
+        self.assertIn("欢快", consumed)
+
+        # 未知情绪返回空
+        unknown = plug._consume_tts_style(inferred_emotion="non_existent_emotion")
+        self.assertEqual(unknown, "")
+
+    async def test_send_to_deskpet_delivers_tts_style(self):
+        plug = _make_plugin(gateway=None)
+        mock_ws = _FakeServer()
+        plug._ws_server = mock_ws
+        plug._pending_tts_style = "略带调皮，语速轻快"
+
+        await plug.send_to_deskpet({"processed_plain_text": "你好呀，主人！"})
+
+        # 检查 output:text:done 是否带上了 tts_style
+        done_events = [data for t, data, _ in mock_ws.sent if t == "output:text:done"]
+        self.assertEqual(len(done_events), 1)
+        self.assertEqual(done_events[0]["tts_style"], "略带调皮，语速轻快")
+        # 确认已消费
+        self.assertEqual(plug._pending_tts_style, "")
 
 
 if __name__ == "__main__":

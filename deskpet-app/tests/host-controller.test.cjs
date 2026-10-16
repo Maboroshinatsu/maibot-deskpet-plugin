@@ -147,6 +147,16 @@ test('reply-done synthesizes the full text and forwards requestId for ordering',
   assert.deepEqual(spoke, [['你好呀', 'req-7']])
 })
 
+test('reply-done forwards style when present', () => {
+  const spoke = []
+  const h = deps({ speakReply: (text, requestId, style) => spoke.push([text, requestId, style]) })
+  assert.equal(
+    applyHostEvent({ kind: 'reply-done', requestId: 'req-8', text: '你好呀', speak: true, style: '欢快活泼' }, h.deps),
+    true,
+  )
+  assert.deepEqual(spoke, [['你好呀', 'req-8', '欢快活泼']])
+})
+
 test('reply-done does not synthesize when speak is false, on error, or without text', () => {
   const spoke = []
   const h = deps({ speakReply: (text, requestId) => spoke.push([text, requestId]) })

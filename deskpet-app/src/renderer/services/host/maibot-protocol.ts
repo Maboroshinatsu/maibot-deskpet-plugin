@@ -60,12 +60,14 @@ export function normalizeServerMessage(msg: ServerMessage): DeskpetHostEvent | n
       const error = asString(data.error)
       const text = asString(data.text)
       const speak = typeof data.speak === 'boolean' ? data.speak : undefined
+      const style = asString(data.tts_style) || asString(data.style)
       return {
         kind: 'reply-done',
         requestId: pickRequestId(msg, data),
         ...(error ? { error } : {}),
         ...(text ? { text } : {}),
         ...(speak !== undefined ? { speak } : {}),
+        ...(style ? { style } : {}),
       }
     }
 

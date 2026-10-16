@@ -62,8 +62,8 @@ export type DeskpetHostEvent =
   | { kind: 'connection'; state: HostConnectionState }
   /** 助手文本增量 */
   | { kind: 'reply-delta'; delta: string; requestId: string }
-  /** 一次回复结束；error 存在表示失败。text 为完整回复文本，speak 表示是否应朗读（端侧合成用） */
-  | { kind: 'reply-done'; requestId: string; error?: string; text?: string; speak?: boolean }
+  /** 一次回复结束；error 存在表示失败。text 为完整回复文本，speak 表示是否应朗读（端侧合成用），style 为语音风格提示词 */
+  | { kind: 'reply-done'; requestId: string; error?: string; text?: string; speak?: boolean; style?: string }
   /** 一次性完整文本（非流式） */
   | { kind: 'reply-text'; text: string }
   | { kind: 'emotion'; emotion: string; controls?: string }

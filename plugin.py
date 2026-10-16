@@ -84,6 +84,21 @@ EMOTION_LIST = [
 
 TOOL_EMOTION_SUPPRESS_SECONDS = 3.0
 
+# 基础情绪到语音合成风格提示词的自然映射（专供 MiMo 等模型）
+EMOTION_TTS_STYLE_MAP: Dict[str, str] = {
+    "happy": "语气欢快活泼，带有一丝开心的笑意",
+    "sad": "语气低落难过，轻声细语，语速偏慢",
+    "angry": "语气强硬严肃，语速偏快，略带不满",
+    "surprise": "语气惊讶意外，音调微微上扬",
+    "embarrassed": "语气略带尴尬局促，微带讪笑",
+    "thinking": "语气沉稳专注，若有所思",
+    "shy": "语气轻柔害羞，带着一丝迟疑与羞怯",
+    "curious": "语气好奇探究，带着浓厚兴趣",
+    "confused": "语气疑惑困惑，带着询问的语调",
+    "neutral": "",
+    "idle": "",
+}
+
 # 自动情绪推断的关键词（按 dict 顺序首个命中生效）
 EMOTION_KEYWORDS = {
     "surprise": ("哇", "竟然", "真的假的", "不会吧", "惊讶", "震惊"),
@@ -318,8 +333,16 @@ class DeskpetPlugin(MaiBotPlugin):
     # 测试可通过覆盖该属性缩短等待。
     UNLOAD_TIMEOUT_SECONDS = 5.0
 
+    _last_tool_emotion_at: float = 0.0
+    _last_tool_emotion: str = ""
+    _pending_tts_style: str = ""
+    _ws_server: Optional[DeskpetWSServer] = None
+    _closing: bool = False
+
     async def on_load(self) -> None:
         self._last_tool_emotion_at = 0.0
+        self._last_tool_emotion = ""
+        self._pending_tts_style = ""
         self._ws_server: Optional[DeskpetWSServer] = None
         # 当前模型声明的自定义情绪（桌宠经 sys:emotions 上报，与内置词表取并集）
         self._model_emotions: Set[str] = set()
@@ -529,6 +552,7 @@ class DeskpetPlugin(MaiBotPlugin):
 
         if response_text:
             recent_tool_emotion = time.time() - self._last_tool_emotion_at < TOOL_EMOTION_SUPPRESS_SECONDS
+            inferred_emotion = None
             if recent_tool_emotion:
                 self.ctx.logger.debug("[Deskpet] Skip auto emotion because tool emotion was recently set")
             else:
@@ -536,6 +560,7 @@ class DeskpetPlugin(MaiBotPlugin):
                 if emotion not in ("neutral", "idle"):
                     self.ctx.logger.debug(f"[Deskpet] Auto inferred emotion: {emotion}")
                     await server.broadcast("state:emotion", {"emotion": emotion}, req_id)
+                    inferred_emotion = emotion
 
             # 配置成 0/负数会让 range 步长非法，钳到至少 1
             buf = max(1, self.config.chat.stream_buffer_size)
@@ -549,13 +574,17 @@ class DeskpetPlugin(MaiBotPlugin):
 
             if self._closing:
                 return {"success": False, "error": "Plugin unloading"}
-            # 语音合成由桌宠端本地完成：这里只把「完整文本 + 是否朗读」交给客户端，
+            # 语音合成由桌宠端本地完成：这里只把「完整文本 + 是否朗读 + 语音风格」交给客户端，
             # 客户端自行调用本机 TTS 桥并播放（避免服务器反向连接 NAT 后的客户端）。
-            await server.broadcast("output:text:done", {
+            tts_style = self._consume_tts_style(inferred_emotion)
+            done_payload: Dict[str, Any] = {
                 "request_id": req_id,
                 "text": response_text,
                 "speak": bool(self.config.tts.enabled),
-            })
+            }
+            if tts_style:
+                done_payload["tts_style"] = tts_style
+            await server.broadcast("output:text:done", done_payload)
 
         for item in media_items:
             if self._closing:
@@ -663,6 +692,42 @@ class DeskpetPlugin(MaiBotPlugin):
                 return emotion
 
         return "neutral"
+
+    def _consume_tts_style(self, inferred_emotion: Optional[str] = None) -> str:
+        """获取并重置当前的语音风格指令。优先使用工具显式设置的值，其次尝试按情绪映射。"""
+        if getattr(self, "_pending_tts_style", ""):
+            style = self._pending_tts_style
+            self._pending_tts_style = ""
+            return style
+        # 尝试按最近工具设置的情绪或推断情绪自动映射
+        emotion = getattr(self, "_last_tool_emotion", "") or inferred_emotion or ""
+        self._last_tool_emotion = ""
+        if emotion:
+            clean_emo = emotion.lower().split("·")[0].split("•")[0].strip()
+            # 基础英文情绪匹配
+            if clean_emo in EMOTION_TTS_STYLE_MAP and EMOTION_TTS_STYLE_MAP[clean_emo]:
+                return EMOTION_TTS_STYLE_MAP[clean_emo]
+            # 常用中文情绪/分组匹配
+            chinese_map = {
+                "开心": "语气欢快活泼，带有一丝开心的笑意",
+                "高兴": "语气欢快活泼，带有一丝开心的笑意",
+                "委屈": "语气低落委屈，轻声细语，语速偏慢",
+                "难过": "语气低落难过，轻声细语，语速偏慢",
+                "生气": "语气强硬严肃，语速偏快，略带不满",
+                "不满": "语气强硬严肃，语速偏快，略带不满",
+                "害羞": "语气轻柔害羞，带着一丝迟疑与羞怯",
+                "尴尬": "语气略带尴尬局促，微带讪笑",
+                "困倦": "语气困倦慵懒，语调轻柔缓慢",
+                "倦怠": "语气困倦慵懒，语调轻柔缓慢",
+                "厌烦": "语气冷淡嫌弃，短促果断",
+                "思考": "语气沉稳专注，若有所思",
+                "疑惑": "语气疑惑困惑，带着询问的语调",
+                "惊讶": "语气惊讶意外，音调微微上扬",
+            }
+            for k, v in chinese_map.items():
+                if k in clean_emo:
+                    return v
+        return ""
 
     # ── Client Messages (桌宠前端 → 插件) ──
 
@@ -971,6 +1036,11 @@ class DeskpetPlugin(MaiBotPlugin):
                 description="情绪分组名（如 '开心'、'害羞'、'生气不满'）、具体预设名或基础情绪名",
                 required=True,
             ),
+            ToolParameterInfo(
+                name="tts_style", param_type=ToolParamType.STRING,
+                description="可选：本次语音合成的语气风格指令（如 '轻快活泼，带有一丝笑意'）",
+                required=False,
+            ),
         ],
     )
     async def handle_set_emotion(self, emotion: str, controls: str = "", **kwargs) -> dict:
@@ -1009,6 +1079,10 @@ class DeskpetPlugin(MaiBotPlugin):
 
         await self._ws_server.broadcast("state:emotion", payload)
         self._last_tool_emotion_at = time.time()
+        self._last_tool_emotion = resolved_emotion
+        custom_style = (kwargs.get("style") or kwargs.get("tts_style") or "").strip()
+        if custom_style:
+            self._pending_tts_style = custom_style
         res: Dict[str, Any] = {"success": True, "emotion": resolved_emotion}
         if matched_preset:
             res["applied_preset"] = matched_preset["label"]
@@ -1267,6 +1341,32 @@ class DeskpetPlugin(MaiBotPlugin):
             "emotion": emoji.get("emotion", ""),
         })
         return {"success": True, "emoji_sent": True, "description": emoji.get("description", "")}
+
+    # ── Tool: 设置语音合成风格 ──
+
+    @Tool(
+        "set_deskpet_tts_style",
+        brief_description="设置桌面宠物本次回复的语音合成风格与情感提示词",
+        detailed_description=(
+            "为支持自然语言风格指令的语音合成模型（如小米 MiMo）设置语气和风格提示词。\n"
+            "例如：'欢快活泼，带有一丝笑意'、'略带害羞，轻声细语'、'严肃认真，语速稍快'、'委屈低落，轻柔委婉' 等。"
+        ),
+        parameters=[
+            ToolParameterInfo(
+                name="style",
+                param_type=ToolParamType.STRING,
+                description="语音风格提示词，描述语气、语速、情感状态",
+                required=True,
+            ),
+        ],
+    )
+    async def handle_set_tts_style(self, style: str, **kwargs) -> dict:
+        style_clean = (style or "").strip()
+        if not style_clean:
+            return {"success": False, "error": "风格提示词不能为空"}
+        self._pending_tts_style = style_clean
+        self.ctx.logger.info(f"[Deskpet] TTS style set by tool: {style_clean}")
+        return {"success": True, "applied_tts_style": style_clean}
 
 
 def create_plugin() -> DeskpetPlugin:

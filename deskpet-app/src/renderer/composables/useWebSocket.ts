@@ -244,7 +244,7 @@ export function useWebSocket() {
     },
     appendReplyDelta: (delta, requestId) => { chatStore.appendChatText(delta, requestId) },
     finishReply: (requestId, error) => { chatStore.finishChatStream(requestId, error) },
-    speakReply: (text, requestId) => speakReply(text, requestId),
+    speakReply: (text, requestId, style) => speakReply(text, requestId, style),
     showReplyText: (text) => { chatStore.showChatMessage(text) },
     playAudio,
     addEmoji: (base64, description) => { chatStore.addEmojiMessage(base64, description) },
@@ -277,14 +277,14 @@ export function useWebSocket() {
   })
 
   /** 收到完整回复文本后，调本机 TTS 桥合成并播放（跨机部署时合成在客户端完成） */
-  function speakReply(text: string, requestId?: string): void {
+  function speakReply(text: string, requestId?: string, style?: string): void {
     const api = window.electronAPI
     if (!api?.ttsSynthesize) return
     const synthesize = api.ttsSynthesize
     speakQueue.push(async (isStale) => {
       // 排队期间已断线/重连：旧任务直接丢弃，不再白跑一次合成
       if (isStale()) return
-      const b64 = await synthesize(text)
+      const b64 = await synthesize(text, style)
       if (!b64) return
       // 合成期间发生断线/重连：丢弃结果，避免旧语音插进新会话
       if (isStale()) return

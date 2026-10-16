@@ -76,7 +76,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   /** 渲染层回执：防抖队列已落盘，主进程可以放行关闭 */
   notifyChatHistoryFlushed: () => ipcRenderer.send('chat-history-flushed'),
-  ttsSynthesize: (text: string): Promise<string | null> => ipcRenderer.invoke('tts-synthesize', text),
+  ttsSynthesize: (text: string, style?: string): Promise<string | null> => ipcRenderer.invoke('tts-synthesize', text, style),
   listModels: (): Promise<ModelEntry[]> => ipcRenderer.invoke('list-models'),
   inspectModelAssets: (modelUrl: string): Promise<unknown> => ipcRenderer.invoke('inspect-model-assets', modelUrl),
   saveModelPresets: (modelUrl: string, presets: unknown): Promise<boolean> => ipcRenderer.invoke('save-model-presets', modelUrl, presets),

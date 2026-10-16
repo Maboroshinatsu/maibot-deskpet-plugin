@@ -93,7 +93,7 @@ interface ElectronAPI {
   onChatHistoryFlushRequest: (callback: () => void) => () => void
   /** 渲染层回执：防抖队列已落盘，主进程可以放行关闭 */
   notifyChatHistoryFlushed: () => void
-  ttsSynthesize: (text: string) => Promise<string | null>
+  ttsSynthesize: (text: string, style?: string) => Promise<string | null>
   listModels: () => Promise<ModelEntry[]>
   inspectModelAssets: (modelUrl: string) => Promise<{
     cdiParameters: Record<string, { name: string; group: string }>

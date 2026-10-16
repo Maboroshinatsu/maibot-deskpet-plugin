@@ -319,6 +319,11 @@ async def handle_tts(request: web.Request) -> web.Response:
     if "error" in cfg:
         return web.json_response({"error": cfg["error"]}, status=400)
 
+    # 动态请求级配置覆盖（优先于环境变量默认值，支持 MaiBot 决策模型动态指定的风格指令）
+    req_style = (body.get("style") or body.get("tts_style") or "").strip()
+    if req_style:
+        cfg["style"] = req_style
+
     synthesizers = {
         "siliconflow": _synthesize_openai_compat,
         "mimo": _synthesize_mimo,

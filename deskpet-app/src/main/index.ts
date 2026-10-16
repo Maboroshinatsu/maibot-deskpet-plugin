@@ -1290,10 +1290,13 @@ app.whenReady().then(() => {
 
   // 语音合成在桌宠端本地完成：渲染层拿到完整回复文本后，经此 IPC 调本机 TTS 桥取音频。
   // 这样跨机部署时无需服务器反向连接客户端（NAT 后的客户端本就不可达）。
-  ipcMain.handle('tts-synthesize', async (_event, text: string): Promise<string | null> => {
+  ipcMain.handle('tts-synthesize', async (_event, text: string, style?: string): Promise<string | null> => {
     const tts = serviceManager.getTtsRuntimeConfig()
     if (!tts.enabled) return null
-    const payload = JSON.stringify({ text: String(text ?? '') })
+    const payload = JSON.stringify({
+      text: String(text ?? ''),
+      ...(typeof style === 'string' && style.trim() ? { style: style.trim() } : {}),
+    })
     return await new Promise<string | null>((resolve) => {
       const req = http.request({
         hostname: '127.0.0.1', port: tts.port, path: '/tts', method: 'POST',
