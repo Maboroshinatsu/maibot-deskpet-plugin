@@ -935,6 +935,10 @@ function createWindow(): void {
     hasShadow: false,
     alwaysOnTop: false,
     skipTaskbar: false,
+    // 桌宠不该被「显示桌面」（Win+D / 任务栏最右角）收起：Windows 只会最小化带
+    // WS_MINIMIZEBOX 的窗口，去掉该位后 shell 会直接跳过本窗口；仅靠 alwaysOnTop
+    // 只能保证 Z 序（浮在上层），挡不住这一步最小化。
+    minimizable: false,
     minWidth: MIN_WINDOW_WIDTH,
     minHeight: MIN_WINDOW_HEIGHT,
     icon: getAppIconPath(),
