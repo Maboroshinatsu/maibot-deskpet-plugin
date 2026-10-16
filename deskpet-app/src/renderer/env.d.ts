@@ -76,6 +76,8 @@ interface ElectronAPI {
   onWindowPlacement: (callback: (placement: WindowPlacement) => void) => () => void
   setAlwaysOnTop: (flag: boolean) => Promise<void>
   setClickThroughLocked: (flag: boolean) => Promise<void>
+  /** 主动读取主进程的穿透锁定 / 悬停淡化状态，用于渲染层挂载后的首次同步 */
+  getUiState: () => Promise<{ clickThroughLocked: boolean; hoverFadeEnabled: boolean }>
   minimizeWindow: () => Promise<void>
   closeWindow: () => Promise<void>
   onGlobalCursorPosition: (callback: (position: GlobalCursorPosition) => void) => () => void

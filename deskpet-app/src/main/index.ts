@@ -1133,6 +1133,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-window-placement', () => getWindowPlacement())
 
+  // 穿透/悬停状态的权威值在主进程。渲染层挂载完成后要主动拉一次：
+  // did-finish-load 那次广播可能早于渲染层的订阅注册（Live2D 模型加载越慢越必然），
+  // 事件一旦丢失，渲染层会一直以为没锁穿透，底衬与按钮就跟着 hover 反复闪。
+  ipcMain.handle('get-ui-state', () => ({ clickThroughLocked, hoverFadeEnabled }))
+
   ipcMain.handle('set-always-on-top', (_event, flag: boolean) => {
     setAlwaysOnTopState(flag)
   })

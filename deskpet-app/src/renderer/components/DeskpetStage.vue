@@ -1005,14 +1005,27 @@ onMounted(async () => {
   unsubscribeSetHoverFade = window.electronAPI?.onSetHoverFade?.((enabled) => {
     store.hoverFadeEnabled = enabled
   }) ?? null
-  unsubscribeSetClickThrough = window.electronAPI?.onSetClickThroughLocked?.((locked) => {
+  const applyClickThroughLocked = (locked: boolean) => {
     store.clickThroughLocked = locked
     if (locked) {
       showSettings.value = false
       chatPanelOpen.value = false
       showInput.value = false
     }
+  }
+  unsubscribeSetClickThrough = window.electronAPI?.onSetClickThroughLocked?.((locked) => {
+    applyClickThroughLocked(locked)
   }) ?? null
+  // 上面的订阅注册在模型加载之后，而主进程的 did-finish-load 广播只发一次、通常更早，
+  // 事件会丢；这里主动拉一次权威状态兜底，否则「锁定穿透」在渲染层不生效，
+  // 底衬与按钮会跟着 hover 反复闪。
+  void window.electronAPI?.getUiState?.()
+    .then((state) => {
+      if (!state) return
+      store.hoverFadeEnabled = state.hoverFadeEnabled
+      applyClickThroughLocked(state.clickThroughLocked)
+    })
+    .catch(() => {})
   unsubscribeScreenshot = window.electronAPI?.onScreenshotCaptured?.((base64) => {
     transport.sendScreenshot(base64)
   }) ?? null

@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   setAlwaysOnTop: (flag: boolean) => ipcRenderer.invoke('set-always-on-top', flag),
   setClickThroughLocked: (flag: boolean) => ipcRenderer.invoke('set-click-through-locked', flag),
+  getUiState: (): Promise<{ clickThroughLocked: boolean; hoverFadeEnabled: boolean }> =>
+    ipcRenderer.invoke('get-ui-state'),
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   onGlobalCursorPosition: (callback: (position: GlobalCursorPosition) => void) => {
