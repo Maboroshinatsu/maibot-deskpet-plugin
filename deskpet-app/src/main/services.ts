@@ -394,7 +394,13 @@ export class ServiceManager {
   }
 
   setConfig(patch: Partial<ServicesConfig>): ServicesConfig {
-    if (typeof patch.pythonPath === 'string') this.config.pythonPath = patch.pythonPath
+    if (typeof patch.pythonPath === 'string') {
+      this.config.pythonPath = patch.pythonPath
+      // 显式路径落地后待确认候选就失去意义了，立刻撤下，别让设置面板继续挂角标
+      if (this.config.pythonPath.trim() && (this.runtimeCandidate || this.detectedPython)) {
+        this.clearDetectedPython()
+      }
+    }
     if (typeof patch.gsvDir === 'string') this.config.gsvDir = patch.gsvDir
     if (typeof patch.ttsRefAudio === 'string') this.config.ttsRefAudio = patch.ttsRefAudio
     if (typeof patch.ttsPromptText === 'string') this.config.ttsPromptText = patch.ttsPromptText
@@ -493,6 +499,12 @@ export class ServiceManager {
   /** WS 只能提交待审核候选，绝不凭一帧消息执行程序。 */
   setDetectedPython(pythonPath: unknown, sourceUrl: unknown): void {
     if (this.quitting) return
+    // 已有显式配置时显式路径优先：候选既不会被启用，只会让设置面板多挂一个
+    // 「有待确认的解释器」角标，反过来诱发误改，所以直接忽略上报。
+    if (this.config.pythonPath.trim()) {
+      if (this.runtimeCandidate || this.detectedPython) this.clearDetectedPython()
+      return
+    }
     const result = validateDetectedPython(pythonPath, sourceUrl)
     if (!result.ok) {
       this.clearDetectedPython()

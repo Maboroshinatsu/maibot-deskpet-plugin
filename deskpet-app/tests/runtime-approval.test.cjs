@@ -245,11 +245,34 @@ test('an explicit pythonPath wins and suppresses the automatic retry', async () 
 
   h.manager.setConfig({ pythonPath: 'C:\\Explicit\\python.exe' })
   const id = h.report()
-  assert.equal(h.manager.approveDetectedPython(id), true)
+  // 显式路径优先：候选不再登记。否则设置面板会一直挂着「有待确认的解释器」角标，
+  // 反过来诱导用户回来改这一栏（真实故障：一次误触把所有本地 Python 桥改挂了）。
+  assert.equal(h.manager.getRuntimeCandidate(), null, 'an explicit path must not register a candidate')
+  assert.equal(h.manager.approveDetectedPython(id), false, 'nothing to approve when an explicit path is set')
   await flush()
 
   assert.equal(h.manager.python(), 'C:\\Explicit\\python.exe', 'the configured path must win')
   assert.equal(h.spawns.length, 1, 'an explicit path must not trigger the approval retry')
+})
+
+// 9b --------------------------------------------------------------------------
+test('setting an explicit pythonPath withdraws an already pending candidate', () => {
+  const h = harness()
+  const id = h.report()
+  assert.ok(id, 'a candidate registers while pythonPath is empty')
+
+  h.manager.setConfig({ pythonPath: 'C:\\Explicit\\python.exe' })
+  assert.equal(h.manager.getRuntimeCandidate(), null, 'the pending candidate is withdrawn')
+})
+
+// 9c --------------------------------------------------------------------------
+test('clearing the explicit pythonPath lets candidates register again', () => {
+  const h = harness()
+  h.manager.setConfig({ pythonPath: 'C:\\Explicit\\python.exe' })
+  assert.equal(h.report(), undefined, 'no candidate while an explicit path is set')
+
+  h.manager.setConfig({ pythonPath: '' })
+  assert.ok(h.report(), 'candidates come back once the explicit path is cleared')
 })
 
 // 10 --------------------------------------------------------------------------
