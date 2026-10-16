@@ -77,6 +77,21 @@ function nextId(prefix: string): string {
 
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
+  const botName = ref<string>('MaiBot')
+  try {
+    const cachedName = localStorage.getItem('deskpet/bot-name')
+    if (cachedName && cachedName.trim()) botName.value = cachedName.trim()
+  } catch {}
+
+  function setBotName(name: string) {
+    const trimmed = (name || '').trim()
+    if (!trimmed) return
+    botName.value = trimmed
+    try {
+      localStorage.setItem('deskpet/bot-name', trimmed)
+    } catch {}
+  }
+
   let hydrated = false
   let persistTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -233,6 +248,8 @@ export const useChatStore = defineStore('chat', () => {
   return {
     messages,
     chatBubble,
+    botName,
+    setBotName,
     addUserMessage,
     addEmojiMessage,
     appendChatText,

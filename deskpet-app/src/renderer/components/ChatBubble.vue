@@ -36,7 +36,7 @@
 
       <div class="comp-body" ref="messagesRef">
         <div v-for="msg in messages" :key="msg.id" :class="['msg-row', msg.role]">
-          <div class="msg-label">{{ msg.role === 'user' ? '你' : '麦麦' }}</div>
+          <div class="msg-label">{{ msg.role === 'user' ? '你' : (chatStore.botName || 'MaiBot') }}</div>
           <div class="msg-bubble" :class="{ streaming: msg.type === 'text' && msg.streaming }">
             <img v-if="msg.type === 'emoji'" :src="'data:image/png;base64,' + msg.base64" class="emoji-img" />
             <template v-else>{{ msg.text }}<span v-if="msg.streaming" class="msg-cursor">|</span></template>
@@ -53,7 +53,9 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onUnmounted } from 'vue'
-import type { ChatMessage } from '@/stores/chat'
+import { useChatStore, type ChatMessage } from '@/stores/chat'
+
+const chatStore = useChatStore()
 
 const BUBBLE_TTL = 5000
 const STREAMING_BUBBLE_TTL = 30_000

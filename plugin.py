@@ -275,9 +275,16 @@ class DeskpetWSServer:
         # 登记进 _clients 之后的所有路径（含 sys:env 发送）都走同一个 try/finally，
         # 任何断开/发送异常都必须把客户端移除，否则半开连接会永久留在集合里
         try:
-            # 上报插件所在 Python 解释器：桌宠的 STT/TTS 桥复用 MaiBot 的 Python 环境
-            # （依赖已按 manifest 装进同一环境），用户无需单独安装 Python
-            await ws.send(DeskpetMessage(type="sys:env", data={"python": sys.executable}).to_json())
+            # 上报插件所在 Python 解释器与 Bot 昵称：桌宠的 STT/TTS 桥复用 MaiBot 的 Python 环境，
+            # 前端消息记录展示真实的 Bot 昵称
+            env_data: Dict[str, Any] = {"python": sys.executable}
+            try:
+                bot_name = await self.plugin.get_bot_name()
+                if bot_name:
+                    env_data["bot_name"] = bot_name
+            except Exception:
+                pass
+            await ws.send(DeskpetMessage(type="sys:env", data=env_data).to_json())
             async for raw in ws:
                 try:
                     msg = DeskpetMessage.from_json(raw)
@@ -473,6 +480,18 @@ class DeskpetPlugin(MaiBotPlugin):
         elif self._ws_server.auth_token != ws_cfg.auth_token:
             self.ctx.logger.info("[Deskpet] WebSocket 鉴权令牌已更新")
             self._ws_server.auth_token = ws_cfg.auth_token
+
+    async def get_bot_name(self) -> str:
+        """从 MaiBot 全局配置中获取 Bot 昵称，失败或缺省时返回 'MaiBot'。"""
+        try:
+            if hasattr(self, "ctx") and hasattr(self.ctx, "config"):
+                val = await self.ctx.config.get("bot.nickname")
+                if val and str(val).strip():
+                    return str(val).strip()
+        except Exception as e:
+            if hasattr(self, "ctx") and hasattr(self.ctx, "logger"):
+                self.ctx.logger.debug(f"[Deskpet] Failed to read bot.nickname: {e}")
+        return "MaiBot"
 
     # ── MessageGateway: 出站 (MaiBot → 桌宠) ──
 

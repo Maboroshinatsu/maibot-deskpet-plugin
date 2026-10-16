@@ -107,8 +107,15 @@ export function normalizeServerMessage(msg: ServerMessage): DeskpetHostEvent | n
         description: asString(data.description),
       }
 
-    case 'sys:env':
-      return { kind: 'runtime-candidate', python: asString(data.python), sourceUrl: '' }
+    case 'sys:env': {
+      const botName = asString(data.bot_name)
+      return {
+        kind: 'runtime-candidate',
+        python: asString(data.python),
+        sourceUrl: '',
+        ...(botName ? { botName } : {}),
+      }
+    }
 
     case 'heartbeat':
       return null

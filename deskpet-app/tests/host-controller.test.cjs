@@ -18,6 +18,7 @@ function deps(overrides = {}) {
     addEmoji: (b, d) => calls.push(['addEmoji', b, d]),
     setThinking: (a) => calls.push(['setThinking', a]),
     offerRuntimeCandidate: (p) => calls.push(['offerRuntimeCandidate', p]),
+    setBotName: (b) => calls.push(['setBotName', b]),
     log: (...a) => calls.push(['log', ...a]),
     warn: (...a) => calls.push(['warn', ...a]),
     debug: (...a) => calls.push(['debug', ...a]),
@@ -70,6 +71,15 @@ test('empty runtime candidate is not offered to the platform layer', () => {
   const h2 = deps()
   applyHostEvent({ kind: 'runtime-candidate', python: 'C:\\Py\\python.exe', sourceUrl: '' }, h2.deps)
   assert.deepEqual(h2.calls, [['offerRuntimeCandidate', 'C:\\Py\\python.exe']])
+})
+
+test('runtime candidate forwards botName when provided', () => {
+  const h = deps()
+  applyHostEvent({ kind: 'runtime-candidate', python: 'C:\\Py\\python.exe', sourceUrl: '', botName: 'Airi' }, h.deps)
+  assert.deepEqual(h.calls, [
+    ['offerRuntimeCandidate', 'C:\\Py\\python.exe'],
+    ['setBotName', 'Airi'],
+  ])
 })
 
 test('connection, heartbeat and unknown produce no UI side effects', () => {

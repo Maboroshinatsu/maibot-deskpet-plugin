@@ -46,6 +46,11 @@ test('sys:env becomes a runtime candidate and never carries frame-supplied sourc
   same(ev, { kind: 'runtime-candidate', python: 'C:\\Py\\python.exe', sourceUrl: '' })
 })
 
+test('sys:env carries botName when present', () => {
+  const ev = n('sys:env', { python: 'C:\\Py\\python.exe', bot_name: 'Airi' })
+  same(ev, { kind: 'runtime-candidate', python: 'C:\\Py\\python.exe', sourceUrl: '', botName: 'Airi' })
+})
+
 test('heartbeat produces no event (handled by link liveness)', () => {
   assert.equal(n('heartbeat'), null)
 })

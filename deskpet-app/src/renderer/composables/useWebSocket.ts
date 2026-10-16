@@ -253,6 +253,7 @@ export function useWebSocket() {
       // 来源取当前连接真实配置 URL，不接受帧内伪造的来源
       void window.electronAPI?.setDetectedPython(python, activeUrl).catch(() => {})
     },
+    setBotName: (name) => { chatStore.setBotName(name) },
     log: (message, ...args) => { console.log(message, ...args) },
     warn: (message, ...args) => { console.warn(message, ...args) },
     debug: (message, ...args) => { console.debug(message, ...args) },
