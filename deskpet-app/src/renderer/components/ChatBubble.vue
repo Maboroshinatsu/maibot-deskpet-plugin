@@ -112,6 +112,8 @@ watch(
   () => {
     const latest = props.messages[props.messages.length - 1]
     if (!latest || latest.role !== 'assistant') return
+    // 启动时从磁盘恢复的历史消息不弹气泡，只留在消息记录面板里
+    if (latest.restored) return
     const existing = floatingBubbles.value.find((b) => b.id === latest.id)
     if (existing) {
       if (latest.type === 'text') {

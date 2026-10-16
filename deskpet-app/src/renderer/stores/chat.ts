@@ -25,6 +25,7 @@ function sanitizeLoadedMessage(raw: unknown): ChatMessage | null {
       streaming: false,
       timestamp,
       type: 'text',
+      restored: true,
       ...(typeof m.requestId === 'string' ? { requestId: m.requestId } : {}),
     }
   }
@@ -36,6 +37,7 @@ function sanitizeLoadedMessage(raw: unknown): ChatMessage | null {
       description: typeof m.description === 'string' ? m.description : '',
       timestamp,
       type: 'emoji',
+      restored: true,
     }
   }
   return null
@@ -50,6 +52,8 @@ export interface TextMessage {
   type: 'text'
   /** 流式分组用；只在 streaming 中的消息上匹配，后端缺 request_id 时不会把所有回复并进一条 */
   requestId?: string
+  /** 从磁盘恢复的历史消息：只在消息记录面板里展示，不参与启动时的气泡弹出 */
+  restored?: boolean
 }
 
 export interface EmojiMessage {
@@ -59,6 +63,8 @@ export interface EmojiMessage {
   description: string
   timestamp: number
   type: 'emoji'
+  /** 从磁盘恢复的历史消息：只在消息记录面板里展示，不参与启动时的气泡弹出 */
+  restored?: boolean
 }
 
 export type ChatMessage = TextMessage | EmojiMessage
@@ -128,8 +134,9 @@ export const useChatStore = defineStore('chat', () => {
   void hydrate()
 
   // backward-compat: last assistant bubble
+  // 只认本次会话产生的回复：磁盘里恢复出来的历史消息不该在启动瞬间弹成气泡
   const chatBubble = computed(() => {
-    const last = [...messages.value].reverse().find((m) => m.role === 'assistant')
+    const last = [...messages.value].reverse().find((m) => m.role === 'assistant' && !m.restored)
     return {
       text: last && last.type === 'text' ? last.text : '',
       visible: !!last,
