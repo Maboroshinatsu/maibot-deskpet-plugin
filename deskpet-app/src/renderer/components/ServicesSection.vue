@@ -385,11 +385,18 @@
       </div>
     </div>
 
-    <!-- 底部折叠：Python 解释器环境（仅当有待确认候选或用户需要手动指定时展开） -->
-    <details class="svc-config" :open="!!runtimeCandidate">
-      <summary>Python 解释器环境（高级）</summary>
+    <!-- 底部折叠：Python 解释器环境。
+         这里始终保持默认折叠：它是可选的显式覆盖项，自动展开会让人顺手改到路径输入框，
+         而显式配置会盖住自动发现，一旦写错，所有依赖 Python 的本地桥都起不来。
+         有待确认候选时只在标题上挂个角标，展开与否交给用户决定。 -->
+    <details class="svc-config">
+      <summary>
+        Python 解释器环境（高级）
+        <span v-if="runtimeCandidate" class="svc-badge">有待确认的解释器</span>
+      </summary>
       <label class="field-label">Python 路径（显式指定优先；自动发现需确认；否则使用系统 PATH）</label>
       <input class="field-input" :value="config?.pythonPath ?? ''" @change="setPythonPath($event)" placeholder="留空即可" />
+      <p class="hint">填错会让所有本地 Python 桥都起不来；不确定就留空，交给自动发现。</p>
 
       <div v-if="runtimeCandidate || candidateFeedback" class="candidate">
         <template v-if="runtimeCandidate">
@@ -936,6 +943,16 @@ onUnmounted(() => {
   font-weight: 700;
   cursor: pointer;
   user-select: none;
+}
+.svc-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--dp-accent-soft);
+  border: 1px solid var(--dp-accent-border);
+  color: var(--dp-accent);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .candidate {
