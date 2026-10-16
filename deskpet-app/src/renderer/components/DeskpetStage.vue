@@ -162,6 +162,9 @@ import { validateAdapter, reportAdapterValidation } from '@/services/live2d/adap
 
 const store = useDeskpetStore()
 const chatStore = useChatStore()
+if (typeof window !== 'undefined') {
+  ;(window as any).__deskpetStore = store
+}
 const transport = useChimeraTransport()
 const { start: startAnim, stop: stopAnim } = useLive2DAnimation()
 const { onNavMouseDown } = useWindowDrag()

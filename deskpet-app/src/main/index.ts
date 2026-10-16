@@ -6,6 +6,10 @@ import { pathToFileURL } from 'url'
 import { ServiceManager, type ServiceId, type ServicesConfig } from './services'
 import { createRuntimeApproval } from './runtime-approval'
 
+if (!app.isPackaged) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'maibot-deskpet'))
+}
+
 app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.commandLine.appendSwitch('in-process-gpu')
 
@@ -1397,6 +1401,20 @@ app.whenReady().then(() => {
   ipcMain.handle('close-window', () => {
     mainWindow?.close()
   })
+
+  // ── 截图与视觉调试端点 ──
+  ipcMain.handle('capture-deskpet-window', async (_event, customPath?: string) => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      throw new Error('mainWindow unavailable')
+    }
+    const image = await mainWindow.webContents.capturePage()
+    const png = image.toPNG()
+    const target = customPath || 'D:/Frankenstein/deskpet_snapshot.png'
+    await fs.promises.writeFile(target, png)
+    return target
+  })
+
+  startDebugHttpServer()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -1406,9 +1424,87 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+const DEBUG_HTTP_PORT = 8525
+let debugHttpServer: http.Server | null = null
+
+function startDebugHttpServer(): void {
+  try {
+    debugHttpServer = http.createServer(async (req, res) => {
+      const host = req.headers.host || '127.0.0.1'
+      const parsedUrl = new URL(req.url || '/', 'http://' + host)
+      if (parsedUrl.pathname === '/screenshot') {
+        try {
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            res.writeHead(503, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'mainWindow unavailable' }))
+            return
+          }
+          const image = await mainWindow.webContents.capturePage()
+          const png = image.toPNG()
+          const saveParam = parsedUrl.searchParams.get('save')
+          const targetPath = saveParam || 'D:/Frankenstein/deskpet_snapshot.png'
+          try {
+            await fs.promises.writeFile(targetPath, png)
+          } catch (e) {
+            console.warn('[Deskpet] Debug snapshot save error:', e)
+          }
+          res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Content-Length': png.length,
+            'X-Saved-Path': encodeURIComponent(targetPath),
+          })
+          res.end(png)
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: String(err) }))
+        }
+        return
+      }
+      if (parsedUrl.pathname === '/exec') {
+        try {
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            res.writeHead(503, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'mainWindow unavailable' }))
+            return
+          }
+          const code = parsedUrl.searchParams.get('code') || ''
+          const result = await mainWindow.webContents.executeJavaScript(code)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: true, result }))
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: String(err) }))
+        }
+        return
+      }
+      if (parsedUrl.pathname === '/ping' || parsedUrl.pathname === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ status: 'ok', pid: process.pid }))
+        return
+      }
+      res.writeHead(404, { 'Content-Type': 'text/plain' })
+      res.end('Not Found')
+    })
+    debugHttpServer.listen(DEBUG_HTTP_PORT, '127.0.0.1', () => {
+      console.info('[Deskpet] Debug HTTP server listening on http://127.0.0.1:' + DEBUG_HTTP_PORT)
+    })
+    debugHttpServer.on('error', (err) => {
+      console.warn('[Deskpet] Debug HTTP server failed to bind:', err)
+    })
+  } catch (e) {
+    console.warn('[Deskpet] Failed to init debug HTTP server:', e)
+  }
+}
+
 app.on('before-quit', () => {
   stopGlobalCursorPolling()
   globalShortcut.unregisterAll()
+  if (debugHttpServer) {
+    try {
+      debugHttpServer.close()
+    } catch {}
+    debugHttpServer = null
+  }
   if (tray) { tray.destroy(); tray = null }
   serviceManager.stopAllSync()
 })
