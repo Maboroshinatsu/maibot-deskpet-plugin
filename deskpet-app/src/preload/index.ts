@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveModelPresets: (modelUrl: string, presets: unknown): Promise<boolean> => ipcRenderer.invoke('save-model-presets', modelUrl, presets),
   openModelsFolder: () => ipcRenderer.invoke('open-models-folder'),
   reloadWindow: () => ipcRenderer.invoke('reload-window'),
+  captureDeskpetWindow: (customPath?: string): Promise<string> => ipcRenderer.invoke('capture-deskpet-window', customPath),
 
   // ── 后台服务管理（STT/TTS 桥、GPT-SoVITS）──
   listServices: () => ipcRenderer.invoke('services-list'),

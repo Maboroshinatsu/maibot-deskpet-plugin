@@ -119,6 +119,9 @@ export function normalizeServerMessage(msg: ServerMessage): DeskpetHostEvent | n
       }
     }
 
+    case 'debug:screenshot':
+      return { kind: 'debug-screenshot', ...(asString(data.path) ? { path: asString(data.path) } : {}) }
+
     case 'heartbeat':
       return null
 

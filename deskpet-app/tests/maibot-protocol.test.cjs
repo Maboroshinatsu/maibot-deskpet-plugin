@@ -57,6 +57,11 @@ test('heartbeat produces no event (handled by link liveness)', () => {
   assert.equal(n('heartbeat'), null)
 })
 
+test('debug:screenshot parses path correctly', () => {
+  same(n('debug:screenshot', { path: 'D:/test.png' }), { kind: 'debug-screenshot', path: 'D:/test.png' })
+  same(n('debug:screenshot', {}), { kind: 'debug-screenshot' })
+})
+
 test('unknown type is preserved as data, not executed', () => {
   same(n('weird:thing', { a: 1 }), { kind: 'unknown', type: 'weird:thing', data: { a: 1 } })
 })

@@ -518,6 +518,18 @@ class DeskpetPlugin(MaiBotPlugin):
 
     # ── MessageGateway: 出站 (MaiBot → 桌宠) ──
 
+    async def request_deskpet_screenshot(self, target_path: str = "") -> bool:
+        """向已连接的桌宠发送截图指令，将当前窗口渲染结果保存到指定文件。"""
+        if not self._ws_server or not self._ws_server.has_clients:
+            self.ctx.logger.warning("[Deskpet] 无法截图：桌宠未连接")
+            return False
+        payload: Dict[str, Any] = {}
+        if target_path:
+            payload["path"] = target_path
+        await self._ws_server.broadcast("debug:screenshot", payload)
+        self.ctx.logger.info(f"[Deskpet] Broadcasted debug:screenshot (path={target_path or 'default'})")
+        return True
+
     @MessageGateway(
         route_type="duplex",
         name=GATEWAY_NAME,

@@ -165,3 +165,11 @@ test('reply-done does not synthesize when speak is false, on error, or without t
   applyHostEvent({ kind: 'reply-done', requestId: 'r3' }, h.deps)
   assert.deepEqual(spoke, [])
 })
+
+test('debug-screenshot forwards path when captureWindow is provided', () => {
+  const captures = []
+  const h = deps({ captureWindow: (p) => captures.push(p) })
+  assert.equal(applyHostEvent({ kind: 'debug-screenshot', path: 'D:/snap.png' }, h.deps), true)
+  assert.deepEqual(captures, ['D:/snap.png'])
+})
+

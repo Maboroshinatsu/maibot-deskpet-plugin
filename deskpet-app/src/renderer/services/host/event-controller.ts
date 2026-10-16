@@ -25,6 +25,7 @@ export interface DeskpetEventDeps {
   offerRuntimeCandidate(python: string): void
   /** 宿主上报的 Bot 昵称（用于界面与气泡展示） */
   setBotName?(botName: string): void
+  captureWindow?(path?: string): void
   log(message: string, ...args: unknown[]): void
   warn(message: string, ...args: unknown[]): void
   debug(message: string, ...args: unknown[]): void
@@ -98,6 +99,10 @@ export function applyHostEvent(event: DeskpetHostEvent, deps: DeskpetEventDeps):
       // 空路径不构成候选；非空才上送平台层做校验与人工确认
       if (event.python) deps.offerRuntimeCandidate(event.python)
       if (event.botName && deps.setBotName) deps.setBotName(event.botName)
+      return true
+
+    case 'debug-screenshot':
+      if (deps.captureWindow) deps.captureWindow(event.path)
       return true
 
     case 'heartbeat':

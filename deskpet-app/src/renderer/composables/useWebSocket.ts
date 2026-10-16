@@ -254,6 +254,7 @@ export function useWebSocket() {
       void window.electronAPI?.setDetectedPython(python, activeUrl).catch(() => {})
     },
     setBotName: (name) => { chatStore.setBotName(name) },
+    captureWindow: (path) => { void window.electronAPI?.captureDeskpetWindow(path).catch(() => {}) },
     log: (message, ...args) => { console.log(message, ...args) },
     warn: (message, ...args) => { console.warn(message, ...args) },
     debug: (message, ...args) => { console.debug(message, ...args) },

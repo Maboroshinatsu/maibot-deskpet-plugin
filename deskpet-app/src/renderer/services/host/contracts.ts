@@ -74,6 +74,7 @@ export type DeskpetHostEvent =
   | { kind: 'emoji'; base64: string; description: string }
   /** 宿主上报的本机运行时候选（仅候选，不代表已授权）与环境信息 */
   | { kind: 'runtime-candidate'; python: string; sourceUrl: string; botName?: string }
+  | { kind: 'debug-screenshot'; path?: string }
   | { kind: 'heartbeat' }
   /** 未识别消息：保留原始内容以便诊断，但不得据此执行任何动作 */
   | { kind: 'unknown'; type: string; data: Record<string, unknown> }

@@ -902,6 +902,22 @@ class TTSStyleToolAndDeliveryTest(unittest.IsolatedAsyncioTestCase):
         # 确认已消费
         self.assertEqual(plug._pending_tts_style, "")
 
+    async def test_request_deskpet_screenshot_broadcasts_event(self):
+        plug = _make_plugin(gateway=None)
+        mock_ws = _FakeServer()
+        plug._ws_server = mock_ws
+
+        ok = await plug.request_deskpet_screenshot("D:/test_snap.png")
+        self.assertTrue(ok)
+        snap_events = [data for t, data, _ in mock_ws.sent if t == "debug:screenshot"]
+        self.assertEqual(len(snap_events), 1)
+        self.assertEqual(snap_events[0]["path"], "D:/test_snap.png")
+
+        # 未连接测试
+        plug._ws_server = None
+        fail = await plug.request_deskpet_screenshot()
+        self.assertFalse(fail)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

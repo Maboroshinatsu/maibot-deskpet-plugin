@@ -129,6 +129,7 @@ interface ElectronAPI {
   saveModelPresets: (modelUrl: string, presets: unknown) => Promise<boolean>
   openModelsFolder: () => Promise<string>
   reloadWindow: () => Promise<void>
+  captureDeskpetWindow: (customPath?: string) => Promise<string>
   listServices: () => Promise<ServiceState[]>
   startService: (id: ServiceId) => Promise<void>
   stopService: (id: ServiceId) => Promise<void>
