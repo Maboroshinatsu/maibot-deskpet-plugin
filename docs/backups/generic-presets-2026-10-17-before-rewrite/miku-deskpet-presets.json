@@ -1,0 +1,716 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-14T04:39:34.760Z",
+  "presets": [
+    {
+      "id": "neutral",
+      "label": "日常待机",
+      "description": "默认外观与自然面捕状态",
+      "emotion": "neutral",
+      "group": "日常待机",
+      "controls": [],
+      "parameters": {},
+      "steps": [
+        {
+          "label": "自然待机",
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {}
+        }
+      ],
+      "finishMode": "hold",
+      "custom": true
+    },
+    {
+      "id": "happy",
+      "label": "开心·欢呼",
+      "description": "欢呼摇摆 · 弯眼微笑与愉快神态",
+      "emotion": "happy",
+      "group": "开心",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.2,
+        "ParamEyeROpen": 0.2,
+        "ParamMouthForm": 0.85,
+        "ParamEyeLSmile": 0.9,
+        "ParamEyeRSmile": 0.9
+      },
+      "steps": [
+        {
+          "label": "欢呼左倾",
+          "durationMs": 300,
+          "holdMs": 120,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0,
+            "ParamEyeROpen": 0,
+            "ParamMouthForm": 0.85,
+            "ParamEyeLSmile": 0.9,
+            "ParamEyeRSmile": 0.9,
+            "ParamAngleZ": 8.4,
+            "ParamAngleY": 6
+          }
+        },
+        {
+          "label": "欢呼右倾",
+          "durationMs": 320,
+          "holdMs": 120,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0,
+            "ParamEyeROpen": 0,
+            "ParamMouthForm": 0.85,
+            "ParamEyeLSmile": 0.9,
+            "ParamEyeRSmile": 0.9,
+            "ParamAngleZ": -8.4,
+            "ParamAngleY": 4.5
+          }
+        },
+        {
+          "label": "愉快微笑",
+          "durationMs": 360,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.2,
+            "ParamEyeROpen": 0.2,
+            "ParamMouthForm": 0.85,
+            "ParamEyeLSmile": 0.9,
+            "ParamEyeRSmile": 0.9
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1600,
+      "custom": true
+    },
+    {
+      "id": "happy_tilt",
+      "label": "开心·歪头笑",
+      "description": "脸红 · 俏皮歪头 · 眯眼甜笑",
+      "emotion": "happy",
+      "group": "开心",
+      "controls": [
+        "脸红"
+      ],
+      "parameters": {
+        "ParamEyeLOpen": 0.1,
+        "ParamEyeROpen": 0.1,
+        "ParamMouthForm": 0.95,
+        "ParamEyeLSmile": 1,
+        "ParamEyeRSmile": 1,
+        "ParamAngleZ": 10.8,
+        "ParamAngleX": 5.4
+      },
+      "steps": [
+        {
+          "label": "轻仰展颜",
+          "durationMs": 280,
+          "holdMs": 120,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamEyeLOpen": 0.35,
+            "ParamEyeROpen": 0.35,
+            "ParamMouthForm": 0.9,
+            "ParamMouthOpenY": 0.35,
+            "ParamEyeLSmile": 0.85,
+            "ParamEyeRSmile": 0.85,
+            "ParamAngleY": 8.4
+          }
+        },
+        {
+          "label": "俏皮歪头",
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamEyeLOpen": 0.1,
+            "ParamEyeROpen": 0.1,
+            "ParamMouthForm": 0.95,
+            "ParamEyeLSmile": 1,
+            "ParamEyeRSmile": 1,
+            "ParamAngleZ": 10.8,
+            "ParamAngleX": 5.4
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1600,
+      "custom": true
+    },
+    {
+      "id": "sad",
+      "label": "委屈·欲言又止",
+      "description": "欲言又止 · 低头垂眉撇嘴",
+      "emotion": "sad",
+      "group": "委屈难过",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.55,
+        "ParamEyeROpen": 0.55,
+        "ParamMouthForm": -0.75,
+        "ParamBrowLY": -0.6,
+        "ParamBrowRY": -0.6,
+        "ParamBrowLAngle": 0.5,
+        "ParamBrowRAngle": 0.5,
+        "ParamAngleY": -10.5,
+        "ParamAngleZ": -5.4,
+        "ParamEyeBallY": -0.45
+      },
+      "steps": [
+        {
+          "label": "欲言又止",
+          "durationMs": 320,
+          "holdMs": 180,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.75,
+            "ParamEyeROpen": 0.75,
+            "ParamBrowLY": -0.45,
+            "ParamBrowRY": -0.45,
+            "ParamBrowLAngle": 0.4,
+            "ParamBrowRAngle": 0.4,
+            "ParamMouthForm": -0.45,
+            "ParamAngleY": 3.6
+          }
+        },
+        {
+          "label": "垂眸低落",
+          "durationMs": 550,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.55,
+            "ParamEyeROpen": 0.55,
+            "ParamMouthForm": -0.75,
+            "ParamBrowLY": -0.6,
+            "ParamBrowRY": -0.6,
+            "ParamBrowLAngle": 0.5,
+            "ParamBrowRAngle": 0.5,
+            "ParamAngleY": -10.5,
+            "ParamAngleZ": -5.4,
+            "ParamEyeBallY": -0.45
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1800,
+      "custom": true
+    },
+    {
+      "id": "sad_glance",
+      "label": "委屈·撇嘴侧目",
+      "description": "侧目轻叹 · 八字眉委屈撇嘴",
+      "emotion": "sad",
+      "group": "委屈难过",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.5,
+        "ParamEyeROpen": 0.5,
+        "ParamBrowLY": -0.65,
+        "ParamBrowRY": -0.65,
+        "ParamBrowLAngle": 0.55,
+        "ParamBrowRAngle": 0.55,
+        "ParamMouthForm": -0.8,
+        "ParamAngleX": -8.4,
+        "ParamAngleY": -7.5,
+        "ParamEyeBallX": -0.4,
+        "ParamEyeBallY": -0.35
+      },
+      "steps": [
+        {
+          "label": "委屈蹙眉",
+          "durationMs": 300,
+          "holdMs": 150,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.65,
+            "ParamEyeROpen": 0.65,
+            "ParamBrowLY": -0.55,
+            "ParamBrowRY": -0.55,
+            "ParamBrowLAngle": 0.55,
+            "ParamBrowRAngle": 0.55,
+            "ParamMouthForm": -0.65
+          }
+        },
+        {
+          "label": "侧目轻叹",
+          "durationMs": 480,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.5,
+            "ParamEyeROpen": 0.5,
+            "ParamBrowLY": -0.65,
+            "ParamBrowRY": -0.65,
+            "ParamBrowLAngle": 0.55,
+            "ParamBrowRAngle": 0.55,
+            "ParamMouthForm": -0.8,
+            "ParamAngleX": -8.4,
+            "ParamAngleY": -7.5,
+            "ParamEyeBallX": -0.4,
+            "ParamEyeBallY": -0.35
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1800,
+      "custom": true
+    },
+    {
+      "id": "angry",
+      "label": "生气·扭头哼气",
+      "description": "扭头哼气 · 皱眉怒视",
+      "emotion": "angry",
+      "group": "生气不满",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.8,
+        "ParamEyeROpen": 0.8,
+        "ParamMouthForm": -0.85,
+        "ParamBrowLY": -0.75,
+        "ParamBrowRY": -0.75,
+        "ParamBrowLAngle": -0.8,
+        "ParamBrowRAngle": -0.8,
+        "ParamAngleY": -4.5
+      },
+      "steps": [
+        {
+          "label": "扭头哼气",
+          "durationMs": 240,
+          "holdMs": 160,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.75,
+            "ParamEyeROpen": 0.75,
+            "ParamEyeBallX": -0.4,
+            "ParamMouthForm": -0.85,
+            "ParamBrowLY": -0.7,
+            "ParamBrowRY": -0.7,
+            "ParamBrowLAngle": -0.75,
+            "ParamBrowRAngle": -0.75,
+            "ParamAngleX": -12,
+            "ParamAngleZ": -7.5
+          }
+        },
+        {
+          "label": "回正怒视",
+          "durationMs": 280,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.8,
+            "ParamEyeROpen": 0.8,
+            "ParamMouthForm": -0.85,
+            "ParamBrowLY": -0.75,
+            "ParamBrowRY": -0.75,
+            "ParamBrowLAngle": -0.8,
+            "ParamBrowRAngle": -0.8,
+            "ParamAngleY": -4.5
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1600,
+      "custom": true
+    },
+    {
+      "id": "angry_glare",
+      "label": "生气·压眉紧盯",
+      "description": "歪头紧盯 · 压眉赌气不满",
+      "emotion": "angry",
+      "group": "生气不满",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.75,
+        "ParamEyeROpen": 0.75,
+        "ParamBrowLY": -0.75,
+        "ParamBrowRY": -0.75,
+        "ParamBrowLAngle": -0.8,
+        "ParamBrowRAngle": -0.8,
+        "ParamMouthForm": -0.9,
+        "ParamAngleZ": 9,
+        "ParamAngleY": -5.4
+      },
+      "steps": [
+        {
+          "label": "压眉俯视",
+          "durationMs": 260,
+          "holdMs": 140,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.85,
+            "ParamEyeROpen": 0.85,
+            "ParamBrowLY": -0.8,
+            "ParamBrowRY": -0.8,
+            "ParamBrowLAngle": -0.85,
+            "ParamBrowRAngle": -0.85,
+            "ParamMouthForm": -0.75,
+            "ParamAngleY": -7.5
+          }
+        },
+        {
+          "label": "歪头赌气",
+          "durationMs": 320,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.75,
+            "ParamEyeROpen": 0.75,
+            "ParamBrowLY": -0.75,
+            "ParamBrowRY": -0.75,
+            "ParamBrowLAngle": -0.8,
+            "ParamBrowRAngle": -0.8,
+            "ParamMouthForm": -0.9,
+            "ParamAngleZ": 9,
+            "ParamAngleY": -5.4
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1600,
+      "custom": true
+    },
+    {
+      "id": "annoyed",
+      "label": "厌烦·翻白眼",
+      "description": "翻白眼叹气 · 半眯眼斜视嫌弃",
+      "emotion": "neutral",
+      "group": "厌烦",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.45,
+        "ParamEyeROpen": 0.45,
+        "ParamEyeBallX": 0.5,
+        "ParamEyeBallY": 0.25,
+        "ParamMouthForm": -0.65,
+        "ParamBrowLAngle": -0.45,
+        "ParamBrowRAngle": -0.45,
+        "ParamAngleZ": -10.5
+      },
+      "steps": [
+        {
+          "label": "翻白眼叹气",
+          "durationMs": 320,
+          "holdMs": 180,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.45,
+            "ParamEyeROpen": 0.45,
+            "ParamEyeBallY": 0.55,
+            "ParamMouthForm": -0.5,
+            "ParamAngleY": 4.5
+          }
+        },
+        {
+          "label": "斜视嫌弃",
+          "durationMs": 420,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.45,
+            "ParamEyeROpen": 0.45,
+            "ParamEyeBallX": 0.5,
+            "ParamEyeBallY": 0.25,
+            "ParamMouthForm": -0.65,
+            "ParamBrowLAngle": -0.45,
+            "ParamBrowRAngle": -0.45,
+            "ParamAngleZ": -10.5
+          }
+        }
+      ],
+      "finishMode": "hold",
+      "custom": true
+    },
+    {
+      "id": "weary",
+      "label": "倦怠·打盹",
+      "description": "打盹低头 · 困倦半闭眼放松",
+      "emotion": "neutral",
+      "group": "倦怠",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.35,
+        "ParamEyeROpen": 0.35,
+        "ParamBrowLY": -0.4,
+        "ParamBrowRY": -0.4,
+        "ParamMouthForm": -0.3,
+        "ParamAngleY": -12,
+        "ParamAngleZ": 7.5
+      },
+      "steps": [
+        {
+          "label": "打盹低头",
+          "durationMs": 520,
+          "holdMs": 220,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.12,
+            "ParamEyeROpen": 0.12,
+            "ParamBrowLY": -0.4,
+            "ParamBrowRY": -0.4,
+            "ParamAngleY": -15.6,
+            "ParamAngleZ": 5.4
+          }
+        },
+        {
+          "label": "困倦半睁",
+          "durationMs": 480,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.35,
+            "ParamEyeROpen": 0.35,
+            "ParamBrowLY": -0.4,
+            "ParamBrowRY": -0.4,
+            "ParamMouthForm": -0.3,
+            "ParamAngleY": -12,
+            "ParamAngleZ": 7.5
+          }
+        }
+      ],
+      "finishMode": "hold",
+      "custom": true
+    },
+    {
+      "id": "embarrassed",
+      "label": "尴尬·视线躲闪",
+      "description": "脸红 · 左顾右盼 · 视线躲闪与微红僵笑",
+      "emotion": "embarrassed",
+      "group": "尴尬",
+      "controls": [
+        "脸红"
+      ],
+      "parameters": {
+        "ParamEyeLOpen": 0.7,
+        "ParamEyeROpen": 0.7,
+        "ParamEyeBallX": -0.7,
+        "ParamEyeBallY": -0.35,
+        "ParamBrowLY": -0.45,
+        "ParamBrowRY": 0.25,
+        "ParamMouthForm": -0.35,
+        "ParamAngleX": -10.5,
+        "ParamAngleZ": -7.5
+      },
+      "steps": [
+        {
+          "label": "往左张望",
+          "durationMs": 280,
+          "holdMs": 160,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamEyeBallX": -0.65,
+            "ParamAngleX": -6.6,
+            "ParamBrowLY": -0.25,
+            "ParamBrowRY": 0.15
+          }
+        },
+        {
+          "label": "往右张望",
+          "durationMs": 300,
+          "holdMs": 160,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamEyeBallX": 0.65,
+            "ParamAngleX": 6.6,
+            "ParamBrowLY": 0.15,
+            "ParamBrowRY": -0.25
+          }
+        },
+        {
+          "label": "移开视线",
+          "durationMs": 440,
+          "holdMs": 0,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamEyeLOpen": 0.7,
+            "ParamEyeROpen": 0.7,
+            "ParamEyeBallX": -0.7,
+            "ParamEyeBallY": -0.35,
+            "ParamBrowLY": -0.45,
+            "ParamBrowRY": 0.25,
+            "ParamMouthForm": -0.35,
+            "ParamAngleX": -10.5,
+            "ParamAngleZ": -7.5
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1800,
+      "custom": true
+    },
+    {
+      "id": "shy",
+      "label": "害羞·低头垂眸",
+      "description": "脸红 · 脸红微惊 · 低头垂眸羞怯",
+      "emotion": "shy",
+      "group": "害羞",
+      "controls": [
+        "脸红"
+      ],
+      "parameters": {
+        "ParamEyeLOpen": 0.45,
+        "ParamEyeROpen": 0.45,
+        "ParamEyeLSmile": 0.65,
+        "ParamEyeRSmile": 0.65,
+        "ParamAngleY": -9,
+        "ParamAngleZ": 10.5,
+        "ParamEyeBallX": 0.35,
+        "ParamEyeBallY": -0.35
+      },
+      "steps": [
+        {
+          "label": "脸红微惊",
+          "durationMs": 260,
+          "holdMs": 140,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamAngleY": 4.5,
+            "ParamEyeBallY": 0.15
+          }
+        },
+        {
+          "label": "低头羞怯",
+          "durationMs": 480,
+          "holdMs": 0,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamEyeLOpen": 0.45,
+            "ParamEyeROpen": 0.45,
+            "ParamEyeLSmile": 0.65,
+            "ParamEyeRSmile": 0.65,
+            "ParamAngleY": -9,
+            "ParamAngleZ": 10.5,
+            "ParamEyeBallX": 0.35,
+            "ParamEyeBallY": -0.35
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1800,
+      "custom": true
+    },
+    {
+      "id": "shy_peek",
+      "label": "害羞·脸红偷瞄",
+      "description": "脸红 · 侧头羞怯 · 悄悄抬眼偷看",
+      "emotion": "shy",
+      "group": "害羞",
+      "controls": [
+        "脸红"
+      ],
+      "parameters": {
+        "ParamEyeLOpen": 0.65,
+        "ParamEyeROpen": 0.65,
+        "ParamEyeLSmile": 0.55,
+        "ParamEyeRSmile": 0.55,
+        "ParamAngleX": -6.6,
+        "ParamAngleZ": -7.2,
+        "ParamEyeBallX": 0.25,
+        "ParamEyeBallY": 0.2
+      },
+      "steps": [
+        {
+          "label": "羞怯偏头",
+          "durationMs": 300,
+          "holdMs": 160,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamEyeLOpen": 0.55,
+            "ParamEyeROpen": 0.55,
+            "ParamAngleX": -9.6,
+            "ParamAngleZ": -8.4,
+            "ParamEyeBallX": -0.5,
+            "ParamEyeBallY": -0.3
+          }
+        },
+        {
+          "label": "抬眼偷瞄",
+          "durationMs": 420,
+          "holdMs": 0,
+          "controls": [
+            "脸红"
+          ],
+          "parameters": {
+            "ParamEyeLOpen": 0.65,
+            "ParamEyeROpen": 0.65,
+            "ParamEyeLSmile": 0.55,
+            "ParamEyeRSmile": 0.55,
+            "ParamAngleX": -6.6,
+            "ParamAngleZ": -7.2,
+            "ParamEyeBallX": 0.25,
+            "ParamEyeBallY": 0.2
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "revertHoldMs": 1800,
+      "custom": true
+    },
+    {
+      "id": "preset_mv7ilkz9",
+      "label": "比心",
+      "description": "比心 + 脸红 + 前倾 · 滑块(头部歪斜 (Z)/嘴角弧度等9项)",
+      "emotion": "shy",
+      "group": "害羞",
+      "controls": [
+        "比心",
+        "脸红",
+        "前倾"
+      ],
+      "parameters": {
+        "ParamAngleZ": 17,
+        "ParamMouthForm": 0.25,
+        "ParamBrowRY": 0.5,
+        "Param7": -1,
+        "ParamBodyAngleZ": 5,
+        "ParamAngleY": -9,
+        "ParamEyeBallY": 0.85,
+        "ParamMouthOpenY": 0.4,
+        "Paramgulian": 0.25
+      },
+      "steps": [
+        {
+          "label": "自然待机",
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [
+            "比心",
+            "脸红",
+            "前倾"
+          ],
+          "parameters": {
+            "ParamAngleZ": 17,
+            "ParamMouthForm": 0.25,
+            "ParamBrowRY": 0.5,
+            "Param7": -1,
+            "ParamBodyAngleZ": 5,
+            "ParamAngleY": -9,
+            "ParamEyeBallY": 0.85,
+            "ParamMouthOpenY": 0.4,
+            "Paramgulian": 0.25
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "custom": true
+    }
+  ]
+}

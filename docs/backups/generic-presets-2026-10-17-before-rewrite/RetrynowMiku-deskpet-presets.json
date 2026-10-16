@@ -1,0 +1,278 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-12T10:09:18.208Z",
+  "presets": [
+    {
+      "id": "neutral",
+      "label": "日常待机",
+      "description": "默认外观与自然面捕状态",
+      "emotion": "neutral",
+      "group": "日常待机",
+      "controls": [],
+      "parameters": {},
+      "steps": [
+        {
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {}
+        }
+      ],
+      "finishMode": "hold",
+      "custom": true
+    },
+    {
+      "id": "happy",
+      "label": "开心",
+      "description": "Fanged Smile + Star · 弯眼微笑与愉快神态",
+      "emotion": "happy",
+      "group": "开心",
+      "controls": [
+        "Fanged Smile",
+        "Star"
+      ],
+      "parameters": {
+        "ParamMouthForm": 0.85
+      },
+      "steps": [
+        {
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [
+            "Fanged Smile",
+            "Star"
+          ],
+          "parameters": {
+            "ParamMouthForm": 0.85
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "custom": true
+    },
+    {
+      "id": "sad",
+      "label": "委屈难过",
+      "description": "Crying + Tears · 垂眉撇嘴与难过神态",
+      "emotion": "sad",
+      "group": "委屈难过",
+      "controls": [
+        "Crying",
+        "Tears"
+      ],
+      "parameters": {
+        "ParamMouthForm": -0.75,
+        "ParamBrowLY": -0.6,
+        "ParamBrowRY": -0.6,
+        "ParamAngleY": -10.5
+      },
+      "steps": [
+        {
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [
+            "Crying",
+            "Tears"
+          ],
+          "parameters": {
+            "ParamMouthForm": -0.75,
+            "ParamBrowLY": -0.6,
+            "ParamBrowRY": -0.6,
+            "ParamAngleY": -10.5
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "custom": true
+    },
+    {
+      "id": "angry",
+      "label": "生气不满",
+      "description": "皱眉撇嘴与生气神态",
+      "emotion": "angry",
+      "group": "生气不满",
+      "controls": [],
+      "parameters": {
+        "ParamMouthForm": -0.85,
+        "ParamBrowLY": -0.75,
+        "ParamBrowRY": -0.75
+      },
+      "steps": [
+        {
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamMouthForm": -0.85,
+            "ParamBrowLY": -0.75,
+            "ParamBrowRY": -0.75
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "custom": true
+    },
+    {
+      "id": "annoyed",
+      "label": "厌烦",
+      "description": "半眯眼斜视与嫌弃撇嘴",
+      "emotion": "neutral",
+      "group": "厌烦",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.45,
+        "ParamEyeROpen": 0.45,
+        "ParamEyeBallX": 0.5,
+        "ParamEyeBallY": 0.25,
+        "ParamMouthForm": -0.65,
+        "ParamAngleZ": -10.5
+      },
+      "steps": [
+        {
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.45,
+            "ParamEyeROpen": 0.45,
+            "ParamEyeBallX": 0.5,
+            "ParamEyeBallY": 0.25,
+            "ParamMouthForm": -0.65,
+            "ParamAngleZ": -10.5
+          }
+        }
+      ],
+      "finishMode": "hold",
+      "custom": true
+    },
+    {
+      "id": "weary",
+      "label": "倦怠",
+      "description": "困倦半闭眼与放松低头",
+      "emotion": "neutral",
+      "group": "倦怠",
+      "controls": [],
+      "parameters": {
+        "ParamEyeLOpen": 0.35,
+        "ParamEyeROpen": 0.35,
+        "ParamBrowLY": -0.4,
+        "ParamBrowRY": -0.4,
+        "ParamMouthForm": -0.3,
+        "ParamAngleY": -12,
+        "ParamAngleZ": 7.5
+      },
+      "steps": [
+        {
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [],
+          "parameters": {
+            "ParamEyeLOpen": 0.35,
+            "ParamEyeROpen": 0.35,
+            "ParamBrowLY": -0.4,
+            "ParamBrowRY": -0.4,
+            "ParamMouthForm": -0.3,
+            "ParamAngleY": -12,
+            "ParamAngleZ": 7.5
+          }
+        }
+      ],
+      "finishMode": "hold",
+      "custom": true
+    },
+    {
+      "id": "embarrassed",
+      "label": "尴尬",
+      "description": "Blush + side Blush · 视线躲闪与微红僵笑",
+      "emotion": "embarrassed",
+      "group": "尴尬",
+      "controls": [
+        "Blush",
+        "side Blush"
+      ],
+      "parameters": {
+        "ParamEyeBallX": -0.6,
+        "ParamBrowLY": -0.45,
+        "ParamBrowRY": 0.25,
+        "ParamMouthForm": -0.35,
+        "ParamAngleX": -10.5,
+        "ParamAngleZ": -7.5
+      },
+      "steps": [
+        {
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [
+            "Blush",
+            "side Blush"
+          ],
+          "parameters": {
+            "ParamEyeBallX": -0.6,
+            "ParamBrowLY": -0.45,
+            "ParamBrowRY": 0.25,
+            "ParamMouthForm": -0.35,
+            "ParamAngleX": -10.5,
+            "ParamAngleZ": -7.5
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "custom": true
+    },
+    {
+      "id": "shy",
+      "label": "害羞",
+      "description": "Blush + side Blush · 脸颊红晕与低头羞怯",
+      "emotion": "shy",
+      "group": "害羞",
+      "controls": [
+        "Blush",
+        "side Blush"
+      ],
+      "parameters": {
+        "ParamAngleY": -9,
+        "ParamAngleZ": 10.5
+      },
+      "steps": [
+        {
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [
+            "Blush",
+            "side Blush"
+          ],
+          "parameters": {
+            "ParamAngleY": -9,
+            "ParamAngleZ": 10.5
+          }
+        }
+      ],
+      "finishMode": "revert",
+      "custom": true
+    },
+    {
+      "id": "preset_mv3vcyhh",
+      "label": "平常（校服）",
+      "description": "School Uniform",
+      "emotion": "neutral",
+      "group": "日常待机",
+      "controls": [
+        "School Uniform"
+      ],
+      "parameters": {},
+      "steps": [
+        {
+          "label": "步骤 1",
+          "durationMs": 380,
+          "holdMs": 0,
+          "controls": [
+            "School Uniform"
+          ],
+          "parameters": {}
+        }
+      ],
+      "finishMode": "hold",
+      "custom": true
+    }
+  ]
+}
