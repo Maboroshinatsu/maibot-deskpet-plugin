@@ -23,9 +23,9 @@ jobs:
         shell: pwsh
         run: |
           $tagVer = "${{ github.ref_name }}" -replace '^v', ''
-          $pkgVer = (Get-Content deskpet-app/package.json -Raw | ConvertFrom-Json).version
-          $manifestVer = (Get-Content _manifest.json -Raw | ConvertFrom-Json).version
-          $pyVer = (Select-String -Path plugin.py -Pattern 'config_version:.*default="([^"]+)"').Matches[0].Groups[1].Value
+          $pkgVer = (Get-Content deskpet-app/package.json -Raw -Encoding UTF8 | ConvertFrom-Json).version
+          $manifestVer = (Get-Content _manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json).version
+          $pyVer = (Select-String -Path plugin.py -Pattern 'config_version:.*default="([^"]+)"' -Encoding UTF8).Matches[0].Groups[1].Value
           Write-Host "tag=$tagVer  package.json=$pkgVer  _manifest.json=$manifestVer  plugin.py=$pyVer"
           $mismatch = @()
           if ($tagVer -ne $pkgVer)      { $mismatch += "deskpet-app/package.json=$pkgVer" }
