@@ -6,9 +6,9 @@ import { pathToFileURL } from 'url'
 import { ServiceManager, type ServiceId, type ServicesConfig } from './services'
 import { createRuntimeApproval } from './runtime-approval'
 
-if (!app.isPackaged) {
-  app.setPath('userData', path.join(app.getPath('appData'), 'maibot-deskpet'))
-}
+// 无论开发环境还是打包运行，均统一定位到 AppData/Roaming/maibot-deskpet
+// 确保用户模型目录、聊天记录、预设配置与 localStorage 在重装与不同运行模式下保持一致且不丢失
+app.setPath('userData', path.join(app.getPath('appData'), 'maibot-deskpet'))
 
 app.commandLine.appendSwitch('disable-gpu-sandbox')
 app.commandLine.appendSwitch('in-process-gpu')
@@ -120,7 +120,7 @@ function getModelsRoot(): string | null {
   // dev 下渲染层直接读 public/，out/renderer 可能是上次 build 留下的旧副本，
   // 所以要先看源目录，否则新放进去的模型扫不出来
   const candidates = app.isPackaged
-    ? [built, path.join(process.resourcesPath, 'models')]
+    ? [path.join(process.resourcesPath, 'models'), built]
     : [source, built]
   for (const dir of candidates) {
     try {
@@ -624,6 +624,22 @@ function migrateUserModelsOnce(): void {
     }
   } catch (err) {
     console.warn('[deskpet] 用户模型迁移失败:', err)
+  }
+
+  // 兼容旧版曾误写入 AppData/Roaming/MaiBot Deskpet/models 的模型
+  try {
+    const legacyUserRoot = path.join(app.getPath('appData'), 'MaiBot Deskpet', 'models')
+    if (fs.existsSync(legacyUserRoot) && legacyUserRoot !== userRoot) {
+      for (const entry of fs.readdirSync(legacyUserRoot, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const dest = path.join(userRoot, entry.name)
+        if (fs.existsSync(dest)) continue
+        fs.cpSync(path.join(legacyUserRoot, entry.name), dest, { recursive: true })
+        console.info(`[deskpet] 已将旧路径模型迁移至统一目录: ${entry.name}`)
+      }
+    }
+  } catch (err) {
+    console.warn('[deskpet] 旧路径用户模型迁移异常:', err)
   }
 }
 

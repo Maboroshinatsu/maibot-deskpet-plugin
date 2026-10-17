@@ -23,26 +23,64 @@ let cachedModelUrl: string | null = null
 let cachedModelList: ModelEntry[] | null = null
 
 /**
- * 判断模型 URL 是否真的可加载。
- *
- * 不能用 HEAD 探测：dev 下 Vite 的 SPA 回退对任何路径都回 200（连不存在的也“存在”），
- * 打包后 file:// 页面的 fetch 又一律被拒（永远“不存在”）。
- * 主进程扫描出的模型清单才是可靠的存在性来源；清单拿不到时退回内容嗅探。
+ * 提取归一化的相对路径标识符，用于跨协议（deskpet:// vs ./models/）、
+ * 跨平台路径分隔符、以及 URL 编码与未编码（如中文文件名）之间做可靠匹配。
  */
-async function modelUrlUsable(url: string): Promise<boolean> {
+export function normalizeModelKey(rawUrl: string): string {
+  if (!rawUrl) return ''
+  let cleaned = rawUrl.trim().replace(/\\/g, '/')
+  try {
+    cleaned = decodeURIComponent(cleaned)
+  } catch {}
+  return cleaned
+    .replace(/^deskpet:\/\/models\//i, '')
+    .replace(/^\.?\/models\//i, '')
+    .replace(/^models\//i, '')
+    .replace(/^\/+/, '')
+    .toLowerCase()
+}
+
+/**
+ * 校验模型 URL 是否在当前运行环境中可用，并返回规范化的目标 URL。
+ * 若 stored 路径与主进程扫描到的模型匹配（无论是否带 deskpet:// 或 URL 编码差异），
+ * 均返回可用的规范 URL；若无法匹配则返回 null。
+ */
+export async function resolveUsableModelUrl(url: string): Promise<string | null> {
+  if (!url) return null
   const models = await listAvailableModels()
-  if (models.some((m) => m.url === url)) return true
+  if (models.length === 0) {
+    // 强制重扫一次主进程，避免启动早期 IPC 时差导致的空列表
+    const rescanned = await listAvailableModels(true)
+    const exact = rescanned.find((m) => m.url === url)
+    if (exact) return exact.url
+    const key = normalizeModelKey(url)
+    const matched = rescanned.find((m) => normalizeModelKey(m.url) === key)
+    if (matched) return matched.url
+  } else {
+    const exact = models.find((m) => m.url === url)
+    if (exact) return exact.url
+    const key = normalizeModelKey(url)
+    const matched = models.find((m) => normalizeModelKey(m.url) === key)
+    if (matched) return matched.url
+  }
 
   // electronAPI 不可用（纯浏览器调试）时退回 GET + JSON 嗅探：
-  // 真正的 .model3.json 以 { 开头，SPA 回退回来的是 HTML
   try {
     const resp = await fetch(url, { cache: 'no-cache' })
-    if (!resp.ok) return false
+    if (!resp.ok) return null
     const text = await resp.text()
-    return text.trimStart().startsWith('{')
+    if (text.trimStart().startsWith('{')) return url
+    return null
   } catch {
-    return false
+    return null
   }
+}
+
+/**
+ * 判断模型 URL 是否真的可加载。
+ */
+export async function modelUrlUsable(url: string): Promise<boolean> {
+  return (await resolveUsableModelUrl(url)) !== null
 }
 
 /**
@@ -115,18 +153,23 @@ export async function discoverModel(): Promise<string> {
   if (cachedModelUrl) return cachedModelUrl
 
   const stored = getStoredModelPath()
-  if (stored && (await modelUrlUsable(stored))) {
-    cachedModelUrl = stored
-    return cachedModelUrl
-  }
   if (stored) {
-    // 清掉失效的值，否则每次启动都要走一遍回退并刷一条警告
-    console.warn(`[ModelDiscovery] Stored model missing, discarding: ${stored}`)
-    setStoredModelPath('')
+    const usableUrl = await resolveUsableModelUrl(stored)
+    if (usableUrl) {
+      cachedModelUrl = usableUrl
+      if (usableUrl !== stored) {
+        setStoredModelPath(usableUrl)
+      }
+      return cachedModelUrl
+    }
+    // 哪怕某次检测暂时未命中（如主进程首帧 IPC 延迟），也绝不擦除用户的配置，
+    // 仅在当前会话平滑回退，避免造成永久性偏好丢失。
+    console.warn(`[ModelDiscovery] Stored model not currently found, falling back without wiping: ${stored}`)
   }
 
-  if (await modelUrlUsable(MODEL_PATH)) {
-    cachedModelUrl = MODEL_PATH
+  const defaultUrl = await resolveUsableModelUrl(MODEL_PATH)
+  if (defaultUrl) {
+    cachedModelUrl = defaultUrl
     return cachedModelUrl
   }
   console.warn(`[ModelDiscovery] Default model missing: ${MODEL_PATH}`)
@@ -138,8 +181,7 @@ export async function discoverModel(): Promise<string> {
     return cachedModelUrl
   }
 
-  console.warn('[ModelDiscovery] No model found in public/models/')
-  console.warn('[ModelDiscovery] Expected structure: public/models/<name>/<name>.model3.json')
+  console.warn('[ModelDiscovery] No model found in models directory')
   return ''
 }
 
