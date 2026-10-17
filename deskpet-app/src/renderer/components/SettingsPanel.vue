@@ -1283,7 +1283,7 @@ function toggleSection(key: keyof typeof expandedSections) {
 }
 
 const editingSteps = ref<PresetKeyframeStep[]>([
-  { label: '步骤 1', durationMs: 380, holdMs: 0, controls: [], parameters: {} },
+  { label: '步骤 1', durationMs: 600, holdMs: 0, controls: [], parameters: {} },
 ])
 const editingStepIndex = ref(0)
 const editingFinishMode = ref<PresetFinishMode>('revert')
@@ -1296,7 +1296,7 @@ const currentEditingStep = computed<PresetKeyframeStep>(() => {
   return (
     editingSteps.value[idx] ?? {
       label: '步骤 1',
-      durationMs: 380,
+      durationMs: 600,
       holdMs: 0,
       controls: [],
       parameters: {},
@@ -1642,7 +1642,7 @@ function startNewPreset(targetGroup?: string, targetEmotion?: string) {
     .map((c) => c.id)
   const firstStep: PresetKeyframeStep = {
     label: '步骤 1',
-    durationMs: 380,
+    durationMs: 600,
     holdMs: 0,
     controls: persistentIds,
     parameters: {},
@@ -1686,8 +1686,8 @@ function addEditingStep() {
   const nextIdx = editingSteps.value.length + 1
   const newStep: PresetKeyframeStep = {
     label: `步骤 ${nextIdx}`,
-    durationMs: 350,
-    holdMs: 150,
+    durationMs: 600,
+    holdMs: 1000,
     controls: [...base.controls],
     parameters: { ...base.parameters },
   }
@@ -2103,7 +2103,7 @@ function resetAllControls() {
     activePresetId.value = 'neutral'
     customPresetName.value = ''
     editingSteps.value = [
-      { label: '步骤 1', durationMs: 380, holdMs: 0, controls: [], parameters: {} },
+      { label: '步骤 1', durationMs: 600, holdMs: 0, controls: [], parameters: {} },
     ]
     editingStepIndex.value = 0
     editingFinishMode.value = 'hold'

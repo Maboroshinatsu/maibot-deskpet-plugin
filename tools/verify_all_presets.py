@@ -71,11 +71,14 @@ def run():
         "happy",
         "happy_tilt",
         "sad",
+        "sad_glance",
         "angry",
+        "angry_glare",
         "annoyed",
         "weary",
         "embarrassed",
         "shy",
+        "shy_peek",
     ]
 
     results = []
@@ -99,8 +102,8 @@ def run():
             """
             t_res = exec_js(trigger_code)
             
-            # 等待过渡完成进入稳定停留期（过渡 800ms + 停留 1000ms，在 1.2s 时进行抓拍）
-            time.sleep(1.2)
+            # 等待过渡完成进入稳定停留期（过渡 600ms + 停留 1000ms，在 1.0s 黄金峰值点抓拍）
+            time.sleep(1.0)
 
             out_file = os.path.join(OUT_DIR, f"{model_key}_{pid}.png").replace("\\", "/")
             ok = snap(out_file)

@@ -309,8 +309,8 @@ function sanitizeModelPresets(raw: unknown): ModelDiskPreset[] | null {
           ...(typeof srec.label === 'string' && srec.label.trim()
             ? { label: srec.label.trim() }
             : {}),
-          durationMs: Number.isFinite(dur) ? Math.max(40, Math.min(5000, Math.round(dur))) : 350,
-          holdMs: Number.isFinite(hold) ? Math.max(0, Math.min(10000, Math.round(hold))) : 150,
+          durationMs: Number.isFinite(dur) ? Math.max(40, Math.min(5000, Math.round(dur))) : 600,
+          holdMs: Number.isFinite(hold) ? Math.max(0, Math.min(10000, Math.round(hold))) : 1000,
           controls: Array.isArray(srec.controls)
             ? srec.controls.map((c) => String(c).trim()).filter(Boolean)
             : [],
