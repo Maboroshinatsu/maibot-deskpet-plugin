@@ -1763,7 +1763,7 @@ function resetSingleSlider(slider: ResolvedModelSlider) {
   const nextParams = { ...step.parameters }
   delete nextParams[slider.id]
   step.parameters = nextParams
-  syncCurrentStepToLiveModel(260)
+  syncCurrentStepToLiveModel(600)
 }
 
 function resetSlidersByGroup(group: 'face' | 'pose' | 'extra') {
@@ -1775,7 +1775,7 @@ function resetSlidersByGroup(group: 'face' | 'pose' | 'extra') {
     }
   }
   step.parameters = nextParams
-  syncCurrentStepToLiveModel(280)
+  syncCurrentStepToLiveModel(600)
 }
 
 // ==================== motion-web Handfeel 物理弹簧与次级果冻引擎 ====================
@@ -2079,7 +2079,7 @@ function toggleSingleControl(controlId: string) {
   }))
   applyControlActionToList(tempControls, controlId, 'toggle', store.modelCapabilities)
   step.controls = tempControls.filter((c) => c.active).map((c) => c.id)
-  syncCurrentStepToLiveModel(260)
+  syncCurrentStepToLiveModel(600)
 }
 
 function resetTransientControls() {
@@ -2088,7 +2088,7 @@ function resetTransientControls() {
     const ctrl = store.modelControls.find((c) => c.id === id)
     return ctrl ? isPersistentControlCategory(ctrl.category) : false
   })
-  syncCurrentStepToLiveModel(260)
+  syncCurrentStepToLiveModel(600)
 }
 
 function resetAllControls() {

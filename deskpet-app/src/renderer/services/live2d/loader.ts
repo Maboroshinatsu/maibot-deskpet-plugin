@@ -773,7 +773,7 @@ function stepStackParametersInFrame(
 
   for (const [id, tr] of [...stack.paramTransitions.entries()]) {
     const rawT = tr.duration > 0 ? (now - tr.startTime) / tr.duration : 1
-    const eased = easeOutCubic(rawT)
+    const eased = easeInOutCubic(rawT)
     const val = tr.from + (tr.to - tr.from) * eased
     stack.currentValues.set(id, val)
     // 注意：正在过渡（含释放淡出 releaseOnComplete=true）的参数绝不能当作 baseWatermark，
@@ -855,7 +855,7 @@ function stepStackPartsInFrame(
 
   for (const [partId, tr] of [...stack.partTransitions.entries()]) {
     const rawT = tr.duration > 0 ? (now - tr.startTime) / tr.duration : 1
-    const eased = easeOutCubic(rawT)
+    const eased = easeInOutCubic(rawT)
     const op = tr.from + (tr.to - tr.from) * eased
     stack.currentPartOpacities.set(partId, op)
     try {

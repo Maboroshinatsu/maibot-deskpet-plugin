@@ -461,10 +461,11 @@ function revertToActiveHoldPreset(expectedToken: number): void {
 function previewPresetStepOnModel(step: PresetKeyframeStep, gazeOverride = true): void {
   cancelPresetSequence()
   sequenceGazeLocked = gazeOverride
+  const dur = step.durationMs && step.durationMs > 0 ? step.durationMs : PRESET_TRANSITION_MS
   if (store.live2dModel) {
-    setFocusWeight(store.live2dModel, gazeOverride ? 0 : 1, { transitionMs: 220 })
+    setFocusWeight(store.live2dModel, gazeOverride ? 0 : 1, { transitionMs: dur })
   }
-  applyStepStateToModel(step, 240, false)
+  applyStepStateToModel(step, dur, false)
 }
 
 function applyPresetByEntry(
