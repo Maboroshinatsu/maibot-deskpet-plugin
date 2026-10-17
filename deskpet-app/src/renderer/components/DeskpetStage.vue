@@ -261,10 +261,10 @@ let presetSeqTimer: ReturnType<typeof setTimeout> | null = null
 /** 分镜序列播放中或分镜编辑锁定时，未显式指定眼球偏移的步骤保持眼球居中（抑制待机动作随机斜视） */
 let sequenceGazeLocked = false
 
-const PRESET_TRANSITION_MS = 380
-const REVERT_TRANSITION_MS = 520
-const CONTROL_TRANSITION_MS = 320
-const RETURN_GAZE_MS = 420
+const PRESET_TRANSITION_MS = 800
+const REVERT_TRANSITION_MS = 800
+const CONTROL_TRANSITION_MS = 500
+const RETURN_GAZE_MS = 800
 
 function cancelPresetSequence(): number {
   if (presetSeqTimer) {

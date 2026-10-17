@@ -63,21 +63,19 @@ def run():
     os.makedirs(OUT_DIR, exist_ok=True)
     models = [
         ("standard_miku", "models/miku/miku.model3.json"),
+        ("hiyori_pro", "hiyori_pro"),
+        ("RetrynowMiku", "RetrynowMiku"),
     ]
 
     preset_ids = [
-        "neutral",
         "happy",
         "happy_tilt",
         "sad",
-        "sad_glance",
         "angry",
-        "angry_glare",
         "annoyed",
         "weary",
         "embarrassed",
         "shy",
-        "shy_peek",
     ]
 
     results = []
@@ -101,16 +99,16 @@ def run():
             """
             t_res = exec_js(trigger_code)
             
-            # 等待进入峰值展示姿态（约 450~550ms）
-            time.sleep(0.55)
+            # 等待过渡完成进入稳定停留期（过渡 800ms + 停留 1000ms，在 1.2s 时进行抓拍）
+            time.sleep(1.2)
 
             out_file = os.path.join(OUT_DIR, f"{model_key}_{pid}.png").replace("\\", "/")
             ok = snap(out_file)
             print(f"  Preset [{pid:12s}] -> {out_file} (snap ok: {ok})")
             results.append((model_key, pid, out_file, ok))
 
-            # 稍微缓冲一下，让过渡回落或自然留白
-            time.sleep(0.6)
+            # 等待预设演示完成并平滑归位（holdMs 1000ms + step2/revert）
+            time.sleep(3.2)
 
     print("\n\nAll test snapshots complete. Total:", len(results))
 

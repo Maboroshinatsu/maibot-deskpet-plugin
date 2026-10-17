@@ -1326,7 +1326,7 @@ export function buildModelStatePresets(
       steps: [
         {
           label: '自然待机',
-          durationMs: 400,
+          durationMs: 800,
           holdMs: 0,
           controls: [...defaultActiveIds],
           parameters: {},
@@ -1358,36 +1358,41 @@ export function buildModelStatePresets(
       label: '开心·欢呼',
       group: '开心',
       emotion: 'happy',
-      fallbackDesc: '欢呼微晃 · 弯眼甜笑与愉悦神态',
+      fallbackDesc: '欢呼微晃 · 明眸甜笑与愉悦神态',
       re: /星星|闪亮|爱心|心眼|笑|开心|比耶|star|heart|happy|smile|peace/i,
       finishMode: 'revert',
-      revertHoldMs: 1800,
+      revertHoldMs: 2000,
       stepDefs: [
         {
           label: '欢呼侧倾',
-          durationMs: 460,
-          holdMs: 200,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.55),
-            ...pickParam('ParamMouthForm', 0.75),
-            ...pickParam('ParamEyeLSmile', 0.7),
-            ...pickParam('ParamEyeRSmile', 0.7),
-            ...pickParam('ParamAngleZ', 0.16),
+            ...pickAbsoluteEye(1.0),
+            ...pickParam('ParamMouthForm', 0.8),
+            ...pickParam('ParamMouthOpenY', 0.2),
+            ...pickParam('ParamEyeLSmile', 0.8),
+            ...pickParam('ParamEyeRSmile', 0.8),
+            ...pickParam('ParamAngleZ', 0.14),
             ...pickParam('ParamBodyAngleZ', 0.08),
-            ...pickParam('ParamAngleY', 0.12),
+            ...pickParam('ParamAngleY', 0.1),
+            ...pickParam('ParamEyeBallY', 0.1),
+            ...pickParam('ParamCheek', 0.45),
           },
         },
         {
           label: '愉悦展颜',
-          durationMs: 440,
-          holdMs: 0,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.7),
-            ...pickParam('ParamMouthForm', 0.8),
-            ...pickParam('ParamEyeLSmile', 0.75),
-            ...pickParam('ParamEyeRSmile', 0.75),
-            ...pickParam('ParamCheek', 0.45),
-            ...pickParam('ParamAngleY', 0.08),
+            ...pickAbsoluteEye(1.0),
+            ...pickParam('ParamMouthForm', 0.85),
+            ...pickParam('ParamMouthOpenY', 0.25),
+            ...pickParam('ParamEyeLSmile', 0.85),
+            ...pickParam('ParamEyeRSmile', 0.85),
+            ...pickParam('ParamCheek', 0.55),
+            ...pickParam('ParamAngleY', 0.06),
+            ...pickParam('ParamEyeBallY', 0.08),
           },
         },
       ],
@@ -1397,38 +1402,39 @@ export function buildModelStatePresets(
       label: '开心·歪头笑',
       group: '开心',
       emotion: 'happy',
-      fallbackDesc: '俏皮歪头 · 眯眼甜笑',
+      fallbackDesc: '俏皮歪头 · 明朗甜笑',
       re: /笑|开心|比耶|脸红|smile|happy|peace|blush/i,
       finishMode: 'revert',
-      revertHoldMs: 1800,
+      revertHoldMs: 2000,
       stepDefs: [
         {
           label: '轻仰展颜',
-          durationMs: 380,
-          holdMs: 160,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.6),
-            ...pickParam('ParamMouthForm', 0.75),
-            ...pickParam('ParamMouthOpenY', 0.25),
-            ...pickParam('ParamEyeLSmile', 0.7),
-            ...pickParam('ParamEyeRSmile', 0.7),
-            ...pickParam('ParamAngleY', 0.15),
+            ...pickAbsoluteEye(1.0),
+            ...pickParam('ParamMouthForm', 0.8),
+            ...pickParam('ParamMouthOpenY', 0.2),
+            ...pickParam('ParamEyeLSmile', 0.8),
+            ...pickParam('ParamEyeRSmile', 0.8),
+            ...pickParam('ParamAngleY', 0.12),
+            ...pickParam('ParamEyeBallY', 0.1),
           },
         },
         {
           label: '俏皮歪头',
-          durationMs: 480,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.65),
+            ...pickAbsoluteEye(1.0),
             ...pickParam('ParamMouthForm', 0.85),
             ...pickParam('ParamEyeLSmile', 0.85),
             ...pickParam('ParamEyeRSmile', 0.85),
             ...pickParam('ParamCheek', 0.5),
-            ...pickParam('ParamAngleZ', 0.2),
-            ...pickParam('ParamBodyAngleZ', 0.09),
-            ...pickParam('ParamEyeBallX', 0.15),
-            ...pickParam('ParamEyeBallY', 0.1),
+            ...pickParam('ParamAngleZ', 0.18),
+            ...pickParam('ParamBodyAngleZ', 0.08),
+            ...pickParam('ParamEyeBallX', 0.12),
+            ...pickParam('ParamEyeBallY', 0.08),
           },
         },
       ],
@@ -1445,10 +1451,10 @@ export function buildModelStatePresets(
       stepDefs: [
         {
           label: '欲言又止',
-          durationMs: 420,
-          holdMs: 180,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.65),
+            ...pickAbsoluteEye(0.7),
             ...pickParam('ParamBrowLY', -0.25),
             ...pickParam('ParamBrowRY', -0.25),
             ...pickParam('ParamBrowLAngle', 0.3),
@@ -1460,10 +1466,10 @@ export function buildModelStatePresets(
         },
         {
           label: '垂眸低落',
-          durationMs: 580,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.55),
+            ...pickAbsoluteEye(0.6),
             ...pickParam('ParamMouthForm', -0.55),
             ...pickParam('ParamBrowLY', -0.35),
             ...pickParam('ParamBrowRY', -0.35),
@@ -1491,10 +1497,10 @@ export function buildModelStatePresets(
       stepDefs: [
         {
           label: '委屈蹙眉',
-          durationMs: 400,
-          holdMs: 160,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.6),
+            ...pickAbsoluteEye(0.65),
             ...pickParam('ParamBrowLY', -0.3),
             ...pickParam('ParamBrowRY', -0.3),
             ...pickParam('ParamBrowLAngle', 0.35),
@@ -1506,10 +1512,10 @@ export function buildModelStatePresets(
         },
         {
           label: '侧目轻叹',
-          durationMs: 520,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.55),
+            ...pickAbsoluteEye(0.6),
             ...pickParam('ParamBrowLY', -0.35),
             ...pickParam('ParamBrowRY', -0.35),
             ...pickParam('ParamBrowLAngle', 0.35),
@@ -1534,14 +1540,14 @@ export function buildModelStatePresets(
       fallbackDesc: '扭头哼气 · 压眉傲娇怒视',
       re: /生气|怒|黑化|脸黑|阴影|angry|anger|dark/i,
       finishMode: 'revert',
-      revertHoldMs: 1800,
+      revertHoldMs: 2000,
       stepDefs: [
         {
           label: '扭头哼气',
-          durationMs: 360,
-          holdMs: 200,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.8),
+            ...pickAbsoluteEye(0.85),
             ...pickParam('ParamEyeBallX', -0.25),
             ...pickParam('ParamMouthForm', -0.65),
             ...pickParam('ParamBrowLY', -0.45),
@@ -1557,10 +1563,10 @@ export function buildModelStatePresets(
         },
         {
           label: '回正瞪眼',
-          durationMs: 420,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.85),
+            ...pickAbsoluteEye(0.9),
             ...pickParam('ParamMouthForm', -0.7),
             ...pickParam('ParamBrowLY', -0.5),
             ...pickParam('ParamBrowRY', -0.5),
@@ -1581,12 +1587,12 @@ export function buildModelStatePresets(
       fallbackDesc: '歪头紧盯 · 压眉赌气不满',
       re: /生气|怒|angry|anger/i,
       finishMode: 'revert',
-      revertHoldMs: 1800,
+      revertHoldMs: 2000,
       stepDefs: [
         {
           label: '压眉俯视',
-          durationMs: 380,
-          holdMs: 180,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
             ...pickAbsoluteEye(0.85),
             ...pickParam('ParamBrowLY', -0.5),
@@ -1601,8 +1607,8 @@ export function buildModelStatePresets(
         },
         {
           label: '歪头赌气',
-          durationMs: 460,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
             ...pickAbsoluteEye(0.85),
             ...pickParam('ParamBrowLY', -0.5),
@@ -1630,10 +1636,10 @@ export function buildModelStatePresets(
       stepDefs: [
         {
           label: '轻哼别过',
-          durationMs: 440,
-          holdMs: 220,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.6),
+            ...pickAbsoluteEye(0.65),
             ...pickParam('ParamEyeBallX', 0.22),
             ...pickParam('ParamEyeBallY', 0.12),
             ...pickParam('ParamMouthForm', -0.35),
@@ -1642,10 +1648,10 @@ export function buildModelStatePresets(
         },
         {
           label: '斜视嫌弃',
-          durationMs: 500,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.55),
+            ...pickAbsoluteEye(0.6),
             ...pickParam('ParamEyeBallX', 0.28),
             ...pickParam('ParamEyeBallY', 0.08),
             ...pickParam('ParamMouthForm', -0.45),
@@ -1670,8 +1676,8 @@ export function buildModelStatePresets(
       stepDefs: [
         {
           label: '打盹低头',
-          durationMs: 620,
-          holdMs: 300,
+          durationMs: 900,
+          holdMs: 1200,
           params: {
             ...pickAbsoluteEye(0.22),
             ...pickParam('ParamBrowLY', -0.25),
@@ -1683,8 +1689,8 @@ export function buildModelStatePresets(
         },
         {
           label: '困倦半睁',
-          durationMs: 560,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
             ...pickAbsoluteEye(0.42),
             ...pickParam('ParamBrowLY', -0.2),
@@ -1704,12 +1710,12 @@ export function buildModelStatePresets(
       fallbackDesc: '左右顾盼 · 视线躲闪与微红干笑',
       re: /汗|尴尬|脸红|捂脸|sweat|blush/i,
       finishMode: 'revert',
-      revertHoldMs: 1900,
+      revertHoldMs: 2000,
       stepDefs: [
         {
           label: '往左张望',
-          durationMs: 380,
-          holdMs: 180,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
             ...pickParam('ParamEyeBallX', -0.28),
             ...pickParam('ParamEyeBallY', -0.12),
@@ -1720,8 +1726,8 @@ export function buildModelStatePresets(
         },
         {
           label: '往右张望',
-          durationMs: 400,
-          holdMs: 180,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
             ...pickParam('ParamEyeBallX', 0.26),
             ...pickParam('ParamEyeBallY', -0.08),
@@ -1732,10 +1738,10 @@ export function buildModelStatePresets(
         },
         {
           label: '移开视线',
-          durationMs: 520,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.7),
+            ...pickAbsoluteEye(0.75),
             ...pickParam('ParamCheek', 0.55),
             ...pickParam('ParamEyeBallX', -0.25),
             ...pickParam('ParamEyeBallY', -0.18),
@@ -1756,14 +1762,14 @@ export function buildModelStatePresets(
       fallbackDesc: '脸红微讶 · 低头垂眸羞怯',
       re: /脸红|红晕|害羞|捂脸|blush|shy/i,
       finishMode: 'revert',
-      revertHoldMs: 1900,
+      revertHoldMs: 2000,
       stepDefs: [
         {
           label: '脸红微讶',
-          durationMs: 380,
-          holdMs: 160,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.75),
+            ...pickAbsoluteEye(0.8),
             ...pickParam('ParamCheek', 0.6),
             ...pickParam('ParamAngleY', 0.1),
             ...pickParam('ParamEyeBallY', 0.1),
@@ -1771,10 +1777,10 @@ export function buildModelStatePresets(
         },
         {
           label: '低头羞怯',
-          durationMs: 540,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.55),
+            ...pickAbsoluteEye(0.6),
             ...pickParam('ParamCheek', 0.75),
             ...pickParam('ParamEyeLSmile', 0.6),
             ...pickParam('ParamEyeRSmile', 0.6),
@@ -1796,14 +1802,14 @@ export function buildModelStatePresets(
       fallbackDesc: '侧头羞怯 · 悄悄抬眼偷看',
       re: /脸红|红晕|害羞|blush|shy/i,
       finishMode: 'revert',
-      revertHoldMs: 1900,
+      revertHoldMs: 2000,
       stepDefs: [
         {
           label: '羞怯偏头',
-          durationMs: 420,
-          holdMs: 200,
+          durationMs: 800,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.6),
+            ...pickAbsoluteEye(0.65),
             ...pickParam('ParamCheek', 0.65),
             ...pickParam('ParamAngleX', -0.18),
             ...pickParam('ParamAngleZ', -0.14),
@@ -1813,10 +1819,10 @@ export function buildModelStatePresets(
         },
         {
           label: '抬眼偷瞄',
-          durationMs: 500,
-          holdMs: 0,
+          durationMs: 850,
+          holdMs: 1000,
           params: {
-            ...pickAbsoluteEye(0.7),
+            ...pickAbsoluteEye(0.75),
             ...pickParam('ParamCheek', 0.8),
             ...pickParam('ParamEyeLSmile', 0.55),
             ...pickParam('ParamEyeRSmile', 0.55),
